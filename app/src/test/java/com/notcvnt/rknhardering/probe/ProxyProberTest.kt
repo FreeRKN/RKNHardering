@@ -33,7 +33,7 @@ class ProxyProberTest {
                     socket.getOutputStream().flush()
                 },
                 { socket ->
-                    socket.getInputStream().readNBytes(128)
+                    socket.getInputStream().read(ByteArray(128))
                     socket.getOutputStream().write("HTTP/1.1 200 Connection Established\r\n\r\n".encodeToByteArray())
                     socket.getOutputStream().flush()
                 },
@@ -53,7 +53,7 @@ class ProxyProberTest {
                     socket.getOutputStream().flush()
                 },
                 { socket ->
-                    socket.getInputStream().readNBytes(128)
+                    socket.getInputStream().read(ByteArray(128))
                     socket.getOutputStream().write("HELLO".encodeToByteArray())
                     socket.getOutputStream().flush()
                 },

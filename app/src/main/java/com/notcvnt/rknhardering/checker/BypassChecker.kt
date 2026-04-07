@@ -96,6 +96,8 @@ object BypassChecker {
         var directIp: String? = null
         var proxyIp: String? = null
 
+        var confirmedBypass = false
+
         if (proxyEndpoint != null) {
             onProgress?.invoke(Progress("Проверка IP", "Получение прямого IP и IP через прокси..."))
 
@@ -119,6 +121,7 @@ object BypassChecker {
 
             if (directIp != null && proxyIp != null) {
                 if (directIp != proxyIp) {
+                    confirmedBypass = true
                     findings.add(
                         Finding("Per-app split bypass: подтвержден (IP отличаются)", true)
                     )
@@ -130,7 +133,7 @@ object BypassChecker {
             }
         }
 
-        val detected = proxyEndpoint != null || xrayApiScanResult != null
+        val detected = confirmedBypass || xrayApiScanResult != null
 
         BypassResult(
             proxyEndpoint = proxyEndpoint,

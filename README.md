@@ -197,7 +197,7 @@ API: `ConnectivityManager.getLinkProperties(activeNetwork).dnsServers`.
 
 | Тип | Протокол обнаружения |
 |-----|----------------------|
-| `SOCKS5` |握手: `\x05\x01\x00` → ожидание `\x05\x00` (version=5, method=NO_AUTH) |
+| `SOCKS5` | `\x05\x01\x00` → ожидание `\x05\x00` (version=5, method=NO_AUTH) |
 | `HTTP` | `CONNECT ifconfig.me:443 HTTP/1.1` → ожидание `HTTP/x.x 200` |
 
 Обнаруживаются только прокси без аутентификации.

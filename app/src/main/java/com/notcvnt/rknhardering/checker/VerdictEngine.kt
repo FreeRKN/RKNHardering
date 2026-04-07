@@ -9,6 +9,8 @@ object VerdictEngine {
         directDetected: Boolean,
         indirectDetected: Boolean,
         bypassDetected: Boolean = false,
+        directNeedsReview: Boolean = false,
+        indirectNeedsReview: Boolean = false,
     ): Verdict {
         // Bypass detection (open proxy / xray API on localhost) is a strong signal
         if (bypassDetected) return Verdict.DETECTED
@@ -17,6 +19,7 @@ object VerdictEngine {
             geoIpDetected && (directDetected || indirectDetected) -> Verdict.DETECTED
             geoIpDetected -> Verdict.NEEDS_REVIEW
             directDetected && indirectDetected -> Verdict.NEEDS_REVIEW
+            directNeedsReview || indirectNeedsReview -> Verdict.NEEDS_REVIEW
             else -> Verdict.NOT_DETECTED
         }
     }

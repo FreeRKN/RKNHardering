@@ -153,6 +153,10 @@ class MainActivity : AppCompatActivity() {
             icon.setImageResource(R.drawable.ic_warning)
             status.text = "Обнаружено"
             status.setTextColor(ContextCompat.getColor(this, R.color.finding_detected))
+        } else if (category.needsReview) {
+            icon.setImageResource(R.drawable.ic_help)
+            status.text = "Требует проверки"
+            status.setTextColor(ContextCompat.getColor(this, R.color.verdict_yellow))
         } else {
             icon.setImageResource(R.drawable.ic_check_circle)
             status.text = "Чисто"
@@ -173,11 +177,19 @@ class MainActivity : AppCompatActivity() {
         }
 
         val indicator = TextView(this).apply {
-            text = if (finding.detected) "\u26A0" else "\u2713"
+            text = when {
+                finding.detected -> "\u26A0"
+                finding.needsReview -> "?"
+                else -> "\u2713"
+            }
             setTextColor(
                 ContextCompat.getColor(
                     this@MainActivity,
-                    if (finding.detected) R.color.finding_detected else R.color.finding_ok
+                    when {
+                        finding.detected -> R.color.finding_detected
+                        finding.needsReview -> R.color.verdict_yellow
+                        else -> R.color.finding_ok
+                    }
                 )
             )
             textSize = 14f

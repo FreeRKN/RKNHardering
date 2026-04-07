@@ -25,7 +25,9 @@ object VpnCheckRunner {
             geoIpDetected = geoIp.detected,
             directDetected = directSigns.detected,
             indirectDetected = indirectSigns.detected,
-            bypassDetected = bypassResult.detected
+            bypassDetected = bypassResult.detected,
+            directNeedsReview = directSigns.needsReview,
+            indirectNeedsReview = indirectSigns.needsReview,
         )
 
         CheckResult(

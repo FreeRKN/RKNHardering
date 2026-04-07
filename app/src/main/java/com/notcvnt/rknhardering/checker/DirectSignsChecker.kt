@@ -4,16 +4,18 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Proxy
 import com.notcvnt.rknhardering.model.CategoryResult
 import com.notcvnt.rknhardering.model.Finding
 
 object DirectSignsChecker {
 
     private val KNOWN_PROXY_PORTS = setOf(
-        "1080", "9000", "5555",   // SOCKS
-        "8080", "3128",           // HTTP proxy
-        "9050", "9150"            // Tor
+        80, 443, 1080, 3127, 3128, 4080, 5555,
+        7000, 7044, 8000, 8080, 8081, 8082, 8888,
+        9000, 9050, 9051, 9150, 12345
     )
+    private val KNOWN_PROXY_PORT_RANGES = listOf(16000..16100)
 
     // packageId to human-readable name
     private val KNOWN_VPN_PACKAGES = mapOf(
@@ -40,31 +42,33 @@ object DirectSignsChecker {
 
     fun check(context: Context): CategoryResult {
         val findings = mutableListOf<Finding>()
+        var detected = false
+        var needsReview = false
 
-        checkVpnTransport(context, findings)
-        checkSystemProxy(findings)
-        checkKnownVpnApps(context, findings)
+        detected = checkVpnTransport(context, findings) || detected
+        detected = checkSystemProxy(findings) || detected
+        needsReview = checkKnownVpnApps(context, findings) || needsReview
 
-        val detected = findings.any { it.detected }
         return CategoryResult(
             name = "Прямые признаки",
             detected = detected,
-            findings = findings
+            findings = findings,
+            needsReview = needsReview,
         )
     }
 
-    private fun checkVpnTransport(context: Context, findings: MutableList<Finding>) {
+    private fun checkVpnTransport(context: Context, findings: MutableList<Finding>): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val activeNetwork = cm.activeNetwork
         if (activeNetwork == null) {
             findings.add(Finding("Активная сеть не найдена", false))
-            return
+            return false
         }
 
         val caps = cm.getNetworkCapabilities(activeNetwork)
         if (caps == null) {
             findings.add(Finding("NetworkCapabilities недоступны", false))
-            return
+            return false
         }
 
         val hasVpnTransport = caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
@@ -76,27 +80,36 @@ object DirectSignsChecker {
         )
 
         val capsString = caps.toString()
+        var detected = hasVpnTransport
 
         val hasIsVpn = capsString.contains("IS_VPN")
         if (hasIsVpn) {
             findings.add(Finding("Флаг IS_VPN обнаружен в capabilities", true))
+            detected = true
         }
 
         val hasVpnTransportInfo = capsString.contains("VpnTransportInfo")
         if (hasVpnTransportInfo) {
             findings.add(Finding("VpnTransportInfo обнаружен в транспортной информации", true))
+            detected = true
         }
+
+        return detected
     }
 
-    private fun checkSystemProxy(findings: MutableList<Finding>) {
-        val httpHost = System.getProperty("http.proxyHost")
+    @Suppress("DEPRECATION")
+    private fun checkSystemProxy(findings: MutableList<Finding>): Boolean {
+        val httpHost = System.getProperty("http.proxyHost") ?: Proxy.getDefaultHost()
         val httpPort = System.getProperty("http.proxyPort")
+            ?: Proxy.getDefaultPort().takeIf { it > 0 }?.toString()
         val socksHost = System.getProperty("socksProxyHost")
         val socksPort = System.getProperty("socksProxyPort")
+        var detected = false
 
         val httpProxySet = !httpHost.isNullOrBlank()
         if (httpProxySet) {
             findings.add(Finding("HTTP прокси: $httpHost:${httpPort ?: "N/A"}", true))
+            detected = true
             checkKnownPort(httpPort, "HTTP прокси", findings)
         } else {
             findings.add(Finding("HTTP прокси: не настроен", false))
@@ -105,13 +118,16 @@ object DirectSignsChecker {
         val socksProxySet = !socksHost.isNullOrBlank()
         if (socksProxySet) {
             findings.add(Finding("SOCKS прокси: $socksHost:${socksPort ?: "N/A"}", true))
+            detected = true
             checkKnownPort(socksPort, "SOCKS прокси", findings)
         } else {
             findings.add(Finding("SOCKS прокси: не настроен", false))
         }
+
+        return detected
     }
 
-    private fun checkKnownVpnApps(context: Context, findings: MutableList<Finding>) {
+    private fun checkKnownVpnApps(context: Context, findings: MutableList<Finding>): Boolean {
         val pm = context.packageManager
         val installed = mutableListOf<String>()
 
@@ -119,7 +135,12 @@ object DirectSignsChecker {
             try {
                 pm.getPackageInfo(pkg, 0)
                 installed.add(name)
-                findings.add(Finding("Установлено VPN-приложение: $name ($pkg)", true))
+                findings.add(
+                    Finding(
+                        description = "Установлено VPN/Proxy-приложение: $name ($pkg)",
+                        needsReview = true,
+                    )
+                )
             } catch (_: PackageManager.NameNotFoundException) {
                 // not installed
             }
@@ -128,11 +149,23 @@ object DirectSignsChecker {
         if (installed.isEmpty()) {
             findings.add(Finding("Известные VPN-приложения: не обнаружены", false))
         }
+
+        return installed.isNotEmpty()
     }
 
     private fun checkKnownPort(port: String?, type: String, findings: MutableList<Finding>) {
-        if (port != null && port in KNOWN_PROXY_PORTS) {
-            findings.add(Finding("$type использует известный порт $port", true))
+        if (isKnownProxyPort(port)) {
+            findings.add(
+                Finding(
+                    description = "$type использует характерный порт $port",
+                    needsReview = true,
+                )
+            )
         }
+    }
+
+    internal fun isKnownProxyPort(port: String?): Boolean {
+        val value = port?.toIntOrNull() ?: return false
+        return value in KNOWN_PROXY_PORTS || KNOWN_PROXY_PORT_RANGES.any { value in it }
     }
 }

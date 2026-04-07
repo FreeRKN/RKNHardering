@@ -3,12 +3,17 @@ package com.notcvnt.rknhardering.model
 import com.notcvnt.rknhardering.probe.ProxyEndpoint
 import com.notcvnt.rknhardering.probe.XrayApiScanResult
 
-data class Finding(val description: String, val detected: Boolean)
+data class Finding(
+    val description: String,
+    val detected: Boolean = false,
+    val needsReview: Boolean = false,
+)
 
 data class CategoryResult(
     val name: String,
     val detected: Boolean,
-    val findings: List<Finding>
+    val findings: List<Finding>,
+    val needsReview: Boolean = false,
 )
 
 enum class Verdict {

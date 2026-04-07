@@ -9,8 +9,15 @@
 /.idea/assetWizardSettings.xml
 .DS_Store
 /build
+**/build/
 /captures
 .externalNativeBuild
 .cxx
+.android/
+.android-home/
+.android-user-home/
+.gradle-user-home/
+.kotlin/
 local.properties
 release.jks
+ocr_methodika_vpn_proxy.md

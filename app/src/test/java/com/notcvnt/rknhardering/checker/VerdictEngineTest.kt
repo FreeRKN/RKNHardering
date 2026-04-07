@@ -99,6 +99,18 @@ class VerdictEngineTest {
     }
 
     @Test
+    fun `foreign geo alone returns not detected`() {
+        val verdict = VerdictEngine.evaluate(
+            geoIp = category(needsReview = true),
+            directSigns = category(),
+            indirectSigns = category(),
+            bypassResult = bypass(),
+        )
+
+        assertEquals(Verdict.NOT_DETECTED, verdict)
+    }
+
+    @Test
     fun `no evidence returns not detected`() {
         val verdict = VerdictEngine.evaluate(
             geoIp = category(),

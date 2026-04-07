@@ -16,8 +16,12 @@ class IndirectSignsCheckerTest {
     fun `classifies private tunnel dns`() {
         assertEquals(DnsClassification.PRIVATE_TUNNEL, IndirectSignsChecker.classifyDnsAddress("10.0.0.2"))
         assertEquals(DnsClassification.PRIVATE_TUNNEL, IndirectSignsChecker.classifyDnsAddress("172.16.0.10"))
-        assertEquals(DnsClassification.PRIVATE_TUNNEL, IndirectSignsChecker.classifyDnsAddress("192.168.1.1"))
         assertEquals(DnsClassification.PRIVATE_TUNNEL, IndirectSignsChecker.classifyDnsAddress("fd00::1"))
+    }
+
+    @Test
+    fun `classifies private lan dns separately`() {
+        assertEquals(DnsClassification.PRIVATE_LAN, IndirectSignsChecker.classifyDnsAddress("192.168.1.1"))
     }
 
     @Test

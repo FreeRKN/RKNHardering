@@ -25,6 +25,7 @@ object IndirectSignsChecker {
 
     internal enum class DnsClassification {
         LOOPBACK,
+        PRIVATE_LAN,
         PRIVATE_TUNNEL,
         KNOWN_PUBLIC_RESOLVER,
         LINK_LOCAL,
@@ -346,6 +347,9 @@ object IndirectSignsChecker {
                         )
                         detected = true
                     }
+                    DnsClassification.PRIVATE_LAN -> {
+                        findings.add(Finding("DNS: $addr (локальный резолвер приватной сети)"))
+                    }
                     DnsClassification.PRIVATE_TUNNEL -> {
                         findings.add(
                             Finding(
@@ -580,12 +584,12 @@ object IndirectSignsChecker {
         if (
             normalized.startsWith("10.") ||
             (normalized.startsWith("172.") && isPrivate172(normalized)) ||
-            normalized.startsWith("192.168.") ||
             normalized.startsWith("fc") ||
             normalized.startsWith("fd")
         ) {
             return DnsClassification.PRIVATE_TUNNEL
         }
+        if (normalized.startsWith("192.168.")) return DnsClassification.PRIVATE_LAN
         if (normalized in KNOWN_PUBLIC_RESOLVERS) return DnsClassification.KNOWN_PUBLIC_RESOLVER
         return DnsClassification.OTHER_PUBLIC
     }

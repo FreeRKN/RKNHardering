@@ -13,6 +13,17 @@ import java.net.URL
 
 object GeoIpChecker {
 
+    internal data class GeoIpSnapshot(
+        val ip: String,
+        val country: String,
+        val countryCode: String,
+        val isp: String,
+        val org: String,
+        val asn: String,
+        val isProxy: Boolean,
+        val isHosting: Boolean,
+    )
+
     private const val API_URL =
         "http://ip-api.com/json/?fields=status,country,countryCode,isp,org,as,proxy,hosting,query"
 
@@ -40,34 +51,59 @@ object GeoIpChecker {
         }
     }
 
-    private fun evaluate(json: JSONObject): CategoryResult {
+    internal fun evaluate(json: JSONObject): CategoryResult {
+        return evaluate(
+            GeoIpSnapshot(
+                ip = json.optString("query", "N/A"),
+                country = json.optString("country", "N/A"),
+                countryCode = json.optString("countryCode", ""),
+                isp = json.optString("isp", "N/A"),
+                org = json.optString("org", "N/A"),
+                asn = json.optString("as", "N/A"),
+                isProxy = json.optBoolean("proxy", false),
+                isHosting = json.optBoolean("hosting", false),
+            ),
+        )
+    }
+
+    internal fun evaluate(snapshot: GeoIpSnapshot): CategoryResult {
         val findings = mutableListOf<Finding>()
         val evidence = mutableListOf<EvidenceItem>()
-        val ip = json.optString("query", "N/A")
-        val country = json.optString("country", "N/A")
-        val countryCode = json.optString("countryCode", "")
-        val isp = json.optString("isp", "N/A")
-        val org = json.optString("org", "N/A")
-        val asn = json.optString("as", "N/A")
-        val isProxy = json.optBoolean("proxy", false)
-        val isHosting = json.optBoolean("hosting", false)
 
-        findings.add(Finding("IP: $ip"))
-        findings.add(Finding("Страна: $country ($countryCode)"))
-        findings.add(Finding("ISP: $isp"))
-        findings.add(Finding("Организация: $org"))
-        findings.add(Finding("ASN: $asn"))
+        findings.add(Finding("IP: ${snapshot.ip}"))
+        findings.add(Finding("Страна: ${snapshot.country} (${snapshot.countryCode})"))
+        findings.add(Finding("ISP: ${snapshot.isp}"))
+        findings.add(Finding("Организация: ${snapshot.org}"))
+        findings.add(Finding("ASN: ${snapshot.asn}"))
 
-        val foreignIp = countryCode.isNotEmpty() && countryCode != "RU"
-        addGeoFinding(findings, evidence, "IP вне России: ${if (foreignIp) "да ($countryCode)" else "нет"}", foreignIp)
-        addGeoFinding(findings, evidence, "IP принадлежит хостинг-провайдеру: ${if (isHosting) "да" else "нет"}", isHosting)
-        addGeoFinding(findings, evidence, "IP в базе известных прокси/VPN: ${if (isProxy) "да" else "нет"}", isProxy)
+        val foreignIp = snapshot.countryCode.isNotEmpty() && snapshot.countryCode != "RU"
+        val needsReview = foreignIp && !snapshot.isHosting && !snapshot.isProxy
+        findings.add(
+            Finding(
+                description = "IP вне России: ${if (foreignIp) "да (${snapshot.countryCode})" else "нет"}",
+                needsReview = needsReview,
+                source = EvidenceSource.GEO_IP,
+                confidence = needsReview.takeIf { it }?.let { EvidenceConfidence.LOW },
+            ),
+        )
+        addGeoFinding(
+            findings = findings,
+            evidence = evidence,
+            description = "IP принадлежит хостинг-провайдеру: ${if (snapshot.isHosting) "да" else "нет"}",
+            detected = snapshot.isHosting,
+        )
+        addGeoFinding(
+            findings = findings,
+            evidence = evidence,
+            description = "IP в базе известных прокси/VPN: ${if (snapshot.isProxy) "да" else "нет"}",
+            detected = snapshot.isProxy,
+        )
 
-        val detected = foreignIp || isHosting || isProxy
         return CategoryResult(
             name = "GeoIP",
-            detected = detected,
+            detected = snapshot.isHosting || snapshot.isProxy,
             findings = findings,
+            needsReview = needsReview,
             evidence = evidence,
         )
     }

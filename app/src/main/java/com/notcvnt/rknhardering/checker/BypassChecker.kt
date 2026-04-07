@@ -137,12 +137,13 @@ object BypassChecker {
                 append(familySuffix)
                 append("]")
             }
+            append(" (требует подтверждения обхода)")
         }
 
         findings.add(
             Finding(
                 description = description,
-                detected = true,
+                needsReview = true,
                 source = EvidenceSource.LOCAL_PROXY,
                 confidence = EvidenceConfidence.MEDIUM,
                 family = familySuffix,

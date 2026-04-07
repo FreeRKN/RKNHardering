@@ -1,6 +1,9 @@
 package com.notcvnt.rknhardering.checker
 
 import com.notcvnt.rknhardering.model.CategoryResult
+import com.notcvnt.rknhardering.model.EvidenceConfidence
+import com.notcvnt.rknhardering.model.EvidenceItem
+import com.notcvnt.rknhardering.model.EvidenceSource
 import com.notcvnt.rknhardering.model.Finding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -39,6 +42,7 @@ object GeoIpChecker {
 
     private fun evaluate(json: JSONObject): CategoryResult {
         val findings = mutableListOf<Finding>()
+        val evidence = mutableListOf<EvidenceItem>()
         val ip = json.optString("query", "N/A")
         val country = json.optString("country", "N/A")
         val countryCode = json.optString("countryCode", "")
@@ -48,39 +52,23 @@ object GeoIpChecker {
         val isProxy = json.optBoolean("proxy", false)
         val isHosting = json.optBoolean("hosting", false)
 
-        findings.add(Finding("IP: $ip", false))
-        findings.add(Finding("Страна: $country ($countryCode)", false))
-        findings.add(Finding("ISP: $isp", false))
-        findings.add(Finding("Организация: $org", false))
-        findings.add(Finding("ASN: $asn", false))
+        findings.add(Finding("IP: $ip"))
+        findings.add(Finding("Страна: $country ($countryCode)"))
+        findings.add(Finding("ISP: $isp"))
+        findings.add(Finding("Организация: $org"))
+        findings.add(Finding("ASN: $asn"))
 
         val foreignIp = countryCode.isNotEmpty() && countryCode != "RU"
-        findings.add(
-            Finding(
-                "IP вне России: ${if (foreignIp) "да ($countryCode)" else "нет"}",
-                foreignIp
-            )
-        )
-
-        findings.add(
-            Finding(
-                "IP принадлежит хостинг-провайдеру: ${if (isHosting) "да" else "нет"}",
-                isHosting
-            )
-        )
-
-        findings.add(
-            Finding(
-                "IP в базе известных прокси/VPN: ${if (isProxy) "да" else "нет"}",
-                isProxy
-            )
-        )
+        addGeoFinding(findings, evidence, "IP вне России: ${if (foreignIp) "да ($countryCode)" else "нет"}", foreignIp)
+        addGeoFinding(findings, evidence, "IP принадлежит хостинг-провайдеру: ${if (isHosting) "да" else "нет"}", isHosting)
+        addGeoFinding(findings, evidence, "IP в базе известных прокси/VPN: ${if (isProxy) "да" else "нет"}", isProxy)
 
         val detected = foreignIp || isHosting || isProxy
         return CategoryResult(
             name = "GeoIP",
             detected = detected,
-            findings = findings
+            findings = findings,
+            evidence = evidence,
         )
     }
 
@@ -88,7 +76,33 @@ object GeoIpChecker {
         return CategoryResult(
             name = "GeoIP",
             detected = false,
-            findings = listOf(Finding(message, false))
+            findings = listOf(Finding(message)),
         )
+    }
+
+    private fun addGeoFinding(
+        findings: MutableList<Finding>,
+        evidence: MutableList<EvidenceItem>,
+        description: String,
+        detected: Boolean,
+    ) {
+        findings.add(
+            Finding(
+                description = description,
+                detected = detected,
+                source = EvidenceSource.GEO_IP,
+                confidence = detected.takeIf { it }?.let { EvidenceConfidence.MEDIUM },
+            ),
+        )
+        if (detected) {
+            evidence.add(
+                EvidenceItem(
+                    source = EvidenceSource.GEO_IP,
+                    detected = true,
+                    confidence = EvidenceConfidence.MEDIUM,
+                    description = description,
+                ),
+            )
+        }
     }
 }

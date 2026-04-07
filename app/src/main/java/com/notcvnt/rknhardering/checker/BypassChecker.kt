@@ -1,6 +1,9 @@
 package com.notcvnt.rknhardering.checker
 
 import com.notcvnt.rknhardering.model.BypassResult
+import com.notcvnt.rknhardering.model.EvidenceConfidence
+import com.notcvnt.rknhardering.model.EvidenceItem
+import com.notcvnt.rknhardering.model.EvidenceSource
 import com.notcvnt.rknhardering.model.Finding
 import com.notcvnt.rknhardering.probe.IfconfigClient
 import com.notcvnt.rknhardering.probe.ProxyEndpoint
@@ -8,6 +11,7 @@ import com.notcvnt.rknhardering.probe.ProxyScanner
 import com.notcvnt.rknhardering.probe.ScanMode
 import com.notcvnt.rknhardering.probe.XrayApiScanResult
 import com.notcvnt.rknhardering.probe.XrayApiScanner
+import com.notcvnt.rknhardering.vpn.VpnAppCatalog
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
@@ -22,11 +26,11 @@ object BypassChecker {
         onProgress: (suspend (Progress) -> Unit)? = null,
     ): BypassResult = coroutineScope {
         val findings = mutableListOf<Finding>()
+        val evidence = mutableListOf<EvidenceItem>()
 
         val scanner = ProxyScanner()
         val xrayScanner = XrayApiScanner()
 
-        // Run proxy scan and xray scan in parallel
         val proxyDeferred = async {
             onProgress?.invoke(Progress("Сканирование портов", "Поиск открытых прокси на localhost..."))
             scanner.findOpenProxyEndpoint(
@@ -38,9 +42,7 @@ object BypassChecker {
                         com.notcvnt.rknhardering.probe.ScanPhase.FULL_RANGE -> "Полное сканирование"
                     }
                     val percent = if (progress.total > 0) (progress.scanned * 100 / progress.total) else 0
-                    onProgress?.invoke(
-                        Progress(phaseText, "Порт ${progress.currentPort} ($percent%)")
-                    )
+                    onProgress?.invoke(Progress(phaseText, "Порт ${progress.currentPort} ($percent%)"))
                 },
             )
         }
@@ -49,53 +51,18 @@ object BypassChecker {
             onProgress?.invoke(Progress("Xray API", "Поиск gRPC API на localhost..."))
             xrayScanner.findXrayApi { progress ->
                 val percent = if (progress.total > 0) (progress.scanned * 100 / progress.total) else 0
-                onProgress?.invoke(
-                    Progress("Xray API", "${progress.host}:${progress.currentPort} ($percent%)")
-                )
+                onProgress?.invoke(Progress("Xray API", "${progress.host}:${progress.currentPort} ($percent%)"))
             }
         }
 
-        val proxyEndpoint: ProxyEndpoint? = proxyDeferred.await()
-        val xrayApiScanResult: XrayApiScanResult? = xrayDeferred.await()
+        val proxyEndpoint = proxyDeferred.await()
+        val xrayApiScanResult = xrayDeferred.await()
 
-        // Report proxy scan result
-        if (proxyEndpoint != null) {
-            findings.add(
-                Finding(
-                    "Открытый ${proxyEndpoint.type.name} прокси: ${formatHostPort(proxyEndpoint.host, proxyEndpoint.port)}",
-                    true
-                )
-            )
-        } else {
-            findings.add(Finding("Открытые прокси на localhost: не обнаружены", false))
-        }
+        reportProxyResult(proxyEndpoint, findings, evidence)
+        reportXrayApiResult(xrayApiScanResult, findings, evidence)
 
-        // Report xray API result
-        if (xrayApiScanResult != null) {
-            val ep = xrayApiScanResult.endpoint
-            findings.add(Finding("Xray gRPC API: ${formatHostPort(ep.host, ep.port)}", true))
-            for (outbound in xrayApiScanResult.outbounds.take(10)) {
-                val detail = buildString {
-                    append("  ${outbound.tag}")
-                    outbound.protocolName?.let { append(" [$it]") }
-                    if (outbound.address != null && outbound.port != null) {
-                        append(" → ${outbound.address}:${outbound.port}")
-                    }
-                    outbound.sni?.let { append(", sni=$it") }
-                }
-                findings.add(Finding(detail, true))
-            }
-            if (xrayApiScanResult.outbounds.size > 10) {
-                findings.add(Finding("  ...ещё ${xrayApiScanResult.outbounds.size - 10} аутбаундов", true))
-            }
-        } else {
-            findings.add(Finding("Xray gRPC API: не обнаружен", false))
-        }
-
-        // If proxy found, fetch IPs to prove bypass
         var directIp: String? = null
         var proxyIp: String? = null
-
         var confirmedBypass = false
 
         if (proxyEndpoint != null) {
@@ -107,33 +74,34 @@ object BypassChecker {
             directIp = directDeferred.await().getOrNull()
             proxyIp = proxyIpDeferred.await().getOrNull()
 
-            if (directIp != null) {
-                findings.add(Finding("Прямой IP: $directIp", false))
-            } else {
-                findings.add(Finding("Прямой IP: не удалось получить", false))
-            }
+            findings.add(Finding("Прямой IP: ${directIp ?: "не удалось получить"}"))
+            findings.add(Finding("IP через прокси: ${proxyIp ?: "не удалось получить"}"))
 
-            if (proxyIp != null) {
-                findings.add(Finding("IP через прокси: $proxyIp", false))
-            } else {
-                findings.add(Finding("IP через прокси: не удалось получить", false))
-            }
-
-            if (directIp != null && proxyIp != null) {
-                if (directIp != proxyIp) {
-                    confirmedBypass = true
-                    findings.add(
-                        Finding("Per-app split bypass: подтвержден (IP отличаются)", true)
-                    )
-                } else {
-                    findings.add(
-                        Finding("Per-app split отключен: IP совпадают", false)
-                    )
-                }
+            if (directIp != null && proxyIp != null && directIp != proxyIp) {
+                confirmedBypass = true
+                findings.add(
+                    Finding(
+                        description = "Per-app split bypass: подтвержден (IP отличаются)",
+                        detected = true,
+                        source = EvidenceSource.SPLIT_TUNNEL_BYPASS,
+                        confidence = EvidenceConfidence.HIGH,
+                    ),
+                )
+                evidence.add(
+                    EvidenceItem(
+                        source = EvidenceSource.SPLIT_TUNNEL_BYPASS,
+                        detected = true,
+                        confidence = EvidenceConfidence.HIGH,
+                        description = "Direct IP differs from proxy IP",
+                    ),
+                )
+            } else if (directIp != null && proxyIp != null) {
+                findings.add(Finding("Per-app split отключен: IP совпадают"))
             }
         }
 
         val detected = confirmedBypass || xrayApiScanResult != null
+        val needsReview = !detected && proxyEndpoint != null
 
         BypassResult(
             proxyEndpoint = proxyEndpoint,
@@ -142,7 +110,116 @@ object BypassChecker {
             xrayApiScanResult = xrayApiScanResult,
             findings = findings,
             detected = detected,
+            needsReview = needsReview,
+            evidence = evidence,
         )
+    }
+
+    private fun reportProxyResult(
+        proxyEndpoint: ProxyEndpoint?,
+        findings: MutableList<Finding>,
+        evidence: MutableList<EvidenceItem>,
+    ) {
+        if (proxyEndpoint == null) {
+            findings.add(Finding("Открытые прокси на localhost: не обнаружены"))
+            return
+        }
+
+        val candidateFamilies = VpnAppCatalog.familiesForPort(proxyEndpoint.port)
+        val familySuffix = candidateFamilies.takeIf { it.isNotEmpty() }?.joinToString()
+        val description = buildString {
+            append("Открытый ")
+            append(proxyEndpoint.type.name)
+            append(" прокси: ")
+            append(formatHostPort(proxyEndpoint.host, proxyEndpoint.port))
+            if (!familySuffix.isNullOrBlank()) {
+                append(" [")
+                append(familySuffix)
+                append("]")
+            }
+        }
+
+        findings.add(
+            Finding(
+                description = description,
+                detected = true,
+                source = EvidenceSource.LOCAL_PROXY,
+                confidence = EvidenceConfidence.MEDIUM,
+                family = familySuffix,
+            ),
+        )
+        evidence.add(
+            EvidenceItem(
+                source = EvidenceSource.LOCAL_PROXY,
+                detected = true,
+                confidence = EvidenceConfidence.MEDIUM,
+                description = "Detected open ${proxyEndpoint.type.name} proxy at ${formatHostPort(proxyEndpoint.host, proxyEndpoint.port)}",
+                family = familySuffix,
+            ),
+        )
+    }
+
+    private fun reportXrayApiResult(
+        xrayApiScanResult: XrayApiScanResult?,
+        findings: MutableList<Finding>,
+        evidence: MutableList<EvidenceItem>,
+    ) {
+        if (xrayApiScanResult == null) {
+            findings.add(Finding("Xray gRPC API: не обнаружен"))
+            return
+        }
+
+        val ep = xrayApiScanResult.endpoint
+        findings.add(
+            Finding(
+                description = "Xray gRPC API: ${formatHostPort(ep.host, ep.port)}",
+                detected = true,
+                source = EvidenceSource.XRAY_API,
+                confidence = EvidenceConfidence.HIGH,
+                family = VpnAppCatalog.FAMILY_XRAY,
+            ),
+        )
+        evidence.add(
+            EvidenceItem(
+                source = EvidenceSource.XRAY_API,
+                detected = true,
+                confidence = EvidenceConfidence.HIGH,
+                description = "Detected Xray gRPC API at ${formatHostPort(ep.host, ep.port)}",
+                family = VpnAppCatalog.FAMILY_XRAY,
+            ),
+        )
+
+        for (outbound in xrayApiScanResult.outbounds.take(10)) {
+            val detail = buildString {
+                append("  ")
+                append(outbound.tag)
+                outbound.protocolName?.let { append(" [$it]") }
+                if (outbound.address != null && outbound.port != null) {
+                    append(" -> ${outbound.address}:${outbound.port}")
+                }
+                outbound.sni?.let { append(", sni=$it") }
+            }
+            findings.add(
+                Finding(
+                    description = detail,
+                    detected = true,
+                    source = EvidenceSource.XRAY_API,
+                    confidence = EvidenceConfidence.HIGH,
+                    family = VpnAppCatalog.FAMILY_XRAY,
+                ),
+            )
+        }
+        if (xrayApiScanResult.outbounds.size > 10) {
+            findings.add(
+                Finding(
+                    description = "  ...ещё ${xrayApiScanResult.outbounds.size - 10} аутбаундов",
+                    detected = true,
+                    source = EvidenceSource.XRAY_API,
+                    confidence = EvidenceConfidence.HIGH,
+                    family = VpnAppCatalog.FAMILY_XRAY,
+                ),
+            )
+        }
     }
 
     private fun formatHostPort(host: String, port: Int): String {

@@ -1,5 +1,6 @@
 package com.notcvnt.rknhardering.probe
 
+import com.notcvnt.rknhardering.vpn.VpnAppCatalog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
@@ -14,7 +15,9 @@ import kotlin.math.max
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ProxyScanner(
     private val loopbackHosts: List<String> = listOf("127.0.0.1", "::1"),
-    private val popularPorts: List<Int> = listOf(1080, 2080, 1081, 10808, 10809, 12334, 7890),
+    private val popularPorts: List<Int> = (
+        VpnAppCatalog.localhostProxyPorts + listOf(1081, 7890, 7891)
+        ).distinct().sorted(),
     private val scanRange: IntRange = 1024..65535,
     private val connectTimeoutMs: Int = 15,
     private val readTimeoutMs: Int = 30,

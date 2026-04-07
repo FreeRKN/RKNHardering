@@ -22,12 +22,10 @@ object VpnCheckRunner {
         val bypassResult = bypassDeferred.await()
 
         val verdict = VerdictEngine.evaluate(
-            geoIpDetected = geoIp.detected,
-            directDetected = directSigns.detected,
-            indirectDetected = indirectSigns.detected,
-            bypassDetected = bypassResult.detected,
-            directNeedsReview = directSigns.needsReview,
-            indirectNeedsReview = indirectSigns.needsReview,
+            geoIp = geoIp,
+            directSigns = directSigns,
+            indirectSigns = indirectSigns,
+            bypassResult = bypassResult,
         )
 
         CheckResult(
@@ -35,7 +33,7 @@ object VpnCheckRunner {
             directSigns = directSigns,
             indirectSigns = indirectSigns,
             bypassResult = bypassResult,
-            verdict = verdict
+            verdict = verdict,
         )
     }
 }

@@ -219,6 +219,10 @@ class MainActivity : AppCompatActivity() {
             iconBypass.setImageResource(R.drawable.ic_warning)
             statusBypass.text = "Обнаружено"
             statusBypass.setTextColor(ContextCompat.getColor(this, R.color.finding_detected))
+        } else if (bypass.needsReview) {
+            iconBypass.setImageResource(R.drawable.ic_help)
+            statusBypass.text = "Требует проверки"
+            statusBypass.setTextColor(ContextCompat.getColor(this, R.color.verdict_yellow))
         } else {
             iconBypass.setImageResource(R.drawable.ic_check_circle)
             statusBypass.text = "Чисто"

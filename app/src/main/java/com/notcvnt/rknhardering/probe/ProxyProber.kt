@@ -5,9 +5,15 @@ import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
-import kotlin.math.min
 
 object ProxyProber {
+
+    internal enum class PortProbeResult {
+        CLOSED,
+        UNKNOWN_TCP_SERVICE,
+        SOCKS5_NO_AUTH,
+        HTTP_CONNECT_PROXY,
+    }
 
     fun probeNoAuthProxyType(
         host: String,
@@ -15,23 +21,29 @@ object ProxyProber {
         connectTimeoutMs: Int,
         readTimeoutMs: Int,
     ): ProxyType? {
-        return when (probeSocks5NoAuth(host, port, connectTimeoutMs, readTimeoutMs)) {
-            SocksProbeResult.SOCKS5_NO_AUTH -> ProxyType.SOCKS5
-            SocksProbeResult.CLOSED -> null
-            SocksProbeResult.NOT_SOCKS -> {
-                if (probeHttpConnectNoAuth(host, port, connectTimeoutMs, readTimeoutMs)) {
-                    ProxyType.HTTP
-                } else {
-                    null
-                }
-            }
+        return when (probePort(host, port, connectTimeoutMs, readTimeoutMs)) {
+            PortProbeResult.SOCKS5_NO_AUTH -> ProxyType.SOCKS5
+            PortProbeResult.HTTP_CONNECT_PROXY -> ProxyType.HTTP
+            PortProbeResult.CLOSED,
+            PortProbeResult.UNKNOWN_TCP_SERVICE,
+            -> null
         }
     }
 
-    private enum class SocksProbeResult {
-        CLOSED,
-        NOT_SOCKS,
-        SOCKS5_NO_AUTH,
+    internal fun probePort(
+        host: String,
+        port: Int,
+        connectTimeoutMs: Int,
+        readTimeoutMs: Int,
+    ): PortProbeResult {
+        val socksResult = probeSocks5NoAuth(host, port, connectTimeoutMs, readTimeoutMs)
+        return when (socksResult) {
+            PortProbeResult.SOCKS5_NO_AUTH,
+            PortProbeResult.CLOSED,
+            -> socksResult
+            PortProbeResult.UNKNOWN_TCP_SERVICE -> probeHttpConnect(host, port, connectTimeoutMs, readTimeoutMs)
+            PortProbeResult.HTTP_CONNECT_PROXY -> PortProbeResult.HTTP_CONNECT_PROXY
+        }
     }
 
     private fun probeSocks5NoAuth(
@@ -39,12 +51,12 @@ object ProxyProber {
         port: Int,
         connectTimeoutMs: Int,
         readTimeoutMs: Int,
-    ): SocksProbeResult {
+    ): PortProbeResult {
         return Socket().use { socket ->
             try {
                 socket.connect(InetSocketAddress(host, port), connectTimeoutMs)
             } catch (_: Exception) {
-                return SocksProbeResult.CLOSED
+                return PortProbeResult.CLOSED
             }
 
             socket.soTimeout = readTimeoutMs
@@ -53,18 +65,57 @@ object ProxyProber {
             try {
                 socket.getOutputStream().writeSocks5NoAuthGreeting()
                 val response = socket.getInputStream().readExactly(2)
-                    ?: return SocksProbeResult.NOT_SOCKS
+                    ?: return PortProbeResult.UNKNOWN_TCP_SERVICE
                 val version = response[0].toInt() and 0xFF
                 val method = response[1].toInt() and 0xFF
                 if (version == 0x05 && method == 0x00) {
-                    SocksProbeResult.SOCKS5_NO_AUTH
+                    PortProbeResult.SOCKS5_NO_AUTH
                 } else {
-                    SocksProbeResult.NOT_SOCKS
+                    PortProbeResult.UNKNOWN_TCP_SERVICE
                 }
             } catch (_: SocketTimeoutException) {
-                SocksProbeResult.NOT_SOCKS
+                PortProbeResult.UNKNOWN_TCP_SERVICE
             } catch (_: Exception) {
-                SocksProbeResult.NOT_SOCKS
+                PortProbeResult.UNKNOWN_TCP_SERVICE
+            }
+        }
+    }
+
+    private fun probeHttpConnect(
+        host: String,
+        port: Int,
+        connectTimeoutMs: Int,
+        readTimeoutMs: Int,
+    ): PortProbeResult {
+        return Socket().use { socket ->
+            try {
+                socket.connect(InetSocketAddress(host, port), connectTimeoutMs)
+            } catch (_: Exception) {
+                return PortProbeResult.CLOSED
+            }
+
+            socket.soTimeout = readTimeoutMs
+            socket.tcpNoDelay = true
+
+            try {
+                socket.getOutputStream().writeHttpConnectProbe()
+                val response = socket.getInputStream().readAsciiPrefix()
+                    ?: return PortProbeResult.UNKNOWN_TCP_SERVICE
+                val code = Regex("^HTTP/1\\.[01]\\s+(\\d{3})").find(response)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?.toIntOrNull()
+                    ?: return PortProbeResult.UNKNOWN_TCP_SERVICE
+
+                if (code == 200) {
+                    PortProbeResult.HTTP_CONNECT_PROXY
+                } else {
+                    PortProbeResult.UNKNOWN_TCP_SERVICE
+                }
+            } catch (_: SocketTimeoutException) {
+                PortProbeResult.UNKNOWN_TCP_SERVICE
+            } catch (_: Exception) {
+                PortProbeResult.UNKNOWN_TCP_SERVICE
             }
         }
     }
@@ -74,36 +125,16 @@ object ProxyProber {
         flush()
     }
 
-    private fun probeHttpConnectNoAuth(
-        host: String,
-        port: Int,
-        connectTimeoutMs: Int,
-        readTimeoutMs: Int,
-    ): Boolean {
-        return try {
-            Socket().use { socket ->
-                socket.connect(InetSocketAddress(host, port), connectTimeoutMs)
-                socket.soTimeout = readTimeoutMs
-                socket.tcpNoDelay = true
-
-                val request =
-                    "CONNECT ifconfig.me:443 HTTP/1.1\r\n" +
-                        "Host: ifconfig.me:443\r\n" +
-                        "User-Agent: ProxyBypass/1.0\r\n" +
-                        "Proxy-Connection: keep-alive\r\n" +
-                        "\r\n"
-                socket.getOutputStream().write(request.toByteArray(Charsets.ISO_8859_1))
-                socket.getOutputStream().flush()
-
-                val statusLine = socket.getInputStream().readAsciiLine(maxBytes = 256) ?: return false
-                val parts = statusLine.trim().split(Regex("\\s+"), limit = 3)
-                if (parts.size < 2 || !parts[0].startsWith("HTTP/")) return false
-                val code = parts[1].toIntOrNull() ?: return false
-                code == 200
-            }
-        } catch (_: Exception) {
-            false
-        }
+    private fun OutputStream.writeHttpConnectProbe() {
+        write(
+            (
+                "CONNECT ifconfig.me:443 HTTP/1.1\r\n" +
+                    "Host: ifconfig.me:443\r\n" +
+                    "Proxy-Connection: Keep-Alive\r\n" +
+                    "\r\n"
+                ).encodeToByteArray(),
+        )
+        flush()
     }
 
     private fun InputStream.readExactly(byteCount: Int): ByteArray? {
@@ -117,19 +148,10 @@ object ProxyProber {
         return buffer
     }
 
-    private fun InputStream.readAsciiLine(maxBytes: Int): String? {
-        val buffer = ByteArray(min(maxBytes, 1024))
-        var count = 0
-        while (count < maxBytes) {
-            val b = read()
-            if (b == -1) return null
-            if (b == '\n'.code) break
-            if (b != '\r'.code) {
-                if (count >= buffer.size) return null
-                buffer[count] = b.toByte()
-                count++
-            }
-        }
-        return if (count == 0) null else String(buffer, 0, count, Charsets.ISO_8859_1)
+    private fun InputStream.readAsciiPrefix(limit: Int = 256): String? {
+        val buffer = ByteArray(limit)
+        val read = read(buffer)
+        if (read <= 0) return null
+        return buffer.decodeToString(0, read)
     }
 }

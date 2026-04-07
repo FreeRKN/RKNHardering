@@ -1,26 +1,84 @@
 package com.notcvnt.rknhardering.checker
 
+import com.notcvnt.rknhardering.model.BypassResult
+import com.notcvnt.rknhardering.model.CategoryResult
+import com.notcvnt.rknhardering.model.EvidenceConfidence
+import com.notcvnt.rknhardering.model.EvidenceItem
+import com.notcvnt.rknhardering.model.EvidenceSource
 import com.notcvnt.rknhardering.model.Verdict
+import com.notcvnt.rknhardering.model.VpnAppKind
 
 object VerdictEngine {
 
     fun evaluate(
-        geoIpDetected: Boolean,
-        directDetected: Boolean,
-        indirectDetected: Boolean,
-        bypassDetected: Boolean = false,
-        directNeedsReview: Boolean = false,
-        indirectNeedsReview: Boolean = false,
+        geoIp: CategoryResult,
+        directSigns: CategoryResult,
+        indirectSigns: CategoryResult,
+        bypassResult: BypassResult,
     ): Verdict {
-        // Bypass detection (open proxy / xray API on localhost) is a strong signal
-        if (bypassDetected) return Verdict.DETECTED
+        val evidence = buildList {
+            addAll(geoIp.evidence)
+            addAll(directSigns.evidence)
+            addAll(indirectSigns.evidence)
+            addAll(bypassResult.evidence)
+        }
 
+        if (evidence.any { it.source == EvidenceSource.SPLIT_TUNNEL_BYPASS && it.detected }) {
+            return Verdict.DETECTED
+        }
+        if (evidence.any { it.source == EvidenceSource.XRAY_API && it.detected }) {
+            return Verdict.DETECTED
+        }
+
+        val hasGeo = evidence.any { it.source == EvidenceSource.GEO_IP && it.detected }
+        val hasStrongTransport = evidence.any {
+            it.source == EvidenceSource.NETWORK_CAPABILITIES && it.confidence == EvidenceConfidence.HIGH
+        }
+        val hasLocalProxy = evidence.any { it.source == EvidenceSource.LOCAL_PROXY && it.detected }
+        val hasTargetedInstalled = evidence.any {
+            it.source == EvidenceSource.INSTALLED_APP && it.kind == VpnAppKind.TARGETED_BYPASS
+        }
+        val hasTargetedActive = evidence.any {
+            it.source == EvidenceSource.ACTIVE_VPN && it.kind == VpnAppKind.TARGETED_BYPASS
+        }
+        val hasGenericActive = evidence.any {
+            it.source == EvidenceSource.ACTIVE_VPN && it.kind == VpnAppKind.GENERIC_VPN
+        }
+
+        if (hasTargetedActive && (hasLocalProxy || hasStrongTransport || hasGeo || hasTargetedInstalled)) {
+            return Verdict.DETECTED
+        }
+
+        if (hasGeo && (hasStrongTransport || hasLocalProxy || hasTargetedActive)) {
+            return Verdict.DETECTED
+        }
+
+        val score = evidence.sumOf(::weight)
         return when {
-            geoIpDetected && (directDetected || indirectDetected) -> Verdict.DETECTED
-            geoIpDetected -> Verdict.NEEDS_REVIEW
-            directDetected && indirectDetected -> Verdict.NEEDS_REVIEW
-            directNeedsReview || indirectNeedsReview -> Verdict.NEEDS_REVIEW
+            score >= 11 && (hasTargetedInstalled || hasTargetedActive || hasLocalProxy) -> Verdict.DETECTED
+            hasGenericActive || score >= 4 || directSigns.needsReview || indirectSigns.needsReview -> Verdict.NEEDS_REVIEW
             else -> Verdict.NOT_DETECTED
         }
+    }
+
+    private fun weight(item: EvidenceItem): Int {
+        val confidenceWeight = when (item.confidence) {
+            EvidenceConfidence.HIGH -> 5
+            EvidenceConfidence.MEDIUM -> 3
+            EvidenceConfidence.LOW -> 1
+        }
+        val kindWeight = when (item.kind) {
+            VpnAppKind.TARGETED_BYPASS -> 2
+            VpnAppKind.GENERIC_VPN -> 0
+            null -> 0
+        }
+        val sourceWeight = when (item.source) {
+            EvidenceSource.ACTIVE_VPN -> 2
+            EvidenceSource.LOCAL_PROXY -> 2
+            EvidenceSource.XRAY_API -> 4
+            EvidenceSource.SPLIT_TUNNEL_BYPASS -> 5
+            else -> 0
+        }
+        return confidenceWeight + kindWeight + sourceWeight
     }
 }

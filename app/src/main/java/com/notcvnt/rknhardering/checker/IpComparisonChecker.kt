@@ -10,6 +10,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.net.URL
 
 object IpComparisonChecker {
 
@@ -31,13 +32,23 @@ object IpComparisonChecker {
             scope = IpCheckerScope.RU,
         ),
         EndpointSpec(
+            label = "2ip.ru",
+            url = "https://2ip.ru",
+            scope = IpCheckerScope.RU,
+        ),
+        EndpointSpec(
             label = "Yandex IPv6",
             url = "https://ipv6-internet.yandex.net/api/v0/ip",
             scope = IpCheckerScope.RU,
         ),
         EndpointSpec(
-            label = "ifconfig.me",
-            url = "https://ifconfig.me/ip",
+            label = "ifconfig.me IPv4",
+            url = "https://ipv4.ifconfig.me/ip",
+            scope = IpCheckerScope.NON_RU,
+        ),
+        EndpointSpec(
+            label = "ifconfig.me IPv6",
+            url = "https://ipv6.ifconfig.me/ip",
             scope = IpCheckerScope.NON_RU,
         ),
         EndpointSpec(
@@ -51,8 +62,13 @@ object IpComparisonChecker {
             scope = IpCheckerScope.NON_RU,
         ),
         EndpointSpec(
-            label = "ip.sb",
-            url = "https://api.ip.sb/ip",
+            label = "ip.sb IPv4",
+            url = "https://api-ipv4.ip.sb/ip",
+            scope = IpCheckerScope.NON_RU,
+        ),
+        EndpointSpec(
+            label = "ip.sb IPv6",
+            url = "https://api-ipv6.ip.sb/ip",
             scope = IpCheckerScope.NON_RU,
         ),
     )
@@ -61,13 +77,22 @@ object IpComparisonChecker {
         coroutineScope {
             val responses = ENDPOINTS.map { endpoint ->
                 async {
+                    val dnsRecords = PublicIpClient.resolveDnsRecords(endpoint.url)
                     val result = PublicIpClient.fetchIp(endpoint.url, timeoutMs)
+                    val error = result.exceptionOrNull()?.let(::formatError)
                     IpCheckerResponse(
                         label = endpoint.label,
                         url = endpoint.url,
                         scope = endpoint.scope,
                         ip = result.getOrNull(),
-                        error = result.exceptionOrNull()?.let(::formatError),
+                        error = error,
+                        ipv4Records = dnsRecords.ipv4Records,
+                        ipv6Records = dnsRecords.ipv6Records,
+                        ignoredIpv6Error = shouldIgnoreIpv6Error(
+                            url = endpoint.url,
+                            error = error,
+                            dnsRecords = dnsRecords,
+                        ),
                     )
                 }
             }.map { it.await() }
@@ -115,6 +140,8 @@ object IpComparisonChecker {
             detected -> "RU и не-RU чекеры вернули разные IP: ${ruGroup.canonicalIp} и ${nonRuGroup.canonicalIp}"
             familyMismatch -> "RU и не-RU чекеры вернули адреса разных семейств: ${ruGroup.canonicalIp} и ${nonRuGroup.canonicalIp}"
             rawMismatch -> "IP различаются, но данные неполные: ${ruGroup.canonicalIp} и ${nonRuGroup.canonicalIp}"
+            ruGroup.ignoredIpv6ErrorCount > 0 || nonRuGroup.ignoredIpv6ErrorCount > 0 ->
+                "Все ответившие IPv4-чекеры вернули один IP: ${ruGroup.canonicalIp ?: nonRuGroup.canonicalIp}"
             ruGroup.canonicalIp != null && nonRuGroup.canonicalIp != null ->
                 "Все чекеры вернули один IP: ${ruGroup.canonicalIp}"
             ruGroup.canonicalIp == null && nonRuGroup.canonicalIp == null ->
@@ -161,17 +188,27 @@ object IpComparisonChecker {
 
         val successfulIps = responses.mapNotNull { it.ip }
         val uniqueIps = successfulIps.distinct()
-        val failureCount = responses.count { it.ip == null }
+        val failureCount = responses.count { it.ip == null && !it.ignoredIpv6Error }
+        val ignoredIpv6ErrorCount = responses.count { it.ip == null && it.ignoredIpv6Error }
         val families = successfulIps.mapNotNull(::detectFamily).distinct()
 
         return when {
-            uniqueIps.isEmpty() -> IpCheckerGroupResult(
+            uniqueIps.isEmpty() && failureCount > 0 -> IpCheckerGroupResult(
                 title = title,
                 detected = false,
                 needsReview = true,
                 statusLabel = "Нет ответа",
                 summary = "Ни один сервис не вернул IP",
                 responses = responses,
+            )
+            uniqueIps.isEmpty() -> IpCheckerGroupResult(
+                title = title,
+                detected = false,
+                needsReview = false,
+                statusLabel = "IPv6 игнор",
+                summary = "IPv6-ошибки проигнорированы, валидного IPv4-ответа нет",
+                responses = responses,
+                ignoredIpv6ErrorCount = ignoredIpv6ErrorCount,
             )
             families.size > 1 -> IpCheckerGroupResult(
                 title = title,
@@ -180,6 +217,7 @@ object IpComparisonChecker {
                 statusLabel = "IPv4/IPv6",
                 summary = "Сервисы вернули адреса разных семейств: ${uniqueIps.joinToString()}",
                 responses = responses,
+                ignoredIpv6ErrorCount = ignoredIpv6ErrorCount,
             )
             uniqueIps.size > 1 -> IpCheckerGroupResult(
                 title = title,
@@ -188,6 +226,7 @@ object IpComparisonChecker {
                 statusLabel = "Разнобой",
                 summary = "Сервисы вернули разные IP: ${uniqueIps.joinToString()}",
                 responses = responses,
+                ignoredIpv6ErrorCount = ignoredIpv6ErrorCount,
             )
             failureCount > 0 -> IpCheckerGroupResult(
                 title = title,
@@ -197,15 +236,23 @@ object IpComparisonChecker {
                 summary = "IP ${uniqueIps.single()}, но ${failureCount} из ${responses.size} сервисов не ответили",
                 canonicalIp = uniqueIps.single(),
                 responses = responses,
+                ignoredIpv6ErrorCount = ignoredIpv6ErrorCount,
             )
             else -> IpCheckerGroupResult(
                 title = title,
                 detected = false,
                 needsReview = false,
                 statusLabel = "Совпадает",
-                summary = "Все сервисы группы вернули IP ${uniqueIps.single()}",
+                summary = buildString {
+                    append("Все ответившие сервисы группы вернули IP ${uniqueIps.single()}")
+                    if (ignoredIpv6ErrorCount > 0) {
+                        append("; IPv6-ошибки проигнорированы: ")
+                        append(ignoredIpv6ErrorCount)
+                    }
+                },
                 canonicalIp = uniqueIps.single(),
                 responses = responses,
+                ignoredIpv6ErrorCount = ignoredIpv6ErrorCount,
             )
         }
     }
@@ -226,5 +273,35 @@ object IpComparisonChecker {
             ip.contains('.') -> IpFamily.IPV4
             else -> null
         }
+    }
+
+    private fun shouldIgnoreIpv6Error(
+        url: String,
+        error: String?,
+        dnsRecords: PublicIpClient.DnsRecords,
+    ): Boolean {
+        if (error.isNullOrBlank()) return false
+        val host = try {
+            URL(url).host.lowercase()
+        } catch (_: Exception) {
+            ""
+        }
+        if (host.contains("ipv6")) {
+            return true
+        }
+        val normalizedError = error.lowercase()
+        if (Regex("""\[[0-9a-f:]+]""").containsMatchIn(normalizedError)) {
+            return true
+        }
+        if (normalizedError.contains("address family not supported")) {
+            return true
+        }
+        if (normalizedError.contains("network is unreachable") && dnsRecords.ipv6Records.isNotEmpty()) {
+            return true
+        }
+        if (normalizedError.contains("no route to host") && dnsRecords.ipv6Records.isNotEmpty()) {
+            return true
+        }
+        return false
     }
 }

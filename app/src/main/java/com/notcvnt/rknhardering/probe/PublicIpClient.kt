@@ -1,11 +1,19 @@
 package com.notcvnt.rknhardering.probe
 
 import java.io.IOException
+import java.net.Inet4Address
+import java.net.Inet6Address
+import java.net.InetAddress
 import java.net.Proxy
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
 object PublicIpClient {
+
+    data class DnsRecords(
+        val ipv4Records: List<String> = emptyList(),
+        val ipv6Records: List<String> = emptyList(),
+    )
 
     private const val USER_AGENT = "curl/8.0"
 
@@ -73,6 +81,25 @@ object PublicIpClient {
             .orEmpty()
         if (candidate.isBlank()) return null
         return candidate.takeIf(::looksLikeIp)
+    }
+
+    fun resolveDnsRecords(endpoint: String): DnsRecords {
+        return try {
+            val host = URL(endpoint).host
+            val allAddresses = InetAddress.getAllByName(host)
+            DnsRecords(
+                ipv4Records = allAddresses
+                    .filterIsInstance<Inet4Address>()
+                    .mapNotNull { it.hostAddress }
+                    .distinct(),
+                ipv6Records = allAddresses
+                    .filterIsInstance<Inet6Address>()
+                    .mapNotNull { it.hostAddress }
+                    .distinct(),
+            )
+        } catch (_: Exception) {
+            DnsRecords()
+        }
     }
 
     private fun looksLikeIp(text: String): Boolean {

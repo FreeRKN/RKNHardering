@@ -88,19 +88,51 @@ class IpComparisonCheckerTest {
     }
 
     @Test
-    fun `ru group with one success and one failure is partial`() {
+    fun `ignored ipv6 error does not make ru group partial`() {
         val result = IpComparisonChecker.evaluate(
             listOf(
                 response("Yandex IPv4", IpCheckerScope.RU, ip = "37.113.42.220"),
-                response("Yandex IPv6", IpCheckerScope.RU, error = "connect failed"),
+                response(
+                    "Yandex IPv6",
+                    IpCheckerScope.RU,
+                    error = "connect failed",
+                    ignoredIpv6Error = true,
+                    ipv6Records = listOf("2a02:6b8::"),
+                ),
                 response("ifconfig.me", IpCheckerScope.NON_RU, ip = "37.113.42.220"),
                 response("checkip.amazonaws.com", IpCheckerScope.NON_RU, ip = "37.113.42.220"),
             ),
         )
 
         assertFalse(result.detected)
-        assertTrue(result.needsReview)
-        assertEquals("Частично", result.ruGroup.statusLabel)
+        assertFalse(result.needsReview)
+        assertEquals("Совпадает", result.ruGroup.statusLabel)
+        assertEquals(1, result.ruGroup.ignoredIpv6ErrorCount)
+    }
+
+    @Test
+    fun `ignored ipv6 error does not make non ru group partial`() {
+        val result = IpComparisonChecker.evaluate(
+            listOf(
+                response("Yandex IPv4", IpCheckerScope.RU, ip = "37.113.42.220"),
+                response("2ip.ru", IpCheckerScope.RU, ip = "37.113.42.220"),
+                response("ifconfig.me IPv4", IpCheckerScope.NON_RU, ip = "37.113.42.220"),
+                response(
+                    "ifconfig.me IPv6",
+                    IpCheckerScope.NON_RU,
+                    error = "connect failed",
+                    ignoredIpv6Error = true,
+                    ipv6Records = listOf("2600:1901:0:b2bd::"),
+                ),
+                response("ipify", IpCheckerScope.NON_RU, ip = "37.113.42.220"),
+                response("ip.sb IPv4", IpCheckerScope.NON_RU, ip = "37.113.42.220"),
+            ),
+        )
+
+        assertFalse(result.detected)
+        assertFalse(result.needsReview)
+        assertEquals("Ð¡Ð¾Ð²Ð¿Ð°Ð´Ð°ÐµÑ‚", result.nonRuGroup.statusLabel)
+        assertEquals(1, result.nonRuGroup.ignoredIpv6ErrorCount)
     }
 
     private fun response(
@@ -108,11 +140,17 @@ class IpComparisonCheckerTest {
         scope: IpCheckerScope,
         ip: String? = null,
         error: String? = null,
+        ipv4Records: List<String> = emptyList(),
+        ipv6Records: List<String> = emptyList(),
+        ignoredIpv6Error: Boolean = false,
     ): IpCheckerResponse = IpCheckerResponse(
         label = label,
         url = "https://example.com/$label",
         scope = scope,
         ip = ip,
         error = error,
+        ipv4Records = ipv4Records,
+        ipv6Records = ipv6Records,
+        ignoredIpv6Error = ignoredIpv6Error,
     )
 }

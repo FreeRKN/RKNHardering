@@ -111,6 +111,9 @@ data class IpCheckerResponse(
     val scope: IpCheckerScope,
     val ip: String? = null,
     val error: String? = null,
+    val ipv4Records: List<String> = emptyList(),
+    val ipv6Records: List<String> = emptyList(),
+    val ignoredIpv6Error: Boolean = false,
 )
 
 data class IpCheckerGroupResult(
@@ -121,6 +124,7 @@ data class IpCheckerGroupResult(
     val summary: String,
     val canonicalIp: String? = null,
     val responses: List<IpCheckerResponse>,
+    val ignoredIpv6ErrorCount: Int = 0,
 )
 
 data class IpComparisonResult(

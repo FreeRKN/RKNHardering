@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.TypedValue
@@ -152,19 +153,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requiredPermissions(): Array<String> {
-        return arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.NEARBY_WIFI_DEVICES,
+            )
+        } else {
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
     }
 
     private fun showPermissionRationale(permissions: Array<String> = requiredPermissions()) {
         AlertDialog.Builder(this)
-            .setTitle("Дополнительное разрешение")
-            .setMessage(
-                "Для более точной проверки приложению нужен доступ к точной геолокации.\n\n" +
-                    "Он используется для чтения идентификаторов базовых станций, lookup по cell ID " +
-                    "и доступа к BSSID текущей Wi-Fi сети.\n\n" +
-                    "Без этого разрешения проверка продолжит работать, но часть сигналов " +
-                    "местоположения будет недоступна.",
-            )
+            .setTitle("\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0435 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043d\u0438\u0435")
+            .setMessage(permissionRationaleMessage())
             .setPositiveButton("Разрешить") { _, _ ->
                 launchPermissionRequest(permissions)
             }
@@ -173,6 +175,19 @@ class MainActivity : AppCompatActivity() {
             }
             .setCancelable(false)
             .show()
+    }
+
+    private fun permissionRationaleMessage(): String {
+        val wifiPermissionLine = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            "На Android 13+ приложение также запрашивает доступ к nearby Wi-Fi devices для поиска Wi-Fi точек поблизости."
+        } else {
+            "Приложение также использует Wi-Fi scan для поиска точек доступа поблизости."
+        }
+
+        return "Для более точной проверки приложению нужен доступ к точной геолокации.\n\n" +
+            "Он используется для чтения идентификаторов базовых станций и geolocation lookup через BeaconDB.\n\n" +
+            wifiPermissionLine + "\n\n" +
+            "Без этих разрешений проверка продолжит работать, но часть сигналов местоположения и Wi-Fi scan будут недоступны."
     }
 
     private fun reRequestPermissions() {
@@ -562,18 +577,55 @@ class MainActivity : AppCompatActivity() {
         container.addView(topRow)
         container.addView(url)
 
+        if (response.ipv4Records.isNotEmpty()) {
+            container.addView(
+                createIpDnsView(
+                    label = "A",
+                    value = response.ipv4Records.joinToString(),
+                ),
+            )
+        }
+        if (response.ipv6Records.isNotEmpty()) {
+            container.addView(
+                createIpDnsView(
+                    label = "AAAA",
+                    value = response.ipv6Records.joinToString(),
+                ),
+            )
+        }
+
         if (!response.error.isNullOrBlank()) {
             container.addView(
                 TextView(this).apply {
-                    text = response.error
+                    text = buildString {
+                        if (response.ignoredIpv6Error) {
+                            append("IPv6-ошибка проигнорирована: ")
+                        }
+                        append(response.error)
+                    }
                     textSize = 12f
                     setPadding(0, 2.dp, 0, 0)
-                    setTextColor(ContextCompat.getColor(this@MainActivity, R.color.status_amber))
+                    setTextColor(
+                        ContextCompat.getColor(
+                            this@MainActivity,
+                            if (response.ignoredIpv6Error) R.color.md_on_surface_variant else R.color.status_amber,
+                        ),
+                    )
                 },
             )
         }
 
         return container
+    }
+
+    private fun createIpDnsView(label: String, value: String): View {
+        return TextView(this).apply {
+            text = "$label: $value"
+            textSize = 12f
+            typeface = Typeface.MONOSPACE
+            setPadding(0, 2.dp, 0, 0)
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.md_on_surface_variant))
+        }
     }
 
     private fun displayBypass(bypass: BypassResult) {

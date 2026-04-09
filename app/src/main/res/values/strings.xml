@@ -58,4 +58,50 @@
     <string name="main_card_indirect_signs">Косвенные признаки</string>
     <string name="main_card_location_signals">Сигналы местоположения</string>
     <string name="main_verdict_details">Подробнее</string>
+
+    <string name="main_perm_title">Дополнительное разрешение</string>
+    <string name="main_perm_allow">Разрешить</string>
+    <string name="main_perm_skip">Пропустить</string>
+    <string name="main_perm_all_granted">Все разрешения уже выданы</string>
+    <string name="main_perm_blocked">Разрешение заблокировано. Откройте настройки приложения.</string>
+    <string name="main_perm_rationale">Для более точной проверки приложению нужен доступ к точной геолокации.\n\nОн используется для чтения идентификаторов базовых станций и geolocation lookup через BeaconDB.\n\n%s\n\nБез этих разрешений проверка продолжит работать, но часть сигналов местоположения и Wi-Fi scan будут недоступны.</string>
+    <string name="main_perm_rationale_wifi_13">На Android 13+ приложение также запрашивает доступ к nearby Wi-Fi devices для поиска Wi-Fi точек поблизости.</string>
+    <string name="main_perm_rationale_wifi">Приложение также использует Wi-Fi scan для поиска точек доступа поблизости.</string>
+
+    <string name="main_check_running">Проверка идет. Карточки обновляются прямо по мере получения данных.</string>
+    <string name="main_check_stopped">Проверка остановлена</string>
+    <string name="main_status_scanning">Сканирование...</string>
+    <string name="main_status_preparing">Подготовка...</string>
+    <string name="main_status_cancelled">Отменено</string>
+    <string name="main_status_stopped">Остановлено</string>
+
+    <string name="main_loading_status_scanning">Сканирование</string>
+    <string name="main_loading_status_checking">Проверяется</string>
+
+    <string name="main_loading_geo_ip">Сверяем страну, ASN и признаки хостинга.</string>
+    <string name="main_loading_ip_comparison">Сравниваем внешний IP через несколько независимых сервисов.</string>
+    <string name="main_loading_direct">Ищем прямые признаки VPN, прокси и установленных клиентов.</string>
+    <string name="main_loading_indirect">Проверяем интерфейсы, DNS, маршруты и локальные технические сигналы.</string>
+    <string name="main_loading_location">Собираем сигналы оператора, вышек и ближайших Wi-Fi точек.</string>
+    <string name="main_loading_bypass">Ищем локальный split tunnel bypass и доступные proxy endpoints.</string>
+
+    <string name="main_stopped_scan">Сканирование остановлено до завершения этого этапа.</string>
+    <string name="main_stopped_check">Проверка этого этапа была остановлена до завершения.</string>
+
+    <string name="main_card_status_detected">Обнаружено</string>
+    <string name="main_card_status_error">Ошибка</string>
+    <string name="main_card_status_needs_review">Требует проверки</string>
+    <string name="main_card_status_clean">Чисто</string>
+
+    <string name="main_verdict_not_detected">Обход не выявлен</string>
+    <string name="main_verdict_needs_review">Требуется дополнительная проверка</string>
+    <string name="main_verdict_detected">Обход выявлен</string>
+
+    <string name="main_verdict_section_meaning">Что это значит</string>
+    <string name="main_verdict_section_discovered">Что удалось узнать</string>
+    <string name="main_verdict_section_reasons">Почему вынесен такой вывод</string>
+
+    <string name="main_verdict_hide_details">Скрыть детали</string>
+
+    <string name="main_ipv6_error_ignored">IPv6-ошибка проигнорирована: </string>
 </resources>

@@ -275,12 +275,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun showPermissionRationale(permissions: Array<String> = requiredPermissions()) {
         AlertDialog.Builder(this)
-            .setTitle("\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0435 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043d\u0438\u0435")
+            .setTitle(getString(R.string.main_perm_title))
             .setMessage(permissionRationaleMessage())
-            .setPositiveButton("Разрешить") { _, _ ->
+            .setPositiveButton(getString(R.string.main_perm_allow)) { _, _ ->
                 launchPermissionRequest(permissions)
             }
-            .setNegativeButton("Пропустить") { _, _ ->
+            .setNegativeButton(getString(R.string.main_perm_skip)) { _, _ ->
                 prefs.edit().putBoolean(PREF_RATIONALE_SHOWN, true).apply()
             }
             .setCancelable(false)
@@ -289,15 +289,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun permissionRationaleMessage(): String {
         val wifiPermissionLine = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            "На Android 13+ приложение также запрашивает доступ к nearby Wi-Fi devices для поиска Wi-Fi точек поблизости."
+            getString(R.string.main_perm_rationale_wifi_13)
         } else {
-            "Приложение также использует Wi-Fi scan для поиска точек доступа поблизости."
+            getString(R.string.main_perm_rationale_wifi)
         }
-
-        return "Для более точной проверки приложению нужен доступ к точной геолокации.\n\n" +
-            "Он используется для чтения идентификаторов базовых станций и geolocation lookup через BeaconDB.\n\n" +
-            wifiPermissionLine + "\n\n" +
-            "Без этих разрешений проверка продолжит работать, но часть сигналов местоположения и Wi-Fi scan будут недоступны."
+        return getString(R.string.main_perm_rationale, wifiPermissionLine)
     }
 
     internal fun reRequestPermissions() {
@@ -305,7 +301,7 @@ class MainActivity : AppCompatActivity() {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
         if (missingPermissions.isEmpty()) {
-            Toast.makeText(this, "Все разрешения уже выданы", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.main_perm_all_granted), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -329,7 +325,7 @@ class MainActivity : AppCompatActivity() {
             PermissionRequestPlanner.Action.OPEN_SETTINGS -> {
                 Toast.makeText(
                     this,
-                "Разрешение заблокировано. Откройте настройки приложения.",
+                    getString(R.string.main_perm_blocked),
                     Toast.LENGTH_LONG,
                 ).show()
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -394,11 +390,13 @@ class MainActivity : AppCompatActivity() {
 
         btnStopCheck.visibility = if (isRunning) View.VISIBLE else View.GONE
         if (isRunning) {
-            updateCheckStatus("Проверка идет. Карточки обновляются прямо по мере получения данных.")
-        } else if (textCheckStatus.text != CHECK_STATUS_STOPPED) {
+            updateCheckStatus(getString(R.string.main_check_running))
+        } else if (textCheckStatus.text != checkStatusStopped()) {
             updateCheckStatus(null)
         }
     }
+
+    private fun checkStatusStopped(): String = getString(R.string.main_check_stopped)
 
     private fun updateCheckStatus(message: String?) {
         textCheckStatus.text = message.orEmpty()
@@ -435,14 +433,14 @@ class MainActivity : AppCompatActivity() {
         if (splitTunnelEnabled) {
             cardBypass.visibility = View.VISIBLE
             iconBypass.setImageResource(R.drawable.ic_help)
-            statusBypass.text = "Сканирование..."
+            statusBypass.text = getString(R.string.main_status_scanning)
             statusBypass.setTextColor(ContextCompat.getColor(this, R.color.verdict_yellow))
             resetBypassProgress()
             updateBypassProgress(
                 BypassChecker.Progress(
                     line = BypassChecker.ProgressLine.BYPASS,
                     phase = "Split tunnel bypass",
-                    detail = "Подготовка...",
+                    detail = getString(R.string.main_status_preparing),
                 ),
             )
             findingsBypass.removeAllViews()
@@ -468,11 +466,11 @@ class MainActivity : AppCompatActivity() {
             } catch (e: kotlinx.coroutines.CancellationException) {
                 updateCheckControls(isRunning = false)
                 resetBypassProgress()
-                statusBypass.text = "Отменено"
+                statusBypass.text = getString(R.string.main_status_cancelled)
                 statusBypass.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.verdict_yellow))
                 if (sessionId == activeCheckSessionId) {
                     stopLoadingStatusAnimation()
-                    updateCheckStatus(CHECK_STATUS_STOPPED)
+                    updateCheckStatus(getString(R.string.main_check_stopped))
                     markLoadingStagesCancelled()
                     activeCheckSessionId = 0
                 }
@@ -788,7 +786,7 @@ class MainActivity : AppCompatActivity() {
         infoDivider: View? = null,
     ) {
         icon.setImageResource(R.drawable.ic_help)
-        status.text = "Остановлено"
+        status.text = getString(R.string.main_status_stopped)
         status.setTextColor(ContextCompat.getColor(this, R.color.verdict_yellow))
         infoSection?.apply {
             removeAllViews()
@@ -803,7 +801,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showIpComparisonStopped(stage: RunningStage) {
         iconIpComparison.setImageResource(R.drawable.ic_help)
-        statusIpComparison.text = "Остановлено"
+        statusIpComparison.text = getString(R.string.main_status_stopped)
         statusIpComparison.setTextColor(ContextCompat.getColor(this, R.color.verdict_yellow))
         textIpComparisonSummary.text = stageStoppedMessage(stage)
         ipComparisonGroups.removeAllViews()
@@ -813,7 +811,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showBypassStopped(stage: RunningStage) {
         iconBypass.setImageResource(R.drawable.ic_help)
-        statusBypass.text = "Остановлено"
+        statusBypass.text = getString(R.string.main_status_stopped)
         statusBypass.setTextColor(ContextCompat.getColor(this, R.color.verdict_yellow))
         findingsBypass.removeAllViews()
         findingsBypass.visibility = View.GONE
@@ -866,26 +864,26 @@ class MainActivity : AppCompatActivity() {
 
     private fun stageLoadingStatusBase(stage: RunningStage): String {
         return when (stage) {
-            RunningStage.BYPASS -> "Сканирование"
-            else -> "Проверяется"
+            RunningStage.BYPASS -> getString(R.string.main_loading_status_scanning)
+            else -> getString(R.string.main_loading_status_checking)
         }
     }
 
     private fun stageLoadingMessage(stage: RunningStage): String {
         return when (stage) {
-            RunningStage.GEO_IP -> "Сверяем страну, ASN и признаки хостинга."
-            RunningStage.IP_COMPARISON -> "Сравниваем внешний IP через несколько независимых сервисов."
-            RunningStage.DIRECT -> "Ищем прямые признаки VPN, прокси и установленных клиентов."
-            RunningStage.INDIRECT -> "Проверяем интерфейсы, DNS, маршруты и локальные технические сигналы."
-            RunningStage.LOCATION -> "Собираем сигналы оператора, вышек и ближайших Wi-Fi точек."
-            RunningStage.BYPASS -> "Ищем локальный split tunnel bypass и доступные proxy endpoints."
+            RunningStage.GEO_IP -> getString(R.string.main_loading_geo_ip)
+            RunningStage.IP_COMPARISON -> getString(R.string.main_loading_ip_comparison)
+            RunningStage.DIRECT -> getString(R.string.main_loading_direct)
+            RunningStage.INDIRECT -> getString(R.string.main_loading_indirect)
+            RunningStage.LOCATION -> getString(R.string.main_loading_location)
+            RunningStage.BYPASS -> getString(R.string.main_loading_bypass)
         }
     }
 
     private fun stageStoppedMessage(stage: RunningStage): String {
         return when (stage) {
-            RunningStage.BYPASS -> "Сканирование остановлено до завершения этого этапа."
-            else -> "Проверка этого этапа была остановлена до завершения."
+            RunningStage.BYPASS -> getString(R.string.main_stopped_scan)
+            else -> getString(R.string.main_stopped_check)
         }
     }
 
@@ -1286,7 +1284,7 @@ class MainActivity : AppCompatActivity() {
 
         val displayIp = if (privacyMode && response.ip != null) maskIp(response.ip) else response.ip
         val value = TextView(this).apply {
-            text = displayIp ?: "Ошибка"
+            text = displayIp ?: getString(R.string.main_card_status_error)
             textSize = 13f
             typeface = Typeface.MONOSPACE
             setTextColor(
@@ -1314,7 +1312,7 @@ class MainActivity : AppCompatActivity() {
                 TextView(this).apply {
                     text = buildString {
                         if (response.ignoredIpv6Error) {
-                            append("IPv6-ошибка проигнорирована: ")
+                            append(getString(R.string.main_ipv6_error_ignored))
                         }
                         append(response.error)
                     }
@@ -1375,19 +1373,19 @@ class MainActivity : AppCompatActivity() {
         when {
             detected -> {
                 icon.setImageResource(R.drawable.ic_warning)
-                status.text = "Обнаружено"
+                status.text = getString(R.string.main_card_status_detected)
             }
             hasError -> {
                 icon.setImageResource(R.drawable.ic_error)
-                status.text = "Ошибка"
+                status.text = getString(R.string.main_card_status_error)
             }
             needsReview -> {
                 icon.setImageResource(R.drawable.ic_help)
-                status.text = "Требует проверки"
+                status.text = getString(R.string.main_card_status_needs_review)
             }
             else -> {
                 icon.setImageResource(R.drawable.ic_check_circle)
-                status.text = "Чисто"
+                status.text = getString(R.string.main_card_status_clean)
             }
         }
         status.setTextColor(ContextCompat.getColor(this, statusColorRes(detected, needsReview, hasError)))
@@ -1409,7 +1407,7 @@ class MainActivity : AppCompatActivity() {
         when (result.verdict) {
             Verdict.NOT_DETECTED -> {
                 iconVerdict.setImageResource(R.drawable.ic_check_circle)
-                textVerdict.text = "Обход не выявлен"
+                textVerdict.text = getString(R.string.main_verdict_not_detected)
                 textVerdict.setTextColor(ContextCompat.getColor(this, R.color.verdict_green))
                 cardVerdict.setCardBackgroundColor(
                     ContextCompat.getColor(this, R.color.verdict_green_bg),
@@ -1417,7 +1415,7 @@ class MainActivity : AppCompatActivity() {
             }
             Verdict.NEEDS_REVIEW -> {
                 iconVerdict.setImageResource(R.drawable.ic_help)
-                textVerdict.text = "Требуется дополнительная проверка"
+                textVerdict.text = getString(R.string.main_verdict_needs_review)
                 textVerdict.setTextColor(ContextCompat.getColor(this, R.color.verdict_yellow))
                 cardVerdict.setCardBackgroundColor(
                     ContextCompat.getColor(this, R.color.verdict_yellow_bg),
@@ -1425,7 +1423,7 @@ class MainActivity : AppCompatActivity() {
             }
             Verdict.DETECTED -> {
                 iconVerdict.setImageResource(R.drawable.ic_error)
-                textVerdict.text = "Обход выявлен"
+                textVerdict.text = getString(R.string.main_verdict_detected)
                 textVerdict.setTextColor(ContextCompat.getColor(this, R.color.verdict_red))
                 cardVerdict.setCardBackgroundColor(
                     ContextCompat.getColor(this, R.color.verdict_red_bg),
@@ -1442,15 +1440,15 @@ class MainActivity : AppCompatActivity() {
 
         verdictDetailsContent.removeAllViews()
         addVerdictSection(
-            title = "Что это значит",
+            title = getString(R.string.main_verdict_section_meaning),
             content = narrative.meaningRows.map(::createVerdictBulletView),
         )
         addVerdictSection(
-            title = "Что удалось узнать",
+            title = getString(R.string.main_verdict_section_discovered),
             content = narrative.discoveredRows.map(::createVerdictRowView),
         )
         addVerdictSection(
-            title = "Почему вынесен такой вывод",
+            title = getString(R.string.main_verdict_section_reasons),
             content = narrative.reasonRows.map(::createVerdictBulletView),
         )
 
@@ -1540,7 +1538,7 @@ class MainActivity : AppCompatActivity() {
         textVerdictExplanation.visibility = View.GONE
         verdictDetailsDivider.visibility = View.GONE
         btnVerdictDetails.visibility = View.GONE
-        btnVerdictDetails.text = "Подробнее"
+        btnVerdictDetails.text = getString(R.string.main_verdict_details)
         verdictDetailsContent.removeAllViews()
         verdictDetailsContent.visibility = View.GONE
     }
@@ -1556,7 +1554,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateVerdictDetailsButton() {
-        btnVerdictDetails.text = if (isVerdictDetailsExpanded) "Скрыть детали" else "Подробнее"
+        btnVerdictDetails.text = if (isVerdictDetailsExpanded) getString(R.string.main_verdict_hide_details) else getString(R.string.main_verdict_details)
     }
 
     private val Int.dp: Int
@@ -1571,7 +1569,6 @@ class MainActivity : AppCompatActivity() {
         private const val PREF_RATIONALE_SHOWN = "permissions_rationale_shown"
         private const val PREF_REQUESTED_PERMISSIONS = "requested_permissions"
         private const val STATE_RUN_CHECK_NOTICE_HIDDEN = "state_run_check_notice_hidden"
-        private const val CHECK_STATUS_STOPPED = "Проверка остановлена"
         private const val INITIAL_CARD_STAGGER_MS = 70L
         private const val LOADING_STATUS_FRAME_MS = 420L
         private const val AUTO_SCROLL_LOCK_MS = 450L

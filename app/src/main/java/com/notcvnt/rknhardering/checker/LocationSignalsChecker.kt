@@ -18,6 +18,8 @@ import android.telephony.CellInfoGsm
 import android.telephony.CellInfoLte
 import android.telephony.CellInfoWcdma
 import android.telephony.TelephonyManager
+import androidx.annotation.DoNotInline
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.notcvnt.rknhardering.model.CategoryResult
 import com.notcvnt.rknhardering.model.EvidenceConfidence
@@ -367,7 +369,7 @@ object LocationSignalsChecker {
 
     private fun gsmMcc(identity: android.telephony.CellIdentityGsm): String? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            normalizeOperatorCode(identity.mccString)
+            Api28Impl.gsmMcc(identity)
         } else {
             normalizeOperatorCode(identity.mcc)
         }
@@ -375,7 +377,7 @@ object LocationSignalsChecker {
 
     private fun gsmMnc(identity: android.telephony.CellIdentityGsm): String? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            normalizeOperatorCode(identity.mncString)
+            Api28Impl.gsmMnc(identity)
         } else {
             normalizeOperatorCode(identity.mnc)
         }
@@ -383,7 +385,7 @@ object LocationSignalsChecker {
 
     private fun lteMcc(identity: android.telephony.CellIdentityLte): String? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            normalizeOperatorCode(identity.mccString)
+            Api28Impl.lteMcc(identity)
         } else {
             normalizeOperatorCode(identity.mcc)
         }
@@ -391,7 +393,7 @@ object LocationSignalsChecker {
 
     private fun lteMnc(identity: android.telephony.CellIdentityLte): String? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            normalizeOperatorCode(identity.mncString)
+            Api28Impl.lteMnc(identity)
         } else {
             normalizeOperatorCode(identity.mnc)
         }
@@ -399,7 +401,7 @@ object LocationSignalsChecker {
 
     private fun wcdmaMcc(identity: android.telephony.CellIdentityWcdma): String? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            normalizeOperatorCode(identity.mccString)
+            Api28Impl.wcdmaMcc(identity)
         } else {
             normalizeOperatorCode(identity.mcc)
         }
@@ -407,9 +409,43 @@ object LocationSignalsChecker {
 
     private fun wcdmaMnc(identity: android.telephony.CellIdentityWcdma): String? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            normalizeOperatorCode(identity.mncString)
+            Api28Impl.wcdmaMnc(identity)
         } else {
             normalizeOperatorCode(identity.mnc)
+        }
+    }
+
+    // Keep API 28-only operator accessors isolated so pre-P devices never resolve them.
+    @RequiresApi(Build.VERSION_CODES.P)
+    private object Api28Impl {
+        @DoNotInline
+        fun gsmMcc(identity: android.telephony.CellIdentityGsm): String? {
+            return normalizeOperatorCode(identity.mccString)
+        }
+
+        @DoNotInline
+        fun gsmMnc(identity: android.telephony.CellIdentityGsm): String? {
+            return normalizeOperatorCode(identity.mncString)
+        }
+
+        @DoNotInline
+        fun lteMcc(identity: android.telephony.CellIdentityLte): String? {
+            return normalizeOperatorCode(identity.mccString)
+        }
+
+        @DoNotInline
+        fun lteMnc(identity: android.telephony.CellIdentityLte): String? {
+            return normalizeOperatorCode(identity.mncString)
+        }
+
+        @DoNotInline
+        fun wcdmaMcc(identity: android.telephony.CellIdentityWcdma): String? {
+            return normalizeOperatorCode(identity.mccString)
+        }
+
+        @DoNotInline
+        fun wcdmaMnc(identity: android.telephony.CellIdentityWcdma): String? {
+            return normalizeOperatorCode(identity.mncString)
         }
     }
 

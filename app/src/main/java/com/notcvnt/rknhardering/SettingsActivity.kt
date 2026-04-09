@@ -274,7 +274,8 @@ class SettingsActivity : AppCompatActivity() {
         }
         val portsCount = mergedPorts.sumOf { it.last - it.first + 1 }
         val formattedCount = NumberFormat.getIntegerInstance().format(portsCount)
-        textPortRangePreview.text = "Будут сканироваться proxy-порты localhost: $portsText ($formattedCount ${portWord(portsCount)})"
+        val portCountWord = resources.getQuantityString(R.plurals.settings_port_word, portsCount)
+        textPortRangePreview.text = getString(R.string.settings_port_range_preview, portsText, formattedCount, portCountWord)
     }
 
     private fun selectedPortRange(): String {
@@ -324,17 +325,6 @@ class SettingsActivity : AppCompatActivity() {
 
         mergedRanges += currentStart..currentEnd
         return mergedRanges
-    }
-
-    private fun portWord(count: Int): String {
-        val mod100 = count % 100
-        val mod10 = count % 10
-        return when {
-            mod100 in 11..14 -> "портов"
-            mod10 == 1 -> "порт"
-            mod10 in 2..4 -> "порта"
-            else -> "портов"
-        }
     }
 
     private fun loadResolverSettings() {

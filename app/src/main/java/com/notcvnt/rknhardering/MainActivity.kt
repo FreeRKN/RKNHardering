@@ -26,7 +26,10 @@ import androidx.core.content.ContextCompat
 import androidx.core.text.BidiFormatter
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
@@ -34,7 +37,6 @@ import com.google.android.material.color.MaterialColors
 import com.notcvnt.rknhardering.checker.BypassChecker
 import com.notcvnt.rknhardering.checker.CheckUpdate
 import com.notcvnt.rknhardering.checker.CheckSettings
-import com.notcvnt.rknhardering.checker.VpnCheckRunner
 import com.notcvnt.rknhardering.model.BypassResult
 import com.notcvnt.rknhardering.model.CategoryResult
 import com.notcvnt.rknhardering.model.CheckResult
@@ -44,12 +46,10 @@ import com.notcvnt.rknhardering.model.IpCheckerResponse
 import com.notcvnt.rknhardering.model.IpComparisonResult
 import com.notcvnt.rknhardering.model.Verdict
 import com.notcvnt.rknhardering.network.DnsResolverConfig
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 fun maskIp(ip: String): String {
     val ipv4Parts = ip.split(".")
@@ -79,8 +79,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cardRunCheckNotice: MaterialCardView
     private lateinit var resultsScrollView: ScrollView
     private lateinit var textCheckStatus: TextView
-    private var checkJob: Job? = null
+    private lateinit var viewModel: CheckViewModel
     private var hasDismissedRunCheckNotice = false
+    private var processedEventCount = 0
     private lateinit var cardGeoIp: MaterialCardView
     private lateinit var cardIpComparison: MaterialCardView
     private lateinit var cardDirect: MaterialCardView
@@ -133,8 +134,6 @@ class MainActivity : AppCompatActivity() {
     private var hasUserScrolledManually = false
     private var userTouchScrollInProgress = false
     private var isAutoScrollInProgress = false
-    private var checkSessionCounter = 0
-    private var activeCheckSessionId = 0
     private var activeCheckPrivacyMode = false
     private var isVerdictDetailsExpanded = false
 
@@ -169,12 +168,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        viewModel = ViewModelProvider(this)[CheckViewModel::class.java]
         bindViews()
         hasDismissedRunCheckNotice = savedInstanceState?.getBoolean(STATE_RUN_CHECK_NOTICE_HIDDEN, false) ?: false
         updateRunCheckNoticeVisibility()
 
         btnRunCheck.setOnClickListener { onRunCheckClicked() }
-        btnStopCheck.setOnClickListener { checkJob?.cancel() }
+        btnStopCheck.setOnClickListener { viewModel.cancelScan() }
+        observeScanEvents()
 
         if (intent.getBooleanExtra(SettingsActivity.EXTRA_REQUEST_PERMISSIONS, false)) {
             intent.removeExtra(SettingsActivity.EXTRA_REQUEST_PERMISSIONS)
@@ -356,7 +357,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onRunCheckClicked() {
-        if (checkJob?.isActive == true) return
+        if (viewModel.isRunning.value) return
         hasDismissedRunCheckNotice = true
         updateRunCheckNoticeVisibility()
         runCheck()
@@ -428,62 +429,47 @@ class MainActivity : AppCompatActivity() {
             portRangeEnd = portRangeEnd,
         )
 
-        val sessionId = prepareCheckSession(settings, privacyMode)
+        viewModel.startScan(settings, privacyMode)
+    }
 
-        if (splitTunnelEnabled) {
-            cardBypass.visibility = View.VISIBLE
-            iconBypass.setImageResource(R.drawable.ic_help)
-            statusBypass.text = getString(R.string.main_status_scanning)
-            statusBypass.setTextColor(ContextCompat.getColor(this, R.color.verdict_yellow))
-            resetBypassProgress()
-            updateBypassProgress(
-                BypassChecker.Progress(
-                    line = BypassChecker.ProgressLine.BYPASS,
-                    phase = "Split tunnel bypass",
-                    detail = getString(R.string.main_status_preparing),
-                ),
-            )
-            findingsBypass.removeAllViews()
-        }
+    private fun observeScanEvents() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.scanEvents.collect { events ->
+                    if (events.isEmpty()) return@collect
 
-        checkJob = lifecycleScope.launch {
-            try {
-                showInitialLoadingCards(settings, sessionId)
-                val result = VpnCheckRunner.run(this@MainActivity, settings) { update ->
-                    withContext(Dispatchers.Main) {
-                        if (sessionId != activeCheckSessionId) return@withContext
-                        handleCheckUpdate(update)
+                    val firstEvent = events.first()
+                    val isNewScan = firstEvent is ScanEvent.Started &&
+                        (processedEventCount == 0 || events.size <= processedEventCount)
+                    if (isNewScan) {
+                        prepareCheckSessionUi(
+                            (firstEvent as ScanEvent.Started).settings,
+                            firstEvent.privacyMode,
+                        )
+                        processedEventCount = 1
+                        events.drop(1).forEach { event ->
+                            applyScanEvent(event, animate = false)
+                            processedEventCount++
+                        }
+                    } else if (events.size > processedEventCount) {
+                        events.drop(processedEventCount).forEach { event ->
+                            applyScanEvent(event, animate = true)
+                            processedEventCount++
+                        }
                     }
                 }
-                if (sessionId == activeCheckSessionId) {
-                    ensureCardVisible(cardVerdict, shouldAutoScroll = true)
-                    displayVerdict(result, activeCheckPrivacyMode)
-                    animateContentReveal(iconVerdict, textVerdict, textVerdictExplanation, btnVerdictDetails)
-                    stopLoadingStatusAnimation()
-                    updateCheckControls(isRunning = false)
-                    activeCheckSessionId = 0
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.isRunning.collect { running ->
+                    updateCheckControls(isRunning = running)
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                updateCheckControls(isRunning = false)
-                resetBypassProgress()
-                statusBypass.text = getString(R.string.main_status_cancelled)
-                statusBypass.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.verdict_yellow))
-                if (sessionId == activeCheckSessionId) {
-                    stopLoadingStatusAnimation()
-                    updateCheckStatus(getString(R.string.main_check_stopped))
-                    markLoadingStagesCancelled()
-                    activeCheckSessionId = 0
-                }
-                throw e
-            } finally {
-                checkJob = null
             }
         }
     }
 
-    private fun prepareCheckSession(settings: CheckSettings, privacyMode: Boolean): Int {
-        checkSessionCounter += 1
-        activeCheckSessionId = checkSessionCounter
+    private fun prepareCheckSessionUi(settings: CheckSettings, privacyMode: Boolean) {
         activeCheckPrivacyMode = privacyMode
         hasUserScrolledManually = false
         userTouchScrollInProgress = false
@@ -491,14 +477,37 @@ class MainActivity : AppCompatActivity() {
         loadingStages.clear()
         completedStages.clear()
         stopLoadingStatusAnimation()
-        updateCheckControls(isRunning = true)
         hideCards()
         resetBypassProgress()
         clearStageContent()
-        if (settings.splitTunnelEnabled) {
-            textBypassProgress.text = stageLoadingMessage(RunningStage.BYPASS)
+        showAllLoadingCardsNow(settings)
+    }
+
+    private fun showAllLoadingCardsNow(settings: CheckSettings) {
+        enabledStages(settings).forEach { stage -> showLoadingCardForStage(stage) }
+    }
+
+    private fun applyScanEvent(event: ScanEvent, animate: Boolean) {
+        when (event) {
+            is ScanEvent.Started -> Unit
+            is ScanEvent.Update -> {
+                handleCheckUpdate(event.update, animate = animate)
+            }
+            is ScanEvent.Completed -> {
+                ensureCardVisible(cardVerdict, shouldAutoScroll = animate)
+                displayVerdict(event.result, event.privacyMode)
+                if (animate) animateContentReveal(iconVerdict, textVerdict, textVerdictExplanation, btnVerdictDetails)
+                stopLoadingStatusAnimation()
+            }
+            is ScanEvent.Cancelled -> {
+                resetBypassProgress()
+                statusBypass.text = getString(R.string.main_status_cancelled)
+                statusBypass.setTextColor(ContextCompat.getColor(this, R.color.verdict_yellow))
+                stopLoadingStatusAnimation()
+                updateCheckStatus(getString(R.string.main_check_stopped))
+                markLoadingStagesCancelled()
+            }
         }
-        return activeCheckSessionId
     }
 
     private fun clearStageContent() {
@@ -528,18 +537,6 @@ class MainActivity : AppCompatActivity() {
         clearVerdictCard()
     }
 
-    private fun showInitialLoadingCards(settings: CheckSettings, sessionId: Int) {
-        enabledStages(settings).forEachIndexed { index, stage ->
-            resultsScrollView.postDelayed(
-                {
-                    if (sessionId != activeCheckSessionId) return@postDelayed
-                    showLoadingCardForStage(stage)
-                },
-                index * INITIAL_CARD_STAGGER_MS,
-            )
-        }
-    }
-
     private fun enabledStages(settings: CheckSettings): List<RunningStage> {
         val stages = mutableListOf<RunningStage>()
         if (settings.networkRequestsEnabled) {
@@ -555,7 +552,7 @@ class MainActivity : AppCompatActivity() {
         return stages
     }
 
-    private fun handleCheckUpdate(update: CheckUpdate) {
+    private fun handleCheckUpdate(update: CheckUpdate, animate: Boolean = true) {
         when (update) {
             is CheckUpdate.GeoIpReady -> {
                 markStageCompleted(RunningStage.GEO_IP)
@@ -568,13 +565,13 @@ class MainActivity : AppCompatActivity() {
                     findingsGeoIp,
                     activeCheckPrivacyMode,
                 )
-                animateContentReveal(findingsGeoIp, geoIpInfoSection, geoIpDivider)
+                if (animate) animateContentReveal(findingsGeoIp, geoIpInfoSection, geoIpDivider)
             }
             is CheckUpdate.IpComparisonReady -> {
                 markStageCompleted(RunningStage.IP_COMPARISON)
                 ensureCardVisible(cardIpComparison, animate = false)
                 displayIpComparison(update.result, activeCheckPrivacyMode)
-                animateContentReveal(textIpComparisonSummary, ipComparisonGroups)
+                if (animate) animateContentReveal(textIpComparisonSummary, ipComparisonGroups)
             }
             is CheckUpdate.DirectSignsReady -> {
                 markStageCompleted(RunningStage.DIRECT)
@@ -587,7 +584,7 @@ class MainActivity : AppCompatActivity() {
                     findingsDirect,
                     activeCheckPrivacyMode,
                 )
-                animateContentReveal(findingsDirect, directInfoSection, directDivider)
+                if (animate) animateContentReveal(findingsDirect, directInfoSection, directDivider)
             }
             is CheckUpdate.IndirectSignsReady -> {
                 markStageCompleted(RunningStage.INDIRECT)
@@ -600,7 +597,7 @@ class MainActivity : AppCompatActivity() {
                     findingsIndirect,
                     activeCheckPrivacyMode,
                 )
-                animateContentReveal(findingsIndirect)
+                if (animate) animateContentReveal(findingsIndirect)
             }
             is CheckUpdate.LocationSignalsReady -> {
                 markStageCompleted(RunningStage.LOCATION)
@@ -613,7 +610,7 @@ class MainActivity : AppCompatActivity() {
                     findingsLocation,
                     activeCheckPrivacyMode,
                 )
-                animateContentReveal(findingsLocation, locationInfoSection, locationDivider)
+                if (animate) animateContentReveal(findingsLocation, locationInfoSection, locationDivider)
             }
             is CheckUpdate.BypassProgress -> {
                 showLoadingCardForStage(RunningStage.BYPASS)
@@ -623,7 +620,7 @@ class MainActivity : AppCompatActivity() {
                 markStageCompleted(RunningStage.BYPASS)
                 ensureCardVisible(cardBypass, animate = false)
                 displayBypass(update.result, activeCheckPrivacyMode)
-                animateContentReveal(findingsBypass)
+                if (animate) animateContentReveal(findingsBypass)
             }
             is CheckUpdate.VerdictReady -> {
                 Unit
@@ -1618,7 +1615,6 @@ class MainActivity : AppCompatActivity() {
         private const val PREF_RATIONALE_SHOWN = "permissions_rationale_shown"
         private const val PREF_REQUESTED_PERMISSIONS = "requested_permissions"
         private const val STATE_RUN_CHECK_NOTICE_HIDDEN = "state_run_check_notice_hidden"
-        private const val INITIAL_CARD_STAGGER_MS = 70L
         private const val LOADING_STATUS_FRAME_MS = 420L
         private const val AUTO_SCROLL_LOCK_MS = 450L
     }

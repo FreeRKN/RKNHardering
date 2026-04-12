@@ -94,6 +94,7 @@ dependencies {
     implementation(libs.androidx.constraintlayout)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(project(":xray-protos"))
     implementation(libs.grpc.okhttp)
     implementation(libs.okhttp)

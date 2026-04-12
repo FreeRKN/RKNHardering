@@ -34,18 +34,13 @@ object IpComparisonChecker {
 
     private val ENDPOINTS = listOf(
         EndpointSpec(
-            label = "Yandex IPv4",
-            url = "https://ipv4-internet.yandex.net/api/v0/ip",
-            scope = IpCheckerScope.RU,
-        ),
-        EndpointSpec(
             label = "2ip.ru",
             url = "https://2ip.ru",
             scope = IpCheckerScope.RU,
         ),
         EndpointSpec(
-            label = "Yandex IPv6",
-            url = "https://ipv6-internet.yandex.net/api/v0/ip",
+            label = "sypexgeo.net",
+            url = "https://api.sypexgeo.net/json/",
             scope = IpCheckerScope.RU,
         ),
         EndpointSpec(

@@ -101,7 +101,7 @@ class GeoIpCheckerTest {
         val result = GeoIpChecker.evaluate(
             context,
             GeoIpChecker.GeoIpSnapshot(
-                ip = "22.33.44.55",
+                ip = "198.51.100.55",
                 country = "Russia",
                 countryCode = "RU",
                 isp = "Example ISP",
@@ -125,7 +125,7 @@ class GeoIpCheckerTest {
         val fallback = GeoIpChecker.ProviderSnapshot(
             provider = "ipapi.is",
             snapshot = GeoIpChecker.GeoIpSnapshot(
-                ip = "157.180.123.101",
+                ip = "203.0.113.101",
                 country = "Finland",
                 countryCode = "FI",
                 isp = "Hetzner Online GmbH",
@@ -141,7 +141,7 @@ class GeoIpCheckerTest {
         val secondFallback = GeoIpChecker.ProviderSnapshot(
             provider = "iplocate.io",
             snapshot = GeoIpChecker.GeoIpSnapshot(
-                ip = "157.180.123.101",
+                ip = "203.0.113.101",
                 country = "Finland",
                 countryCode = "FI",
                 isp = "Hetzner Online GmbH",
@@ -160,7 +160,7 @@ class GeoIpCheckerTest {
             providers = listOf(fallback, secondFallback),
         )
 
-        assertEquals("157.180.123.101", merged.ip)
+        assertEquals("203.0.113.101", merged.ip)
         assertEquals("Finland", merged.country)
         assertEquals("FI", merged.countryCode)
         assertEquals("Hetzner Online GmbH", merged.isp)
@@ -177,7 +177,7 @@ class GeoIpCheckerTest {
         val baseProvider = GeoIpChecker.ProviderSnapshot(
             provider = "ipapi.is",
             snapshot = GeoIpChecker.GeoIpSnapshot(
-                ip = "157.180.123.101",
+                ip = "203.0.113.101",
                 country = "Finland",
                 countryCode = "FI",
                 isp = "Hetzner Online GmbH",
@@ -193,7 +193,7 @@ class GeoIpCheckerTest {
         val fallback = GeoIpChecker.ProviderSnapshot(
             provider = "iplocate.io",
             snapshot = GeoIpChecker.GeoIpSnapshot(
-                ip = "157.180.123.101",
+                ip = "203.0.113.101",
                 country = "Finland",
                 countryCode = "FI",
                 isp = "Hetzner Online GmbH",
@@ -222,7 +222,7 @@ class GeoIpCheckerTest {
         val baseProvider = GeoIpChecker.ProviderSnapshot(
             provider = "ipapi.is",
             snapshot = GeoIpChecker.GeoIpSnapshot(
-                ip = "157.180.123.101",
+                ip = "203.0.113.101",
                 country = "Finland",
                 countryCode = "FI",
                 isp = "Hetzner Online GmbH",
@@ -268,7 +268,7 @@ class GeoIpCheckerTest {
         val result = GeoIpChecker.evaluate(
             context,
             GeoIpChecker.GeoIpSnapshot(
-                ip = "157.180.123.101",
+                ip = "203.0.113.101",
                 country = "Finland",
                 countryCode = "FI",
                 isp = "Hetzner Online GmbH",

@@ -7,7 +7,7 @@ class MaskIpTest {
 
     @Test
     fun `masks last two octets of IPv4`() {
-        assertEquals("185.22.*.*", maskIp("185.22.64.1"))
+        assertEquals("203.0.*.*", maskIp("203.0.113.64"))
     }
 
     @Test

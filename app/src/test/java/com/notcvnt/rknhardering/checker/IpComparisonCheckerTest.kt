@@ -92,8 +92,8 @@ class IpComparisonCheckerTest {
         val result = IpComparisonChecker.evaluate(
             context,
             listOf(
-                response("Yandex", IpCheckerScope.RU, ip = "37.113.42.220"),
-                response("ipify", IpCheckerScope.NON_RU, ip = "37.113.42.220"),
+                response("Yandex", IpCheckerScope.RU, ip = "203.0.113.42"),
+                response("ipify", IpCheckerScope.NON_RU, ip = "203.0.113.42"),
                 response("ip.sb", IpCheckerScope.NON_RU, ip = "2a01:4f9:c013:d2ba::1"),
             ),
         )
@@ -108,7 +108,7 @@ class IpComparisonCheckerTest {
         val result = IpComparisonChecker.evaluate(
             context,
             listOf(
-                response("Yandex IPv4", IpCheckerScope.RU, ip = "37.113.42.220"),
+                response("Yandex IPv4", IpCheckerScope.RU, ip = "203.0.113.42"),
                 response(
                     "Yandex IPv6",
                     IpCheckerScope.RU,
@@ -116,8 +116,8 @@ class IpComparisonCheckerTest {
                     ignoredIpv6Error = true,
                     ipv6Records = listOf("2a02:6b8::"),
                 ),
-                response("ifconfig.me", IpCheckerScope.NON_RU, ip = "37.113.42.220"),
-                response("checkip.amazonaws.com", IpCheckerScope.NON_RU, ip = "37.113.42.220"),
+                response("ifconfig.me", IpCheckerScope.NON_RU, ip = "203.0.113.42"),
+                response("checkip.amazonaws.com", IpCheckerScope.NON_RU, ip = "203.0.113.42"),
             ),
         )
 
@@ -132,9 +132,9 @@ class IpComparisonCheckerTest {
         val result = IpComparisonChecker.evaluate(
             context,
             listOf(
-                response("Yandex IPv4", IpCheckerScope.RU, ip = "37.113.42.220"),
-                response("2ip.ru", IpCheckerScope.RU, ip = "37.113.42.220"),
-                response("ifconfig.me IPv4", IpCheckerScope.NON_RU, ip = "37.113.42.220"),
+                response("Yandex IPv4", IpCheckerScope.RU, ip = "203.0.113.42"),
+                response("2ip.ru", IpCheckerScope.RU, ip = "203.0.113.42"),
+                response("ifconfig.me IPv4", IpCheckerScope.NON_RU, ip = "203.0.113.42"),
                 response(
                     "ifconfig.me IPv6",
                     IpCheckerScope.NON_RU,
@@ -142,8 +142,8 @@ class IpComparisonCheckerTest {
                     ignoredIpv6Error = true,
                     ipv6Records = listOf("2600:1901:0:b2bd::"),
                 ),
-                response("ipify", IpCheckerScope.NON_RU, ip = "37.113.42.220"),
-                response("ip.sb IPv4", IpCheckerScope.NON_RU, ip = "37.113.42.220"),
+                response("ipify", IpCheckerScope.NON_RU, ip = "203.0.113.42"),
+                response("ip.sb IPv4", IpCheckerScope.NON_RU, ip = "203.0.113.42"),
             ),
         )
 
@@ -158,10 +158,10 @@ class IpComparisonCheckerTest {
         val result = IpComparisonChecker.evaluate(
             context,
             listOf(
-                response("Yandex IPv4", IpCheckerScope.RU, ip = "37.113.42.220"),
+                response("Yandex IPv4", IpCheckerScope.RU, ip = "203.0.113.42"),
                 response("2ip.ru", IpCheckerScope.RU, error = "HTTP 403 // Forbidden"),
-                response("ifconfig.me IPv4", IpCheckerScope.NON_RU, ip = "37.113.42.220"),
-                response("ipify", IpCheckerScope.NON_RU, ip = "37.113.42.220"),
+                response("ifconfig.me IPv4", IpCheckerScope.NON_RU, ip = "203.0.113.42"),
+                response("ipify", IpCheckerScope.NON_RU, ip = "203.0.113.42"),
                 response("ip.sb IPv4", IpCheckerScope.NON_RU, error = "timeout"),
             ),
         )

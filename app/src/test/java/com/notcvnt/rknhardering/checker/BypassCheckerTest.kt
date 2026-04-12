@@ -35,8 +35,8 @@ class BypassCheckerTest {
             result = UnderlyingNetworkProber.ProbeResult(
                 vpnActive = true,
                 underlyingReachable = true,
-                vpnIp = "185.220.1.10",
-                underlyingIp = "91.198.174.192",
+                vpnIp = "198.51.100.10",
+                underlyingIp = "203.0.113.20",
                 activeNetworkIsVpn = false,
             ),
             findings = findings,
@@ -60,8 +60,8 @@ class BypassCheckerTest {
             result = UnderlyingNetworkProber.ProbeResult(
                 vpnActive = true,
                 underlyingReachable = true,
-                vpnIp = "185.220.1.10",
-                underlyingIp = "91.198.174.192",
+                vpnIp = "198.51.100.10",
+                underlyingIp = "203.0.113.20",
                 activeNetworkIsVpn = true,
             ),
             findings = findings,
@@ -84,7 +84,7 @@ class BypassCheckerTest {
             result = UnderlyingNetworkProber.ProbeResult(
                 vpnActive = true,
                 underlyingReachable = false,
-                vpnIp = "185.220.1.10",
+                vpnIp = "198.51.100.10",
                 underlyingIp = null,
                 activeNetworkIsVpn = true,
             ),
@@ -96,7 +96,7 @@ class BypassCheckerTest {
             findings.any {
                 it.isInformational &&
                     it.source == EvidenceSource.TUN_ACTIVE_PROBE &&
-                    it.description.contains("185.220.1.10")
+                    it.description.contains("198.51.100.10")
             },
         )
     }
@@ -111,7 +111,7 @@ class BypassCheckerTest {
             result = UnderlyingNetworkProber.ProbeResult(
                 vpnActive = true,
                 underlyingReachable = false,
-                vpnIp = "185.220.1.10",
+                vpnIp = "198.51.100.10",
                 underlyingIp = null,
                 activeNetworkIsVpn = false,
             ),
@@ -170,7 +170,7 @@ class BypassCheckerTest {
                 vpnActive = true,
                 underlyingReachable = true,
                 vpnIp = null,
-                underlyingIp = "91.198.174.192",
+                underlyingIp = "203.0.113.20",
                 vpnError = "timeout",
                 activeNetworkIsVpn = true,
             ),
@@ -185,7 +185,7 @@ class BypassCheckerTest {
             findings.any {
                 it.source == EvidenceSource.VPN_GATEWAY_LEAK &&
                     it.needsReview &&
-                    it.description.contains("91.198.174.192")
+                    it.description.contains("203.0.113.20")
             },
         )
     }

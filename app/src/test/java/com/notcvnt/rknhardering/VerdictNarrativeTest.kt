@@ -40,8 +40,8 @@ class VerdictNarrativeTest {
             result = result(
                 verdict = Verdict.DETECTED,
                 bypass = bypass(
-                    directIp = "91.198.174.192",
-                    proxyIp = "185.220.1.10",
+                    directIp = "203.0.113.20",
+                    proxyIp = "198.51.100.10",
                     evidence = listOf(evidence(EvidenceSource.SPLIT_TUNNEL_BYPASS)),
                 ),
             ),
@@ -52,13 +52,13 @@ class VerdictNarrativeTest {
         assertTrue(
             narrative.discoveredRows.any {
                 it.label == context.getString(R.string.narrative_label_direct_ip) &&
-                    it.value == "91.198.174.192"
+                    it.value == "203.0.113.20"
             },
         )
         assertTrue(
             narrative.discoveredRows.any {
                 it.label == context.getString(R.string.narrative_label_proxy_ip) &&
-                    it.value == "185.220.1.10"
+                    it.value == "198.51.100.10"
             },
         )
     }
@@ -112,7 +112,7 @@ class VerdictNarrativeTest {
                         Finding(
                             description = context.getString(
                                 R.string.checker_bypass_tun_probe_success,
-                                "185.220.1.10",
+                                "198.51.100.10",
                             ),
                             isInformational = true,
                             source = EvidenceSource.TUN_ACTIVE_PROBE,
@@ -187,8 +187,8 @@ class VerdictNarrativeTest {
             result = result(
                 verdict = Verdict.DETECTED,
                 bypass = bypass(
-                    directIp = "91.198.174.192",
-                    proxyIp = "185.220.1.10",
+                    directIp = "203.0.113.20",
+                    proxyIp = "198.51.100.10",
                     evidence = listOf(evidence(EvidenceSource.SPLIT_TUNNEL_BYPASS)),
                 ),
             ),
@@ -202,9 +202,9 @@ class VerdictNarrativeTest {
             it.label == context.getString(R.string.narrative_label_proxy_ip)
         }
 
-        assertEquals("91.198.*.*", directRow.value)
-        assertEquals("185.220.*.*", proxyRow.value)
-        assertFalse(proxyRow.value.contains("185.220.1.10"))
+        assertEquals("203.0.*.*", directRow.value)
+        assertEquals("198.51.*.*", proxyRow.value)
+        assertFalse(proxyRow.value.contains("198.51.100.10"))
     }
 
     @Test

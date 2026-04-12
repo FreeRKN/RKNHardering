@@ -94,7 +94,7 @@ class MtProtoProberTest {
             val result = MtProtoProber.trySocks5Connect(
                 proxyHost = "127.0.0.1",
                 proxyPort = server.localPort,
-                targetHost = "149.154.167.51",
+                targetHost = "203.0.113.51",
                 targetPort = 443,
                 connectTimeoutMs = 1000,
                 readTimeoutMs = 1000,

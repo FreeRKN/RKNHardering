@@ -7,17 +7,27 @@ import org.junit.Test
 class PublicIpClientTest {
 
     @Test
-    fun `extractIp strips quotes from yandex response`() {
-        assertEquals("37.113.42.220", PublicIpClient.extractIp("\"37.113.42.220\""))
+    fun `extractIp strips quotes from quoted plain response`() {
+        assertEquals("1.2.3.4", PublicIpClient.extractIp("\"1.2.3.4\""))
     }
 
     @Test
     fun `extractIp keeps plain ipv6 response`() {
-        assertEquals("2a01:4f9:c013:d2ba::1", PublicIpClient.extractIp("2a01:4f9:c013:d2ba::1"))
+        assertEquals("2001:db8::1", PublicIpClient.extractIp("2001:db8::1"))
     }
 
     @Test
-    fun `extractIp rejects non ip payload`() {
-        assertNull(PublicIpClient.extractIp("{\"ip\":\"37.113.42.220\"}"))
+    fun `extractIp parses json ip field`() {
+        assertEquals("1.2.3.4", PublicIpClient.extractIp("{\"ip\":\"1.2.3.4\"}"))
+    }
+
+    @Test
+    fun `extractIp parses json ip field with spaces`() {
+        assertEquals("1.2.3.4", PublicIpClient.extractIp("{\"ip\": \"1.2.3.4\", \"city\": {}}"))
+    }
+
+    @Test
+    fun `extractIp rejects non ip json`() {
+        assertNull(PublicIpClient.extractIp("{\"country\":\"RU\",\"city\":\"Moscow\"}"))
     }
 }

@@ -18,6 +18,7 @@ object PublicIpClient {
 
     private const val USER_AGENT = "curl/8.0"
     private val HTML_TAG_REGEX = Regex("""<\s*(?:!doctype|html|head|body)\b""", RegexOption.IGNORE_CASE)
+    private val JSON_IP_REGEX = Regex(""""ip"\s*:\s*"([^"]+)"""")
 
     fun fetchIp(
         endpoint: String,
@@ -64,8 +65,11 @@ object PublicIpClient {
     }
 
     internal fun extractIp(body: String): String? {
-        val candidate = body
-            .trim()
+        val trimmed = body.trim()
+        JSON_IP_REGEX.find(trimmed)?.groupValues?.getOrNull(1)?.trim()
+            ?.takeIf(::looksLikeIp)
+            ?.let { return it }
+        val candidate = trimmed
             .lineSequence()
             .map { it.trim() }
             .firstOrNull()

@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">RKNHardering</string>
     <string name="github_repo_url">https://github.com/xtclovver/RKNHardering</string>
-    <string name="run_check_notice">Во время проверки приложение выполнит сетевые запросы к доменам:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ipv4-internet.yandex.net\n• ipv6-internet.yandex.net\n• 2ip.ru\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nЕсли в настройках выбран кастомный DNS-резолвер, приложение также будет обращаться к его IP-адресам или DoH-домену.\n\nНажимая кнопку «Запустить проверку», вы соглашаетесь, что с вашего устройства будут выполнены эти сетевые запросы.\n\nПриложение не ведет логи этих запросов. Доступ к сети можно будет отключить в настройках приложения.</string>
+    <string name="run_check_notice">Во время проверки приложение выполнит сетевые запросы к доменам:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nЕсли в настройках выбран кастомный DNS-резолвер, приложение также будет обращаться к его IP-адресам или DoH-домену.\n\nНажимая кнопку «Запустить проверку», вы соглашаетесь, что с вашего устройства будут выполнены эти сетевые запросы.\n\nПриложение не ведет логи этих запросов. Доступ к сети можно будет отключить в настройках приложения.</string>
 
     <string name="settings_title">Настройки</string>
     <string name="settings_section_checks">Проверки</string>
@@ -10,8 +10,13 @@
     <string name="settings_section_about">О приложении</string>
     <string name="settings_split_tunnel">Split tunnel bypass</string>
     <string name="settings_split_tunnel_desc">Сканирование портов занимает много времени</string>
+    <string name="settings_proxy_scan_title">Скан локальных proxy</string>
+    <string name="settings_proxy_scan_desc">Проверяет localhost на открытые SOCKS5/HTTP proxy-порты.</string>
+    <string name="settings_xray_api_scan_title">Скан Xray gRPC API</string>
+    <string name="settings_xray_api_scan_desc">Проверяет localhost на открытые порты Xray gRPC API.</string>
     <string name="settings_port_range">Диапазон портов</string>
     <string name="settings_port_range_desc">Для сканирования Split tunnel</string>
+    <string name="settings_port_range_desc_scans">Используется для включённых localhost-сканов proxy и Xray.</string>
     <string name="settings_port_popular">Популярные</string>
     <string name="settings_port_extended">Расширенный</string>
     <string name="settings_port_full">Полный</string>
@@ -111,6 +116,10 @@
     <string name="main_ipv6_error_ignored">IPv6-ошибка проигнорирована: </string>
 
     <string name="settings_port_range_preview">Будут сканироваться localhost-порты для proxy и Xray API: %1$s (%2$s)</string>
+    <string name="settings_port_range_preview_proxy_xray">Будут сканироваться localhost-порты для proxy и Xray API: %1$s (%2$s)</string>
+    <string name="settings_port_range_preview_proxy_only">Будут сканироваться localhost-порты для proxy: %1$s (%2$s)</string>
+    <string name="settings_port_range_preview_xray_only">Будут сканироваться localhost-порты для Xray API: %1$s (%2$s)</string>
+    <string name="settings_port_range_preview_disabled">Локальные сканы proxy и Xray отключены.</string>
     <plurals name="settings_port_word">
         <item quantity="one">%1$s порт</item>
         <item quantity="few">%1$s порта</item>

@@ -57,8 +57,8 @@ class IfconfigClientTest {
     fun `fetch direct ip prefers generic or ipv4 error over trailing ipv6-only failure`() {
         PublicIpClient.fetchIpOverride = { endpoint, _, _, _, _ ->
             when {
-                endpoint.contains("ipv6-internet.yandex.net") ->
-                    Result.failure(IOException("Unable to resolve host \"ipv6-internet.yandex.net\""))
+                endpoint.contains("api6.ipify.org") ->
+                    Result.failure(IOException("Unable to resolve host \"api6.ipify.org\""))
                 else ->
                     Result.failure(IOException("generic timeout"))
             }
@@ -72,6 +72,33 @@ class IfconfigClientTest {
 
         assertTrue(result.isFailure)
         assertEquals("generic timeout", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun `ipv6 endpoints are tried after all ipv4 and generic endpoints`() {
+        val calledEndpoints = mutableListOf<String>()
+        PublicIpClient.fetchIpOverride = { endpoint, _, _, _, _ ->
+            calledEndpoints += endpoint
+            Result.failure(IOException("fail"))
+        }
+
+        kotlinx.coroutines.runBlocking {
+            IfconfigClient.fetchDirectIp(
+                resolverConfig = DnsResolverConfig.system(),
+            )
+        }
+
+        val ipv6Index = calledEndpoints.indexOfFirst { it.contains("api6.ipify.org") }
+        assertTrue("IPv6 endpoint should be present", ipv6Index >= 0)
+        // All endpoints before IPv6 should be non-IPv6
+        for (i in 0 until ipv6Index) {
+            assertTrue(
+                "Non-IPv6 endpoint should come before IPv6: ${calledEndpoints[i]}",
+                !calledEndpoints[i].contains("api6.ipify.org"),
+            )
+        }
+        // IPv6 endpoint should be last
+        assertEquals(calledEndpoints.lastIndex, ipv6Index)
     }
 
     private fun newNetwork(netId: Int): Network {

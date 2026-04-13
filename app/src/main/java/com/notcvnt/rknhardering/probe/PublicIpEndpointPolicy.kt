@@ -20,7 +20,12 @@ internal suspend fun fetchFirstSuccessfulIp(
 ): Result<String> {
     var preferredFailure: EndpointFailure? = null
 
-    for (endpoint in endpoints) {
+    // IPv4 / GENERIC endpoints first; IPv6 only as a fallback.
+    val (ipv6Endpoints, primaryEndpoints) = endpoints.partition {
+        it.familyHint == IpEndpointFamilyHint.IPV6
+    }
+
+    for (endpoint in primaryEndpoints + ipv6Endpoints) {
         val result = attempt(endpoint)
         if (result.isSuccess) return result
 

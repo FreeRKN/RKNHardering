@@ -12,9 +12,9 @@ object IfconfigClient {
     private val ENDPOINTS = listOf(
         IpEndpointSpec("https://ifconfig.me/ip"),
         IpEndpointSpec("https://checkip.amazonaws.com"),
-        IpEndpointSpec("https://ipv4-internet.yandex.net/api/v0/ip"),
-        IpEndpointSpec("https://ipv6-internet.yandex.net/api/v0/ip"),
         IpEndpointSpec("https://ip.mail.ru"),
+        IpEndpointSpec("https://api4.ipify.org"),
+        IpEndpointSpec("https://api6.ipify.org", IpEndpointFamilyHint.IPV6),
     )
 
     suspend fun fetchDirectIp(

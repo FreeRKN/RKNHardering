@@ -46,17 +46,36 @@ data class XrayScanProgress(
 class XrayApiScanner(
     private val loopbackHosts: List<String> = listOf("127.0.0.1", "::1"),
     private val scanRange: IntRange = 1024..65535,
+    private val scanPorts: List<Int>? = null,
     private val connectTimeoutMs: Int = 200,
     private val grpcDeadlineMs: Long = 2000,
     private val maxConcurrency: Int = 100,
     private val progressUpdateEvery: Int = 512,
+    private val isTcpPortOpenOverride: ((String, Int) -> Boolean)? = null,
+    private val tryListOutboundsOverride: (suspend (String, Int, Long) -> XrayApiScanResult?)? = null,
 ) {
+    companion object {
+        val DEFAULT_POPULAR_PORTS: List<Int> = listOf(8_080, 10_085)
+    }
+
     private val clients = loopbackHosts.associateWith { XrayApiClient(it) }
+    private val candidatePorts: IntArray by lazy {
+        scanPorts
+            ?.asSequence()
+            ?.filter { it in 1..65535 }
+            ?.distinct()
+            ?.sorted()
+            ?.toList()
+            ?.toIntArray()
+            ?: IntArray((scanRange.last - scanRange.first + 1).coerceAtLeast(0)) { index ->
+                scanRange.first + index
+            }
+    }
 
     suspend fun findXrayApi(
         onProgress: suspend (XrayScanProgress) -> Unit,
     ): XrayApiScanResult? = withContext(Dispatchers.IO) {
-        val portsTotal = (scanRange.last - scanRange.first + 1).coerceAtLeast(0)
+        val portsTotal = candidatePorts.size
         val total = portsTotal * loopbackHosts.size
 
         var scannedOffset = 0
@@ -80,7 +99,7 @@ class XrayApiScanner(
         total: Int,
         onProgress: suspend (XrayScanProgress) -> Unit,
     ): XrayApiScanResult? = coroutineScope {
-        val portsTotal = (scanRange.last - scanRange.first + 1).coerceAtLeast(0)
+        val portsTotal = candidatePorts.size
         if (portsTotal <= 0) return@coroutineScope null
 
         val scanned = AtomicInteger(0)
@@ -93,16 +112,17 @@ class XrayApiScanner(
                 host = host,
                 scanned = scannedOffset,
                 total = total,
-                currentPort = scanRange.first,
+                currentPort = candidatePorts.first(),
             ),
         )
 
         val jobs = (0 until maxConcurrency).map { workerIndex ->
             launch(dispatcher) {
-                var port = scanRange.first + workerIndex
-                while (port <= scanRange.last) {
+                var portIndex = workerIndex
+                while (portIndex < portsTotal) {
                     coroutineContext.ensureActive()
                     if (found.get() != null) return@launch
+                    val port = candidatePorts[portIndex]
 
                     val count = scanned.incrementAndGet()
                     if (count % progressUpdateEvery == 0) {
@@ -124,7 +144,7 @@ class XrayApiScanner(
                         }
                     }
 
-                    port += maxConcurrency
+                    portIndex += maxConcurrency
                 }
             }
         }
@@ -136,7 +156,7 @@ class XrayApiScanner(
                 host = host,
                 scanned = scannedOffset + portsTotal,
                 total = total,
-                currentPort = scanRange.last,
+                currentPort = candidatePorts.last(),
             ),
         )
 
@@ -144,6 +164,11 @@ class XrayApiScanner(
     }
 
     private suspend fun tryListOutbounds(host: String, port: Int): XrayApiScanResult? {
+        tryListOutboundsOverride?.let { override ->
+            override(host, port, grpcDeadlineMs)?.let { return it }
+            val retryDeadline = (grpcDeadlineMs * 3).coerceAtLeast(2000)
+            return override(host, port, retryDeadline)
+        }
         val client = clients.getValue(host)
         client.listOutbounds(port, deadlineMs = grpcDeadlineMs).getOrNull()?.let { return it }
         val retryDeadline = (grpcDeadlineMs * 3).coerceAtLeast(2000)
@@ -151,6 +176,7 @@ class XrayApiScanner(
     }
 
     private fun isTcpPortOpen(host: String, port: Int): Boolean {
+        isTcpPortOpenOverride?.let { return it(host, port) }
         return try {
             Socket().use { socket ->
                 socket.connect(InetSocketAddress(host, port), connectTimeoutMs)

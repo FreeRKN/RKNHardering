@@ -110,7 +110,7 @@
 
     <string name="main_ipv6_error_ignored">已忽略 IPv6 错误： </string>
 
-    <string name="settings_port_range_preview">将扫描的 localhost 代理端口：%1$s（%2$s）</string>
+    <string name="settings_port_range_preview">将扫描用于代理和 Xray API 的 localhost 端口：%1$s（%2$s）</string>
     <plurals name="settings_port_word">
         <item quantity="other">%1$s 个端口</item>
     </plurals>

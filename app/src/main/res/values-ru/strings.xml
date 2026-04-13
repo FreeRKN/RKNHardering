@@ -110,7 +110,7 @@
 
     <string name="main_ipv6_error_ignored">IPv6-ошибка проигнорирована: </string>
 
-    <string name="settings_port_range_preview">Будут сканироваться proxy-порты localhost: %1$s (%2$s)</string>
+    <string name="settings_port_range_preview">Будут сканироваться localhost-порты для proxy и Xray API: %1$s (%2$s)</string>
     <plurals name="settings_port_word">
         <item quantity="one">%1$s порт</item>
         <item quantity="few">%1$s порта</item>

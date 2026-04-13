@@ -112,7 +112,7 @@
 
     <string name="main_ipv6_error_ignored">IPv6 error ignored: </string>
 
-    <string name="settings_port_range_preview">Localhost proxy ports to scan: %1$s (%2$s)</string>
+    <string name="settings_port_range_preview">Localhost ports to scan for proxy and Xray API: %1$s (%2$s)</string>
     <string name="settings_port_range_start_default" translatable="false">1024</string>
     <string name="settings_port_range_end_default" translatable="false">65535</string>
     <plurals name="settings_port_word">

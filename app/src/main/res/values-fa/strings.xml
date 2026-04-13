@@ -110,7 +110,7 @@
 
     <string name="main_ipv6_error_ignored">خطای IPv6 نادیده گرفته شد: </string>
 
-    <string name="settings_port_range_preview">پورت‌های proxy لوکال‌هاست برای اسکن: %1$s (%2$s)</string>
+    <string name="settings_port_range_preview">پورت‌های لوکال‌هاست برای اسکن proxy و Xray API: %1$s (%2$s)</string>
     <plurals name="settings_port_word">
         <item quantity="one">%1$s پورت</item>
         <item quantity="other">%1$s پورت</item>

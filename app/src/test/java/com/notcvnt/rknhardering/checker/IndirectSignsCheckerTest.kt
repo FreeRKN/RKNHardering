@@ -293,6 +293,24 @@ class IndirectSignsCheckerTest {
     }
 
     @Test
+    fun `default route on stacked clat interface stays clear`() {
+        val evaluation = IndirectSignsChecker.checkRoutingTable(
+            context,
+            listOf(
+                snapshot(
+                    isActive = true,
+                    isVpn = false,
+                    interfaceName = "wlan0",
+                    routes = listOf(route("0.0.0.0/0", "v4-wlan0", isDefault = true)),
+                ),
+            ),
+        )
+
+        assertFalse(evaluation.detected)
+        assertTrue(evaluation.findings.any { !it.detected && it.description.contains("wlan0") })
+    }
+
+    @Test
     fun `split tunneling route pattern is detected`() {
         val evaluation = IndirectSignsChecker.checkRoutingTable(
             context,

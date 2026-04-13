@@ -11,6 +11,7 @@ import com.notcvnt.rknhardering.model.EvidenceConfidence
 import com.notcvnt.rknhardering.model.EvidenceItem
 import com.notcvnt.rknhardering.model.EvidenceSource
 import com.notcvnt.rknhardering.model.Finding
+import com.notcvnt.rknhardering.network.NetworkInterfaceNameNormalizer
 import com.notcvnt.rknhardering.probe.LocalSocketInspector
 import com.notcvnt.rknhardering.probe.LocalSocketListener
 import com.notcvnt.rknhardering.vpn.VpnAppCatalog
@@ -191,13 +192,15 @@ object IndirectSignsChecker {
                     label = network.toString(),
                     isActive = network == activeNetwork,
                     isVpn = caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN),
-                    interfaceName = linkProperties.interfaceName,
+                    interfaceName = NetworkInterfaceNameNormalizer.canonicalName(linkProperties.interfaceName),
                     routes = linkProperties.routes.map { route ->
                         RouteSnapshot(
                             destination = route.destination?.toString()
                                 ?: if (route.isDefaultRoute) "0.0.0.0/0" else "unknown",
                             gateway = route.gateway?.hostAddress?.takeUnless { it == "0.0.0.0" || it == "::" },
-                            interfaceName = route.`interface` ?: linkProperties.interfaceName,
+                            interfaceName = NetworkInterfaceNameNormalizer.canonicalName(
+                                route.`interface` ?: linkProperties.interfaceName,
+                            ),
                             isDefault = route.isDefaultRoute,
                         )
                     },
@@ -268,7 +271,7 @@ object IndirectSignsChecker {
         return try {
             val interfaces = NetworkInterface.getNetworkInterfaces()?.toList() ?: emptyList()
             val vpnInterfaces = interfaces.filter { iface ->
-                iface.isUp && VPN_INTERFACE_PATTERNS.any { pattern -> pattern.matches(iface.name) }
+                iface.isUp && isVpnInterface(iface.name)
             }
 
             if (vpnInterfaces.isEmpty()) {
@@ -311,7 +314,7 @@ object IndirectSignsChecker {
             var detected = false
             for (iface in interfaces) {
                 if (!iface.isUp) continue
-                val isVpnLike = VPN_INTERFACE_PATTERNS.any { it.matches(iface.name) }
+                val isVpnLike = isVpnInterface(iface.name)
                 if (!isVpnLike) continue
 
                 val mtu = iface.mtu
@@ -342,8 +345,8 @@ object IndirectSignsChecker {
 
             val activeInterfaces = interfaces.filter { it.isUp && it.mtu in 1..1499 }
             val nonVpnLowMtu = activeInterfaces.filter { iface ->
-                !VPN_INTERFACE_PATTERNS.any { it.matches(iface.name) } &&
-                    !STANDARD_INTERFACES.any { it.matches(iface.name) }
+                !isVpnInterface(iface.name) &&
+                    !isStandardInterface(iface.name)
             }
             for (iface in nonVpnLowMtu) {
                 findings.add(
@@ -803,8 +806,9 @@ object IndirectSignsChecker {
     }
 
     private fun isStandardInterface(name: String?): Boolean {
-        if (name.isNullOrBlank()) return false
-        return STANDARD_INTERFACES.any { it.matches(name) }
+        val canonicalName = NetworkInterfaceNameNormalizer.canonicalName(name)
+        if (canonicalName.isNullOrBlank()) return false
+        return STANDARD_INTERFACES.any { it.matches(canonicalName) }
     }
 
     private fun isVpnInterface(name: String?): Boolean {

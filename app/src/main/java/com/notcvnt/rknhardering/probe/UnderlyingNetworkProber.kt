@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import com.notcvnt.rknhardering.network.DnsResolverConfig
+import com.notcvnt.rknhardering.network.NetworkInterfaceNameNormalizer
 import com.notcvnt.rknhardering.network.ResolverBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -68,7 +69,9 @@ object UnderlyingNetworkProber {
             if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue
             val boundNetwork = BoundNetwork(
                 network = network,
-                interfaceName = cm.getLinkProperties(network)?.interfaceName,
+                interfaceName = NetworkInterfaceNameNormalizer.canonicalName(
+                    cm.getLinkProperties(network)?.interfaceName,
+                ),
             )
             if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
                 vpnNetwork = boundNetwork
@@ -145,7 +148,7 @@ object UnderlyingNetworkProber {
             return primaryResult
         }
 
-        val fallbackBinding = boundNetwork.interfaceName
+        val fallbackBinding = NetworkInterfaceNameNormalizer.canonicalName(boundNetwork.interfaceName)
             ?.takeIf { it.isNotBlank() }
             ?.let { ResolverBinding.OsDeviceBinding(it, dnsMode = ResolverBinding.DnsMode.SYSTEM) }
         if (fallbackBinding == null) {

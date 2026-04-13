@@ -376,6 +376,63 @@ class CallTransportLeakProberTest {
         assertEquals(ResolverBinding.DnsMode.SYSTEM, fallbackBinding.dnsMode)
     }
 
+    @Test
+    fun `underlying path normalizes stacked clat interface for public ip fallback`() {
+        val observedBindings = mutableListOf<ResolverBinding?>()
+        PublicIpClient.fetchIpOverride = { _, _, _, _, binding ->
+            observedBindings += binding
+            when (binding) {
+                is ResolverBinding.AndroidNetworkBinding -> Result.failure(IOException("primary path failed"))
+                is ResolverBinding.OsDeviceBinding -> Result.success("203.0.113.10")
+                null -> Result.failure(IOException("unexpected unbound path"))
+            }
+        }
+        CallTransportLeakProber.dependenciesOverride = CallTransportLeakProber.Dependencies(
+            loadCatalog = { _, _ ->
+                CallTransportTargetCatalog.Catalog(
+                    telegramTargets = listOf(
+                        CallTransportTargetCatalog.CallTransportTarget(
+                            service = CallTransportService.TELEGRAM,
+                            host = "149.154.167.51",
+                            port = 3478,
+                            experimental = false,
+                            enabled = true,
+                        ),
+                    ),
+                    whatsappTargets = emptyList(),
+                )
+            },
+            loadPaths = {
+                listOf(
+                    CallTransportLeakProber.PathDescriptor(
+                        path = CallTransportNetworkPath.UNDERLYING,
+                        network = newNetwork(101),
+                        interfaceName = "v4-wlan0",
+                    ),
+                )
+            },
+            stunProbe = { _, _, _ ->
+                Result.success(
+                    StunBindingClient.BindingResult(
+                        resolvedIps = listOf("149.154.167.51"),
+                        remoteIp = "149.154.167.51",
+                        remotePort = 3478,
+                        mappedIp = "198.51.100.20",
+                        mappedPort = 40000,
+                    ),
+                )
+            },
+        )
+
+        val results = runBlockingProbeDirect(experimental = false)
+
+        val telegram = results.first { it.service == CallTransportService.TELEGRAM }
+        assertEquals(CallTransportStatus.NEEDS_REVIEW, telegram.status)
+        val fallbackBinding = observedBindings.last { it is ResolverBinding.OsDeviceBinding } as ResolverBinding.OsDeviceBinding
+        assertEquals("wlan0", fallbackBinding.interfaceName)
+        assertEquals(ResolverBinding.DnsMode.SYSTEM, fallbackBinding.dnsMode)
+    }
+
     private fun runBlockingProbeDirect(
         experimental: Boolean,
     ): List<CallTransportLeakResult> = kotlinx.coroutines.runBlocking {

@@ -12,6 +12,7 @@ import com.notcvnt.rknhardering.model.CallTransportService
 import com.notcvnt.rknhardering.model.CallTransportStatus
 import com.notcvnt.rknhardering.model.EvidenceConfidence
 import com.notcvnt.rknhardering.network.DnsResolverConfig
+import com.notcvnt.rknhardering.network.NetworkInterfaceNameNormalizer
 import com.notcvnt.rknhardering.network.ResolverBinding
 import com.notcvnt.rknhardering.network.ResolverNetworkStack
 import kotlinx.coroutines.Dispatchers
@@ -419,7 +420,7 @@ object CallTransportLeakProber {
     }
 
     private fun PathDescriptor.fallbackBinding(): ResolverBinding.OsDeviceBinding? {
-        return interfaceName
+        return NetworkInterfaceNameNormalizer.canonicalName(interfaceName)
             ?.takeIf { it.isNotBlank() }
             ?.let { ResolverBinding.OsDeviceBinding(it, dnsMode = ResolverBinding.DnsMode.SYSTEM) }
     }
@@ -449,7 +450,9 @@ object CallTransportLeakProber {
             paths += PathDescriptor(
                 path = CallTransportNetworkPath.UNDERLYING,
                 network = underlyingNetwork,
-                interfaceName = cm.getLinkProperties(underlyingNetwork)?.interfaceName,
+                interfaceName = NetworkInterfaceNameNormalizer.canonicalName(
+                    cm.getLinkProperties(underlyingNetwork)?.interfaceName,
+                ),
             )
         }
         return paths

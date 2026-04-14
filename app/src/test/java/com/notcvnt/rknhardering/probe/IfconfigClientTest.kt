@@ -5,6 +5,7 @@ import com.notcvnt.rknhardering.network.DnsResolverConfig
 import com.notcvnt.rknhardering.network.ResolverBinding
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -79,6 +80,95 @@ class IfconfigClientTest {
             "Android Network binding failed: primary path failed; SO_BINDTODEVICE(tun0) failed: device path failed",
             result.exceptionOrNull()?.message,
         )
+    }
+
+    @Test
+    fun `network comparison marks dns path mismatch when curl compatible succeeds after strict failure`() {
+        val observedBindings = mutableListOf<ResolverBinding?>()
+        PublicIpClient.fetchIpOverride = { _, _, _, _, binding ->
+            observedBindings += binding
+            when (binding) {
+                is ResolverBinding.AndroidNetworkBinding -> Result.failure(IOException("strict failed"))
+                is ResolverBinding.OsDeviceBinding -> Result.success("203.0.113.21")
+                null -> Result.failure(IOException("unexpected unbound path"))
+            }
+        }
+
+        val comparison = kotlinx.coroutines.runBlocking {
+            IfconfigClient.fetchIpViaNetworkComparison(
+                primaryBinding = ResolverBinding.AndroidNetworkBinding(newNetwork(204)),
+                fallbackBinding = ResolverBinding.OsDeviceBinding(
+                    interfaceName = "tun0",
+                    dnsMode = ResolverBinding.DnsMode.SYSTEM,
+                ),
+                resolverConfig = DnsResolverConfig.system(),
+            )
+        }
+
+        assertEquals(PublicIpProbeStatus.FAILED, comparison.strict.status)
+        assertEquals(PublicIpProbeStatus.SUCCEEDED, comparison.curlCompatible.status)
+        assertEquals(PublicIpProbeMode.CURL_COMPATIBLE, comparison.selectedMode)
+        assertEquals("203.0.113.21", comparison.selectedIp)
+        assertTrue(comparison.dnsPathMismatch)
+        assertTrue(observedBindings.any { it is ResolverBinding.AndroidNetworkBinding })
+        assertTrue(observedBindings.any { it is ResolverBinding.OsDeviceBinding })
+    }
+
+    @Test
+    fun `network comparison still runs curl compatible branch after strict success`() {
+        val observedBindings = mutableListOf<ResolverBinding?>()
+        PublicIpClient.fetchIpOverride = { _, _, _, _, binding ->
+            observedBindings += binding
+            when (binding) {
+                is ResolverBinding.AndroidNetworkBinding -> Result.success("198.51.100.10")
+                is ResolverBinding.OsDeviceBinding -> Result.success("203.0.113.22")
+                null -> Result.failure(IOException("unexpected unbound path"))
+            }
+        }
+
+        val comparison = kotlinx.coroutines.runBlocking {
+            IfconfigClient.fetchIpViaNetworkComparison(
+                primaryBinding = ResolverBinding.AndroidNetworkBinding(newNetwork(205)),
+                fallbackBinding = ResolverBinding.OsDeviceBinding(
+                    interfaceName = "tun0",
+                    dnsMode = ResolverBinding.DnsMode.SYSTEM,
+                ),
+                resolverConfig = DnsResolverConfig.system(),
+            )
+        }
+
+        assertEquals(PublicIpProbeMode.STRICT_SAME_PATH, comparison.selectedMode)
+        assertEquals("198.51.100.10", comparison.selectedIp)
+        assertEquals(PublicIpProbeStatus.SUCCEEDED, comparison.curlCompatible.status)
+        assertTrue(observedBindings.any { it is ResolverBinding.AndroidNetworkBinding })
+        assertTrue(observedBindings.any { it is ResolverBinding.OsDeviceBinding })
+    }
+
+    @Test
+    fun `network comparison marks curl compatible branch as skipped when interface is missing`() {
+        PublicIpClient.fetchIpOverride = { _, _, _, _, binding ->
+            when (binding) {
+                is ResolverBinding.AndroidNetworkBinding -> Result.failure(IOException("strict failed"))
+                else -> Result.failure(IOException("unexpected binding"))
+            }
+        }
+
+        val comparison = kotlinx.coroutines.runBlocking {
+            IfconfigClient.fetchIpViaNetworkComparison(
+                primaryBinding = ResolverBinding.AndroidNetworkBinding(newNetwork(206)),
+                fallbackBinding = null,
+                resolverConfig = DnsResolverConfig.system(),
+            )
+        }
+
+        assertEquals(PublicIpProbeStatus.SKIPPED, comparison.curlCompatible.status)
+        assertEquals(
+            "OS device bind fallback is unavailable because interfaceName is missing",
+            comparison.curlCompatible.error,
+        )
+        assertEquals("strict failed; OS device bind fallback is unavailable because interfaceName is missing", comparison.selectedError)
+        assertEquals(null, comparison.selectedMode)
+        assertFalse(comparison.dnsPathMismatch)
     }
 
     @Test

@@ -333,8 +333,10 @@
     <string name="checker_bypass_vpn_not_active">Underlying network：VPN 未激活，无需执行此检查</string>
     <string name="checker_bypass_vpn_network_binding">VPN network binding：应用同时访问到了默认非 VPN 路径和 VPN Network（VPN IP：%1$s，默认 IP：%2$s）</string>
     <string name="checker_bypass_tun_probe_success">TUN active probe：通过 VPN Network 发起的请求返回了 IP %1$s（TUN 是一个可路由的活动接口）</string>
+    <string name="checker_bypass_tun_probe_success_transport_only">TUN active probe：curl-compatible transport-only 路径返回了 IP %1$s（SO_BINDTODEVICE + system DNS）</string>
     <string name="checker_bypass_tun_probe_failure">TUN active probe：通过 VPN Network 发起的请求不可用（接口被阻止或被 filtered）</string>
     <string name="checker_bypass_tun_probe_failure_reason">TUN 活跃探测：通过 VPN Network 发起的请求失败（%1$s）</string>
+    <string name="checker_bypass_tun_probe_dns_mismatch">TUN 活跃探测：strict same-path 失败（%1$s），但 curl-compatible transport-only 路径成功；很可能存在 DNS path mismatch</string>
     <string name="checker_bypass_default_non_vpn_ip">默认非 VPN IP：%1$s</string>
     <string name="checker_bypass_underlying_unreachable">Underlying network：非 VPN 网络不可用（full tunnel）</string>
     <string name="checker_bypass_underlying_unreachable_reason">底层网络：非 VPN 网络不可用（%1$s）</string>
@@ -342,6 +344,9 @@
     <string name="checker_bypass_underlying_same_ip">Underlying 网络可达，但 IP 与 VPN%1$s 相同：split tunnel 未确认</string>
     <string name="checker_bypass_compare_family_mismatch">Split tunnel 对比返回了不同地址族的结果（VPN IP：%1$s，非 VPN IP：%2$s），需要人工复核</string>
     <string name="checker_bypass_compare_incomplete">Split tunnel 对比不完整（VPN IP：%1$s，非 VPN IP：%2$s），需要人工复核</string>
+    <string name="checker_bypass_transport_only_used">Split tunnel 对比依赖 curl-compatible transport-only fallback 的路径：%1$s</string>
+    <string name="checker_bypass_transport_only_vpn_path">VPN 路径</string>
+    <string name="checker_bypass_transport_only_underlying_path">underlying 路径</string>
 
     <string name="checker_vpn_known_apps_none">已知 VPN/代理应用和 VpnService 提供方：未发现</string>
     <string name="checker_vpn_installed_app">已安装应用：%1$s（%2$s）</string>

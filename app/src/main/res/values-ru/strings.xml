@@ -351,8 +351,10 @@
     <string name="checker_bypass_vpn_not_active">Underlying network: VPN не активен, проверка не требуется</string>
     <string name="checker_bypass_vpn_network_binding">VPN network binding: приложение видит и VPN Network, и non-VPN default сеть (VPN IP: %1$s, direct IP: %2$s)</string>
     <string name="checker_bypass_tun_probe_success">TUN активный зонд: запрос через VPN Network вернул IP %1$s (TUN — живой маршрутизируемый интерфейс)</string>
+    <string name="checker_bypass_tun_probe_success_transport_only">TUN активный зонд: curl-compatible transport-only путь вернул IP %1$s (SO_BINDTODEVICE + системный DNS)</string>
     <string name="checker_bypass_tun_probe_failure">TUN активный зонд: запрос через VPN Network недоступен (интерфейс заблокирован или filtered)</string>
     <string name="checker_bypass_tun_probe_failure_reason">TUN активный зонд: запрос через VPN Network завершился ошибкой (%1$s)</string>
+    <string name="checker_bypass_tun_probe_dns_mismatch">TUN активный зонд: strict same-path завершился ошибкой (%1$s), но curl-compatible transport-only путь сработал; вероятен mismatch DNS-path</string>
     <string name="checker_bypass_default_non_vpn_ip">Default non-VPN IP: %1$s</string>
     <string name="checker_bypass_underlying_unreachable">Underlying network: non-VPN сеть недоступна (full tunnel)</string>
     <string name="checker_bypass_underlying_unreachable_reason">Underlying network: non-VPN сеть недоступна (%1$s)</string>
@@ -360,6 +362,9 @@
     <string name="checker_bypass_underlying_same_ip">Underlying сеть доступна, но IP совпадает с VPN%1$s: split tunnel не подтверждён</string>
     <string name="checker_bypass_compare_family_mismatch">Сравнение split tunnel вернуло адреса разных семейств (VPN IP: %1$s, non-VPN IP: %2$s): нужна ручная проверка</string>
     <string name="checker_bypass_compare_incomplete">Сравнение split tunnel неполное (VPN IP: %1$s, non-VPN IP: %2$s): нужна ручная проверка</string>
+    <string name="checker_bypass_transport_only_used">Сравнение split tunnel опиралось на curl-compatible transport-only fallback для: %1$s</string>
+    <string name="checker_bypass_transport_only_vpn_path">VPN path</string>
+    <string name="checker_bypass_transport_only_underlying_path">underlying path</string>
 
     <!-- InstalledVpnAppDetector -->
     <string name="checker_vpn_known_apps_none">Известные VPN/Proxy-приложения и VpnService-провайдеры: не обнаружены</string>

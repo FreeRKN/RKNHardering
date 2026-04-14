@@ -351,8 +351,10 @@
     <string name="checker_bypass_vpn_not_active">Underlying network: VPN is not active, the check is not required</string>
     <string name="checker_bypass_vpn_network_binding">VPN network binding: the app can reach both the default non-VPN path and VPN Network (VPN IP: %1$s, default IP: %2$s)</string>
     <string name="checker_bypass_tun_probe_success">TUN active probe: a request via VPN Network returned IP %1$s (TUN is a live routable interface)</string>
+    <string name="checker_bypass_tun_probe_success_transport_only">TUN active probe: a curl-compatible transport-only path returned IP %1$s (SO_BINDTODEVICE + system DNS)</string>
     <string name="checker_bypass_tun_probe_failure">TUN active probe: a request via VPN Network is unavailable (the interface is blocked or filtered)</string>
     <string name="checker_bypass_tun_probe_failure_reason">TUN active probe: a request via VPN Network failed (%1$s)</string>
+    <string name="checker_bypass_tun_probe_dns_mismatch">TUN active probe: strict same-path failed (%1$s), but the curl-compatible transport-only path succeeded; DNS path mismatch is likely</string>
     <string name="checker_bypass_default_non_vpn_ip">Default non-VPN IP: %1$s</string>
     <string name="checker_bypass_underlying_unreachable">Underlying network: the non-VPN network is unavailable (full tunnel)</string>
     <string name="checker_bypass_underlying_unreachable_reason">Underlying network: the non-VPN network is unavailable (%1$s)</string>
@@ -360,6 +362,9 @@
     <string name="checker_bypass_underlying_same_ip">The underlying network is reachable, but the IP matches the VPN%1$s: split tunnel not confirmed</string>
     <string name="checker_bypass_compare_family_mismatch">Split tunnel comparison returned different IP families (VPN IP: %1$s, non-VPN IP: %2$s): manual review is needed</string>
     <string name="checker_bypass_compare_incomplete">Split tunnel comparison is incomplete (VPN IP: %1$s, non-VPN IP: %2$s): manual review is needed</string>
+    <string name="checker_bypass_transport_only_used">Split tunnel comparison used a curl-compatible transport-only fallback for: %1$s</string>
+    <string name="checker_bypass_transport_only_vpn_path">VPN path</string>
+    <string name="checker_bypass_transport_only_underlying_path">underlying path</string>
 
     <!-- InstalledVpnAppDetector -->
     <string name="checker_vpn_known_apps_none">Known VPN/Proxy apps and VpnService providers: none detected</string>

@@ -3,6 +3,10 @@ package com.notcvnt.rknhardering.checker
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.notcvnt.rknhardering.model.EvidenceSource
+import com.notcvnt.rknhardering.probe.PublicIpModeProbeResult
+import com.notcvnt.rknhardering.probe.PublicIpNetworkComparison
+import com.notcvnt.rknhardering.probe.PublicIpProbeMode
+import com.notcvnt.rknhardering.probe.PublicIpProbeStatus
 import com.notcvnt.rknhardering.probe.UnderlyingNetworkProber
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -231,5 +235,50 @@ class DirectSignsCheckerTest {
         assertFalse(result.detected)
         assertTrue(result.needsReview)
         assertTrue(result.evidence.none { it.source == EvidenceSource.TUN_ACTIVE_PROBE && it.detected })
+    }
+
+    @Test
+    fun `check marks curl compatible tun probe success as detected and needs review`() {
+        val result = DirectSignsChecker.check(
+            context = context,
+            tunActiveProbeResult = UnderlyingNetworkProber.ProbeResult(
+                vpnActive = true,
+                underlyingReachable = false,
+                vpnIp = "198.51.100.30",
+                vpnIpComparison = PublicIpNetworkComparison(
+                    strict = PublicIpModeProbeResult(
+                        mode = PublicIpProbeMode.STRICT_SAME_PATH,
+                        status = PublicIpProbeStatus.FAILED,
+                        error = "strict timeout",
+                    ),
+                    curlCompatible = PublicIpModeProbeResult(
+                        mode = PublicIpProbeMode.CURL_COMPATIBLE,
+                        status = PublicIpProbeStatus.SUCCEEDED,
+                        ip = "198.51.100.30",
+                    ),
+                    selectedMode = PublicIpProbeMode.CURL_COMPATIBLE,
+                    selectedIp = "198.51.100.30",
+                    dnsPathMismatch = true,
+                ),
+                activeNetworkIsVpn = true,
+            ),
+        )
+
+        assertTrue(result.detected)
+        assertTrue(result.needsReview)
+        assertTrue(
+            result.findings.any {
+                it.detected &&
+                    it.source == EvidenceSource.TUN_ACTIVE_PROBE &&
+                    it.description.contains("SO_BINDTODEVICE + system DNS")
+            },
+        )
+        assertTrue(
+            result.findings.any {
+                it.needsReview &&
+                    it.source == EvidenceSource.TUN_ACTIVE_PROBE &&
+                    it.description.contains("strict timeout")
+            },
+        )
     }
 }

@@ -9,7 +9,6 @@ import com.notcvnt.rknhardering.network.NetworkInterfaceNameNormalizer
 import com.notcvnt.rknhardering.network.ResolverBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.IOException
 
 /**
  * Detects whether a non-VPN (underlying) network is reachable from this app.
@@ -35,6 +34,9 @@ object UnderlyingNetworkProber {
         val underlyingIp: String? = null,
         val vpnError: String? = null,
         val underlyingError: String? = null,
+        val vpnIpComparison: PublicIpNetworkComparison? = null,
+        val underlyingIpComparison: PublicIpNetworkComparison? = null,
+        val dnsPathMismatch: Boolean = false,
         val vpnNetwork: Network? = null,
         val underlyingNetwork: Network? = null,
         val activeNetworkIsVpn: Boolean? = null,
@@ -79,9 +81,9 @@ object UnderlyingNetworkProber {
             )
         }
 
-        val vpnResult = fetchIpViaNetwork(vpnNetwork, resolverConfig)
-        val vpnIp = vpnResult.getOrNull()
-        val vpnError = vpnResult.exceptionOrNull()?.message
+        val vpnComparison = fetchIpViaNetworkComparison(vpnNetwork, resolverConfig)
+        val vpnIp = vpnComparison.selectedIp
+        val vpnError = vpnComparison.selectedError
 
         if (nonVpnNetworks.isEmpty()) {
             return@withContext ProbeResult(
@@ -89,6 +91,8 @@ object UnderlyingNetworkProber {
                 underlyingReachable = false,
                 vpnIp = vpnIp,
                 vpnError = vpnError,
+                vpnIpComparison = vpnComparison,
+                dnsPathMismatch = vpnComparison.dnsPathMismatch,
                 vpnNetwork = vpnNetwork.network,
                 activeNetworkIsVpn = activeNetworkIsVpn,
             )
@@ -97,16 +101,18 @@ object UnderlyingNetworkProber {
         var underlyingIp: String? = null
         var underlyingError: String? = null
         var usedNetwork: Network? = null
+        var underlyingComparison: PublicIpNetworkComparison? = null
 
         for (network in nonVpnNetworks) {
-            val result = fetchIpViaNetwork(network, resolverConfig)
-            underlyingIp = result.getOrNull()
+            val result = fetchIpViaNetworkComparison(network, resolverConfig)
+            underlyingComparison = result
+            underlyingIp = result.selectedIp
             if (underlyingIp != null) {
                 usedNetwork = network.network
                 underlyingError = null
                 break
             }
-            underlyingError = result.exceptionOrNull()?.message ?: underlyingError
+            underlyingError = result.selectedError ?: underlyingError
         }
 
         ProbeResult(
@@ -116,33 +122,28 @@ object UnderlyingNetworkProber {
             underlyingIp = underlyingIp,
             vpnError = vpnError,
             underlyingError = underlyingError,
+            vpnIpComparison = vpnComparison,
+            underlyingIpComparison = underlyingComparison,
+            dnsPathMismatch = vpnComparison.dnsPathMismatch ||
+                (underlyingComparison?.dnsPathMismatch == true),
             vpnNetwork = vpnNetwork.network,
             underlyingNetwork = usedNetwork,
             activeNetworkIsVpn = activeNetworkIsVpn,
         )
     }
 
-    private suspend fun fetchIpViaNetwork(
+    private suspend fun fetchIpViaNetworkComparison(
         boundNetwork: BoundNetwork,
         resolverConfig: DnsResolverConfig,
-    ): Result<String> {
+    ): PublicIpNetworkComparison {
         val fallbackBinding = boundNetwork.interfaceName
             ?.takeIf { it.isNotBlank() }
             ?.let { ResolverBinding.OsDeviceBinding(it, dnsMode = ResolverBinding.DnsMode.SYSTEM) }
 
-        val result = IfconfigClient.fetchIpViaNetwork(
+        return IfconfigClient.fetchIpViaNetworkComparison(
             primaryBinding = ResolverBinding.AndroidNetworkBinding(boundNetwork.network),
             fallbackBinding = fallbackBinding,
             resolverConfig = resolverConfig,
         )
-
-        if (result.isFailure && fallbackBinding == null) {
-            val message = result.exceptionOrNull()?.message?.let {
-                "$it; OS device bind fallback is unavailable because interfaceName is missing"
-            } ?: "OS device bind fallback is unavailable because interfaceName is missing"
-            return Result.failure(IOException(message))
-        }
-
-        return result
     }
 }

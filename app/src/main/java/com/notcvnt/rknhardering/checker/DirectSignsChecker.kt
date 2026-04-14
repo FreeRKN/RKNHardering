@@ -14,6 +14,7 @@ import com.notcvnt.rknhardering.model.EvidenceSource
 import com.notcvnt.rknhardering.model.Finding
 import com.notcvnt.rknhardering.model.MatchedVpnApp
 import com.notcvnt.rknhardering.network.NetworkInterfaceNameNormalizer
+import com.notcvnt.rknhardering.probe.PublicIpProbeMode
 import com.notcvnt.rknhardering.probe.UnderlyingNetworkProber
 import com.notcvnt.rknhardering.vpn.InstalledVpnAppDetector
 
@@ -639,25 +640,50 @@ object DirectSignsChecker {
         findings: MutableList<Finding>,
         evidence: MutableList<EvidenceItem>,
     ): SignalOutcome {
+        val comparison = result.vpnIpComparison
         result.vpnIp?.let { vpnIp ->
-            val description = context.getString(R.string.checker_bypass_tun_probe_success, vpnIp)
+            val transportOnly = comparison?.selectedMode == PublicIpProbeMode.CURL_COMPATIBLE
+            val description = context.getString(
+                if (transportOnly) R.string.checker_bypass_tun_probe_success_transport_only
+                else R.string.checker_bypass_tun_probe_success,
+                vpnIp,
+            )
+            val confidence = if (transportOnly) EvidenceConfidence.MEDIUM else EvidenceConfidence.HIGH
             findings.add(
                 Finding(
                     description = description,
                     detected = true,
                     source = EvidenceSource.TUN_ACTIVE_PROBE,
-                    confidence = EvidenceConfidence.HIGH,
+                    confidence = confidence,
                 ),
             )
             evidence.add(
                 EvidenceItem(
                     source = EvidenceSource.TUN_ACTIVE_PROBE,
                     detected = true,
-                    confidence = EvidenceConfidence.HIGH,
-                    description = "A request via VPN network returned public IP $vpnIp",
+                    confidence = confidence,
+                    description = if (transportOnly) {
+                        "A curl-compatible transport-only request via VPN network returned public IP $vpnIp"
+                    } else {
+                        "A request via VPN network returned public IP $vpnIp"
+                    },
                 ),
             )
-            return SignalOutcome(detected = true)
+            val hasDnsPathMismatch = comparison?.dnsPathMismatch == true
+            if (hasDnsPathMismatch) {
+                findings.add(
+                    Finding(
+                        description = context.getString(
+                            R.string.checker_bypass_tun_probe_dns_mismatch,
+                            comparison.strict.error ?: result.vpnError ?: "unknown error",
+                        ),
+                        needsReview = true,
+                        source = EvidenceSource.TUN_ACTIVE_PROBE,
+                        confidence = EvidenceConfidence.LOW,
+                    ),
+                )
+            }
+            return SignalOutcome(detected = true, needsReview = hasDnsPathMismatch)
         }
 
         result.vpnError

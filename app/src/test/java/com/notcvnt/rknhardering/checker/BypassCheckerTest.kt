@@ -13,6 +13,8 @@ import com.notcvnt.rknhardering.probe.PublicIpProbeMode
 import com.notcvnt.rknhardering.probe.PublicIpProbeStatus
 import com.notcvnt.rknhardering.probe.ProxyEndpoint
 import com.notcvnt.rknhardering.probe.ProxyType
+import com.notcvnt.rknhardering.probe.TunProbeDiagnostics
+import com.notcvnt.rknhardering.probe.TunProbeModeOverride
 import com.notcvnt.rknhardering.probe.UnderlyingNetworkProber
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -263,6 +265,41 @@ class BypassCheckerTest {
                     dnsPathMismatch = true,
                 ),
                 activeNetworkIsVpn = true,
+                tunProbeDiagnostics = TunProbeDiagnostics(
+                    enabled = true,
+                    modeOverride = TunProbeModeOverride.AUTO,
+                    activeNetworkIsVpn = true,
+                    vpnNetworkPresent = true,
+                    underlyingNetworkPresent = true,
+                    vpnPath = PublicIpNetworkComparison(
+                        strict = PublicIpModeProbeResult(
+                            mode = PublicIpProbeMode.STRICT_SAME_PATH,
+                            status = PublicIpProbeStatus.FAILED,
+                            error = "strict timeout",
+                        ),
+                        curlCompatible = PublicIpModeProbeResult(
+                            mode = PublicIpProbeMode.CURL_COMPATIBLE,
+                            status = PublicIpProbeStatus.SUCCEEDED,
+                            ip = "198.51.100.10",
+                        ),
+                        selectedMode = PublicIpProbeMode.CURL_COMPATIBLE,
+                        selectedIp = "198.51.100.10",
+                        dnsPathMismatch = true,
+                    ).toPathDiagnostics("tun0"),
+                    underlyingPath = PublicIpNetworkComparison(
+                        strict = PublicIpModeProbeResult(
+                            mode = PublicIpProbeMode.STRICT_SAME_PATH,
+                            status = PublicIpProbeStatus.FAILED,
+                            error = "underlying strict timeout",
+                        ),
+                        curlCompatible = PublicIpModeProbeResult(
+                            mode = PublicIpProbeMode.CURL_COMPATIBLE,
+                            status = PublicIpProbeStatus.FAILED,
+                            error = "underlying bind failed",
+                        ),
+                        selectedError = "underlying bind failed",
+                    ).toPathDiagnostics("wlan0"),
+                ),
             ),
             findings = findings,
             evidence = evidence,
@@ -273,6 +310,8 @@ class BypassCheckerTest {
         assertFalse(evidence.any { it.source == EvidenceSource.VPN_GATEWAY_LEAK && it.detected })
         assertTrue(findings.any { it.needsReview && it.source == EvidenceSource.VPN_GATEWAY_LEAK })
         assertTrue(findings.any { it.isInformational && it.description.contains("curl-compatible transport-only fallback") })
+        assertTrue(findings.any { it.isInformational && it.description.contains("VPN path debug") })
+        assertTrue(findings.any { it.isInformational && it.description.contains("underlying path debug") })
     }
 
     @Test
@@ -352,6 +391,44 @@ class BypassCheckerTest {
         assertFalse(outcome.needsReview)
         assertTrue(findings.any { it.isInformational && it.description.contains("curl-compatible transport-only fallback") })
         assertFalse(findings.any { it.needsReview && it.description.contains("strict timeout") })
+    }
+
+    @Test
+    fun `forced curl compatible mode does not downgrade confirmed gateway leak`() {
+        val findings = mutableListOf<Finding>()
+        val evidence = mutableListOf<EvidenceItem>()
+
+        val outcome = BypassChecker.reportUnderlyingNetworkResult(
+            context = context,
+            result = UnderlyingNetworkProber.ProbeResult(
+                vpnActive = true,
+                underlyingReachable = true,
+                vpnIp = "198.51.100.10",
+                underlyingIp = "203.0.113.20",
+                vpnIpComparison = PublicIpNetworkComparison(
+                    strict = PublicIpModeProbeResult(
+                        mode = PublicIpProbeMode.STRICT_SAME_PATH,
+                        status = PublicIpProbeStatus.SKIPPED,
+                        error = "Disabled by override",
+                    ),
+                    curlCompatible = PublicIpModeProbeResult(
+                        mode = PublicIpProbeMode.CURL_COMPATIBLE,
+                        status = PublicIpProbeStatus.SUCCEEDED,
+                        ip = "198.51.100.10",
+                    ),
+                    selectedMode = PublicIpProbeMode.CURL_COMPATIBLE,
+                    selectedIp = "198.51.100.10",
+                ),
+                activeNetworkIsVpn = true,
+            ),
+            findings = findings,
+            evidence = evidence,
+        )
+
+        assertTrue(outcome.detected)
+        assertFalse(outcome.needsReview)
+        assertTrue(evidence.any { it.source == EvidenceSource.VPN_GATEWAY_LEAK && it.detected })
+        assertFalse(findings.any { it.isInformational && it.description.contains("curl-compatible transport-only fallback") })
     }
 
     @Test

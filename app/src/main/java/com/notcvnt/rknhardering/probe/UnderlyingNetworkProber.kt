@@ -40,12 +40,15 @@ object UnderlyingNetworkProber {
         val vpnNetwork: Network? = null,
         val underlyingNetwork: Network? = null,
         val activeNetworkIsVpn: Boolean? = null,
+        val tunProbeDiagnostics: TunProbeDiagnostics? = null,
     )
 
     @Suppress("DEPRECATION")
     suspend fun probe(
         context: Context,
         resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
+        debugEnabled: Boolean = false,
+        modeOverride: TunProbeModeOverride = TunProbeModeOverride.AUTO,
     ): ProbeResult = withContext(Dispatchers.IO) {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val activeNetwork = cm.activeNetwork
@@ -78,10 +81,21 @@ object UnderlyingNetworkProber {
                 vpnActive = false,
                 underlyingReachable = false,
                 activeNetworkIsVpn = activeNetworkIsVpn,
+                tunProbeDiagnostics = buildTunProbeDiagnostics(
+                    debugEnabled = debugEnabled,
+                    modeOverride = modeOverride,
+                    activeNetworkIsVpn = activeNetworkIsVpn,
+                    vpnNetworkPresent = false,
+                    underlyingNetworkPresent = nonVpnNetworks.isNotEmpty(),
+                    vpnInterfaceName = null,
+                    vpnComparison = null,
+                    underlyingInterfaceName = nonVpnNetworks.firstOrNull()?.interfaceName,
+                    underlyingComparison = null,
+                ),
             )
         }
 
-        val vpnComparison = fetchIpViaNetworkComparison(vpnNetwork, resolverConfig)
+        val vpnComparison = fetchIpViaNetworkComparison(vpnNetwork, resolverConfig, debugEnabled, modeOverride)
         val vpnIp = vpnComparison.selectedIp
         val vpnError = vpnComparison.selectedError
 
@@ -95,20 +109,35 @@ object UnderlyingNetworkProber {
                 dnsPathMismatch = vpnComparison.dnsPathMismatch,
                 vpnNetwork = vpnNetwork.network,
                 activeNetworkIsVpn = activeNetworkIsVpn,
+                tunProbeDiagnostics = buildTunProbeDiagnostics(
+                    debugEnabled = debugEnabled,
+                    modeOverride = modeOverride,
+                    activeNetworkIsVpn = activeNetworkIsVpn,
+                    vpnNetworkPresent = true,
+                    underlyingNetworkPresent = false,
+                    vpnInterfaceName = vpnNetwork.interfaceName,
+                    vpnComparison = vpnComparison,
+                    underlyingInterfaceName = null,
+                    underlyingComparison = null,
+                ),
             )
         }
 
         var underlyingIp: String? = null
         var underlyingError: String? = null
         var usedNetwork: Network? = null
+        var usedBoundNetwork: BoundNetwork? = null
         var underlyingComparison: PublicIpNetworkComparison? = null
+        var lastUnderlyingNetwork: BoundNetwork? = null
 
         for (network in nonVpnNetworks) {
-            val result = fetchIpViaNetworkComparison(network, resolverConfig)
+            val result = fetchIpViaNetworkComparison(network, resolverConfig, debugEnabled, modeOverride)
+            lastUnderlyingNetwork = network
             underlyingComparison = result
             underlyingIp = result.selectedIp
             if (underlyingIp != null) {
                 usedNetwork = network.network
+                usedBoundNetwork = network
                 underlyingError = null
                 break
             }
@@ -129,12 +158,25 @@ object UnderlyingNetworkProber {
             vpnNetwork = vpnNetwork.network,
             underlyingNetwork = usedNetwork,
             activeNetworkIsVpn = activeNetworkIsVpn,
+            tunProbeDiagnostics = buildTunProbeDiagnostics(
+                debugEnabled = debugEnabled,
+                modeOverride = modeOverride,
+                activeNetworkIsVpn = activeNetworkIsVpn,
+                vpnNetworkPresent = true,
+                underlyingNetworkPresent = true,
+                vpnInterfaceName = vpnNetwork.interfaceName,
+                vpnComparison = vpnComparison,
+                underlyingInterfaceName = (usedBoundNetwork ?: lastUnderlyingNetwork)?.interfaceName,
+                underlyingComparison = underlyingComparison,
+            ),
         )
     }
 
     private suspend fun fetchIpViaNetworkComparison(
         boundNetwork: BoundNetwork,
         resolverConfig: DnsResolverConfig,
+        debugEnabled: Boolean,
+        modeOverride: TunProbeModeOverride,
     ): PublicIpNetworkComparison {
         val fallbackBinding = boundNetwork.interfaceName
             ?.takeIf { it.isNotBlank() }
@@ -144,6 +186,32 @@ object UnderlyingNetworkProber {
             primaryBinding = ResolverBinding.AndroidNetworkBinding(boundNetwork.network),
             fallbackBinding = fallbackBinding,
             resolverConfig = resolverConfig,
+            modeOverride = modeOverride,
+            collectTrace = debugEnabled,
+        )
+    }
+
+    internal fun buildTunProbeDiagnostics(
+        debugEnabled: Boolean,
+        modeOverride: TunProbeModeOverride,
+        activeNetworkIsVpn: Boolean?,
+        vpnNetworkPresent: Boolean,
+        underlyingNetworkPresent: Boolean,
+        vpnInterfaceName: String?,
+        vpnComparison: PublicIpNetworkComparison?,
+        underlyingInterfaceName: String?,
+        underlyingComparison: PublicIpNetworkComparison?,
+    ): TunProbeDiagnostics? {
+        if (!debugEnabled) return null
+
+        return TunProbeDiagnostics(
+            enabled = true,
+            modeOverride = modeOverride,
+            activeNetworkIsVpn = activeNetworkIsVpn,
+            vpnNetworkPresent = vpnNetworkPresent,
+            underlyingNetworkPresent = underlyingNetworkPresent,
+            vpnPath = vpnComparison?.toPathDiagnostics(vpnInterfaceName),
+            underlyingPath = underlyingComparison?.toPathDiagnostics(underlyingInterfaceName),
         )
     }
 }

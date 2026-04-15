@@ -28,10 +28,12 @@ class CheckViewModel(app: Application) : AndroidViewModel(app) {
     val isRunning: StateFlow<Boolean> = _isRunning
 
     private var scanJob: Job? = null
+    private var completedDiagnosticsConsumed = false
 
     fun startScan(settings: CheckSettings, privacyMode: Boolean) {
         if (scanJob?.isActive == true) return
 
+        resetCompletedDiagnosticsRetention()
         _scanEvents.value = listOf(ScanEvent.Started(settings, privacyMode))
         _isRunning.value = true
 
@@ -56,5 +58,15 @@ class CheckViewModel(app: Application) : AndroidViewModel(app) {
 
     fun cancelScan() {
         scanJob?.cancel()
+    }
+
+    internal fun canRetainCompletedDiagnostics(): Boolean = !completedDiagnosticsConsumed
+
+    internal fun markCompletedDiagnosticsConsumed() {
+        completedDiagnosticsConsumed = true
+    }
+
+    internal fun resetCompletedDiagnosticsRetention() {
+        completedDiagnosticsConsumed = false
     }
 }

@@ -18,6 +18,7 @@ data class PublicIpModeProbeResult(
     val status: PublicIpProbeStatus,
     val ip: String? = null,
     val error: String? = null,
+    val endpointAttempts: List<TunEndpointAttempt> = emptyList(),
 )
 
 data class PublicIpNetworkComparison(
@@ -31,5 +32,34 @@ data class PublicIpNetworkComparison(
     fun asResult(): Result<String> {
         return selectedIp?.let(Result.Companion::success)
             ?: Result.failure(IOException(selectedError ?: "Public IP probe failed"))
+    }
+
+    fun usedCurlCompatibleFallback(): Boolean {
+        return selectedMode == PublicIpProbeMode.CURL_COMPATIBLE &&
+            strict.status == PublicIpProbeStatus.FAILED
+    }
+
+    fun toPathDiagnostics(interfaceName: String?): TunProbePathDiagnostics {
+        return TunProbePathDiagnostics(
+            interfaceName = interfaceName,
+            selectedMode = selectedMode,
+            selectedIp = selectedIp,
+            selectedError = selectedError,
+            dnsPathMismatch = dnsPathMismatch,
+            strict = TunProbeAttemptDiagnostics(
+                mode = strict.mode,
+                status = strict.status,
+                ip = strict.ip,
+                error = strict.error,
+                endpointAttempts = strict.endpointAttempts,
+            ),
+            curlCompatible = TunProbeAttemptDiagnostics(
+                mode = curlCompatible.mode,
+                status = curlCompatible.status,
+                ip = curlCompatible.ip,
+                error = curlCompatible.error,
+                endpointAttempts = curlCompatible.endpointAttempts,
+            ),
+        )
     }
 }

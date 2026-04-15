@@ -1,6 +1,8 @@
 package com.notcvnt.rknhardering
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
@@ -109,6 +111,22 @@ private fun isUniqueLocalIpv6(address: Inet6Address): Boolean {
     return (firstByte and 0xfe) == 0xfc
 }
 
+internal fun retainCompletedDiagnosticsSnapshot(
+    result: CheckResult,
+    settings: CheckSettings?,
+): RetainedDiagnosticsSnapshot? {
+    val retainedSettings = settings?.takeIf { it.tunProbeDebugEnabled } ?: return null
+    return RetainedDiagnosticsSnapshot(
+        result = result,
+        settings = retainedSettings,
+    )
+}
+
+internal data class RetainedDiagnosticsSnapshot(
+    val result: CheckResult,
+    val settings: CheckSettings,
+)
+
 class MainActivity : AppCompatActivity() {
 
     private enum class RunningStage {
@@ -122,6 +140,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var btnRunCheck: MaterialButton
     private lateinit var btnStopCheck: MaterialButton
+    private lateinit var btnCopyDiagnostics: MaterialButton
     private lateinit var cardRunCheckNotice: MaterialCardView
     private lateinit var resultsScrollView: TouchAwareScrollView
     private lateinit var textCheckStatus: TextView
@@ -181,6 +200,8 @@ class MainActivity : AppCompatActivity() {
     private var userTouchScrollInProgress = false
     private var isAutoScrollInProgress = false
     private var activeCheckPrivacyMode = false
+    private var activeCheckSettings: CheckSettings? = null
+    private var retainedDiagnosticsSnapshot: RetainedDiagnosticsSnapshot? = null
     private var isVerdictDetailsExpanded = false
 
     private val prefs by lazy { AppUiSettings.prefs(this) }
@@ -216,6 +237,7 @@ class MainActivity : AppCompatActivity() {
 
         btnRunCheck.setOnClickListener { onRunCheckClicked() }
         btnStopCheck.setOnClickListener { viewModel.cancelScan() }
+        btnCopyDiagnostics.setOnClickListener { copyTunProbeDiagnostics() }
         observeScanEvents()
 
         if (intent.getBooleanExtra(SettingsActivity.EXTRA_REQUEST_PERMISSIONS, false)) {
@@ -233,10 +255,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        updateCopyDiagnosticsVisibility()
+    }
+
     private fun bindViews() {
         resultsScrollView = findViewById(R.id.resultsScrollView)
         btnRunCheck = findViewById(R.id.btnRunCheck)
         btnStopCheck = findViewById(R.id.btnStopCheck)
+        btnCopyDiagnostics = findViewById(R.id.btnCopyDiagnostics)
         cardRunCheckNotice = findViewById(R.id.cardRunCheckNotice)
         textCheckStatus = findViewById(R.id.textCheckStatus)
         cardGeoIp = findViewById(R.id.cardGeoIp)
@@ -281,6 +309,7 @@ class MainActivity : AppCompatActivity() {
         btnVerdictDetails.setOnClickListener { toggleVerdictDetails() }
         setupResultsScrollTracking()
         updateCheckControls(isRunning = false)
+        updateCopyDiagnosticsVisibility()
     }
 
     private fun setupResultsScrollTracking() {
@@ -447,12 +476,46 @@ class MainActivity : AppCompatActivity() {
         textCheckStatus.visibility = if (message.isNullOrBlank()) View.GONE else View.VISIBLE
     }
 
+    private fun updateCopyDiagnosticsVisibility() {
+        val debugEnabled = prefs.getBoolean(SettingsActivity.PREF_TUN_PROBE_DEBUG_ENABLED, false)
+        val canShow = retainedDiagnosticsSnapshot != null &&
+            debugEnabled
+        btnCopyDiagnostics.visibility = if (canShow) View.VISIBLE else View.GONE
+    }
+
+    private fun copyTunProbeDiagnostics() {
+        val snapshot = retainedDiagnosticsSnapshot ?: return
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        val text = DebugDiagnosticsFormatter.format(
+            result = snapshot.result,
+            settings = snapshot.settings,
+            privacyMode = activeCheckPrivacyMode,
+        )
+        clipboard.setPrimaryClip(
+            ClipData.newPlainText(
+                getString(R.string.main_copy_diagnostics),
+                text,
+            ),
+        )
+        viewModel.markCompletedDiagnosticsConsumed()
+        retainedDiagnosticsSnapshot = null
+        updateCopyDiagnosticsVisibility()
+        Toast.makeText(this, R.string.main_diagnostics_copied, Toast.LENGTH_SHORT).show()
+    }
+
     private fun runCheck() {
         val splitTunnelEnabled = prefs.getBoolean(SettingsActivity.PREF_SPLIT_TUNNEL_ENABLED, true)
         val proxyScanEnabled = prefs.getBoolean(SettingsActivity.PREF_PROXY_SCAN_ENABLED, true)
         val xrayApiScanEnabled = prefs.getBoolean(SettingsActivity.PREF_XRAY_API_SCAN_ENABLED, true)
         val networkRequestsEnabled = prefs.getBoolean(SettingsActivity.PREF_NETWORK_REQUESTS_ENABLED, true)
         val callTransportProbeEnabled = prefs.getBoolean(SettingsActivity.PREF_CALL_TRANSPORT_PROBE_ENABLED, false)
+        val tunProbeDebugEnabled = prefs.getBoolean(SettingsActivity.PREF_TUN_PROBE_DEBUG_ENABLED, false)
+        val tunProbeModeOverride = com.notcvnt.rknhardering.probe.TunProbeModeOverride.fromPref(
+            prefs.getString(
+                SettingsActivity.PREF_TUN_PROBE_MODE_OVERRIDE,
+                com.notcvnt.rknhardering.probe.TunProbeModeOverride.AUTO.prefValue,
+            ),
+        )
         val privacyMode = prefs.getBoolean(SettingsActivity.PREF_PRIVACY_MODE, false)
         val portRange = prefs.getString(SettingsActivity.PREF_PORT_RANGE, "full") ?: "full"
         val portRangeStart = prefs.getInt(SettingsActivity.PREF_PORT_RANGE_START, 1024)
@@ -472,6 +535,8 @@ class MainActivity : AppCompatActivity() {
             xrayApiScanEnabled = xrayApiScanEnabled,
             networkRequestsEnabled = networkRequestsEnabled,
             callTransportProbeEnabled = callTransportProbeEnabled,
+            tunProbeDebugEnabled = tunProbeDebugEnabled,
+            tunProbeModeOverride = tunProbeModeOverride,
             resolverConfig = resolverConfig,
             portRange = portRange,
             portRangeStart = portRangeStart,
@@ -520,6 +585,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun prepareCheckSessionUi(settings: CheckSettings, privacyMode: Boolean) {
         activeCheckPrivacyMode = privacyMode
+        activeCheckSettings = settings
+        retainedDiagnosticsSnapshot = null
         hasUserScrolledManually = false
         userTouchScrollInProgress = false
         isAutoScrollInProgress = false
@@ -530,6 +597,7 @@ class MainActivity : AppCompatActivity() {
         resetBypassProgress()
         clearStageContent()
         showAllLoadingCardsNow(settings)
+        updateCopyDiagnosticsVisibility()
     }
 
     private fun showAllLoadingCardsNow(settings: CheckSettings) {
@@ -543,18 +611,30 @@ class MainActivity : AppCompatActivity() {
                 handleCheckUpdate(event.update, animate = animate)
             }
             is ScanEvent.Completed -> {
+                retainedDiagnosticsSnapshot = if (viewModel.canRetainCompletedDiagnostics()) {
+                    retainCompletedDiagnosticsSnapshot(
+                        result = event.result,
+                        settings = activeCheckSettings,
+                    )
+                } else {
+                    null
+                }
+                activeCheckSettings = null
                 ensureCardVisible(cardVerdict, shouldAutoScroll = animate)
                 displayVerdict(event.result, event.privacyMode)
                 if (animate) animateContentReveal(iconVerdict, textVerdict, textVerdictExplanation, btnVerdictDetails)
                 stopLoadingStatusAnimation()
+                updateCopyDiagnosticsVisibility()
             }
             is ScanEvent.Cancelled -> {
+                activeCheckSettings = null
                 resetBypassProgress()
                 statusBypass.text = getString(R.string.main_status_cancelled)
                 statusBypass.setTextColor(ContextCompat.getColor(this, R.color.verdict_yellow))
                 stopLoadingStatusAnimation()
                 updateCheckStatus(getString(R.string.main_check_stopped))
                 markLoadingStagesCancelled()
+                updateCopyDiagnosticsVisibility()
             }
         }
     }

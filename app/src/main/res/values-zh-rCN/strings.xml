@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">RKNHardering</string>
     <string name="github_repo_url">https://github.com/xtclovver/RKNHardering</string>
-    <string name="run_check_notice">执行检查时，应用会向以下域名发起网络请求：\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\n如果在设置中选择了自定义 DNS resolver，应用还会连接到其 IP 地址或 DoH 域名。\n\n点击“运行检查”即表示你同意这些网络请求将从你的设备发出。\n\n应用不会记录这些请求的日志。可以在应用设置中关闭网络访问。</string>
+    <string name="run_check_notice">执行检查时，应用会向以下域名发起网络请求：\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\n如果在设置中选择了自定义 DNS resolver，应用还会连接到其 IP 地址或 DoH 域名。\n\n如果启用了 Debug diagnostics，应用还可以基于最近一次已完成的检查生成可复制的诊断报告，即使这次检查成功完成也一样。该报告只保存在内存中，直到你复制它。\n\n点击“运行检查”即表示你同意这些网络请求将从你的设备发出。\n\n应用不会记录这些请求的日志。可以在应用设置中关闭网络访问。</string>
 
     <string name="settings_title">设置</string>
     <string name="settings_section_checks">检查</string>
@@ -10,6 +10,13 @@
     <string name="settings_section_about">关于</string>
     <string name="settings_split_tunnel">Split tunnel bypass</string>
     <string name="settings_split_tunnel_desc">端口扫描需要较长时间</string>
+    <string name="settings_tun_probe_debug">Debug diagnostics</string>
+    <string name="settings_tun_probe_debug_desc">仅在内存中保留最近一次已完成检查的诊断快照，并在主界面启用 Copy diagnostics 按钮。</string>
+    <string name="settings_tun_probe_mode_title">TUN probe method</string>
+    <string name="settings_tun_probe_mode_desc">覆盖 split tunnel 检查中使用的 TUN 公网 IP 探测方法。</string>
+    <string name="settings_tun_probe_mode_auto">Auto</string>
+    <string name="settings_tun_probe_mode_strict">Strict same-path</string>
+    <string name="settings_tun_probe_mode_curl">Curl-compatible</string>
     <string name="settings_proxy_scan_title">本地代理扫描</string>
     <string name="settings_proxy_scan_desc">扫描 localhost 上开放的 SOCKS5/HTTP 代理端口。</string>
     <string name="settings_xray_api_scan_title">Xray gRPC API 扫描</string>
@@ -58,6 +65,8 @@
     <string name="settings_permissions">权限</string>
     <string name="settings_permissions_desc">管理应用权限</string>
     <string name="settings_github">GitHub</string>
+    <string name="main_copy_diagnostics">复制诊断</string>
+    <string name="main_diagnostics_copied">诊断已复制</string>
     <string name="settings_github_desc">xtclovver/RKNHardering</string>
     <string name="settings_port_range_from">从</string>
     <string name="settings_port_range_to">到</string>
@@ -348,6 +357,13 @@
     <string name="checker_bypass_transport_only_used">Split tunnel 对比依赖 curl-compatible transport-only fallback 的路径：%1$s</string>
     <string name="checker_bypass_transport_only_vpn_path">VPN 路径</string>
     <string name="checker_bypass_transport_only_underlying_path">underlying 路径</string>
+    <string name="checker_tun_probe_debug_summary">%1$s debug：effective mode %2$s，selected mode %3$s，strict %4$s，curl-compatible %5$s，dnsPathMismatch %6$s</string>
+    <string name="checker_tun_probe_path_vpn">VPN 路径</string>
+    <string name="checker_tun_probe_path_underlying">underlying 路径</string>
+    <string name="checker_tun_probe_mode_none">none</string>
+    <string name="checker_tun_probe_status_succeeded">succeeded</string>
+    <string name="checker_tun_probe_status_failed">failed</string>
+    <string name="checker_tun_probe_status_skipped">skipped</string>
 
     <string name="checker_vpn_known_apps_none">已知 VPN/代理应用和 VpnService 提供方：未发现</string>
     <string name="checker_vpn_installed_app">已安装应用：%1$s（%2$s）</string>

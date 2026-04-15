@@ -9,6 +9,7 @@ import com.notcvnt.rknhardering.model.IpCheckerGroupResult
 import com.notcvnt.rknhardering.model.IpComparisonResult
 import com.notcvnt.rknhardering.model.Verdict
 import com.notcvnt.rknhardering.network.DnsResolverConfig
+import com.notcvnt.rknhardering.probe.TunProbeModeOverride
 import com.notcvnt.rknhardering.probe.UnderlyingNetworkProber
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -20,6 +21,8 @@ data class CheckSettings(
     val xrayApiScanEnabled: Boolean = true,
     val networkRequestsEnabled: Boolean = true,
     val callTransportProbeEnabled: Boolean = false,
+    val tunProbeDebugEnabled: Boolean = false,
+    val tunProbeModeOverride: TunProbeModeOverride = TunProbeModeOverride.AUTO,
     val resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
     val portRange: String = "full",
     val portRangeStart: Int = 1024,
@@ -44,8 +47,20 @@ object VpnCheckRunner {
             { ctx, resolverConfig -> GeoIpChecker.check(ctx, resolverConfig) },
         val ipComparisonCheck: suspend (Context, DnsResolverConfig) -> IpComparisonResult =
             { ctx, resolverConfig -> IpComparisonChecker.check(ctx, resolverConfig = resolverConfig) },
-        val underlyingProbe: suspend (Context, DnsResolverConfig) -> UnderlyingNetworkProber.ProbeResult =
-            { ctx, resolverConfig -> UnderlyingNetworkProber.probe(ctx, resolverConfig) },
+        val underlyingProbe: suspend (
+            Context,
+            DnsResolverConfig,
+            Boolean,
+            TunProbeModeOverride,
+        ) -> UnderlyingNetworkProber.ProbeResult =
+            { ctx, resolverConfig, debugEnabled, modeOverride ->
+                UnderlyingNetworkProber.probe(
+                    context = ctx,
+                    resolverConfig = resolverConfig,
+                    debugEnabled = debugEnabled,
+                    modeOverride = modeOverride,
+                )
+            },
         val directCheck: suspend (Context, UnderlyingNetworkProber.ProbeResult?) -> CategoryResult =
             { ctx, tunActiveProbeResult -> DirectSignsChecker.check(ctx, tunActiveProbeResult = tunActiveProbeResult) },
         val indirectCheck: suspend (Context, Boolean, Boolean, DnsResolverConfig) -> CategoryResult =
@@ -111,7 +126,14 @@ object VpnCheckRunner {
         } else null
 
         val tunActiveProbeDeferred = if (settings.splitTunnelEnabled) {
-            async { dependencies.underlyingProbe(context, settings.resolverConfig) }
+            async {
+                dependencies.underlyingProbe(
+                    context,
+                    settings.resolverConfig,
+                    settings.tunProbeDebugEnabled,
+                    settings.tunProbeModeOverride,
+                )
+            }
         } else null
 
         val directDeferred = async {
@@ -225,6 +247,7 @@ object VpnCheckRunner {
         val indirectSigns = indirectReadyDeferred.await()
         val locationSignals = locationReadyDeferred.await()
         val bypassResult = bypassReadyDeferred?.await() ?: emptyBypass
+        val tunProbeResult = tunActiveProbeDeferred?.await()
 
         val verdict = VerdictEngine.evaluate(
             geoIp = geoIp,
@@ -243,6 +266,7 @@ object VpnCheckRunner {
             locationSignals = locationSignals,
             bypassResult = bypassResult,
             verdict = verdict,
+            tunProbeDiagnostics = tunProbeResult?.tunProbeDiagnostics,
         )
     }
 }

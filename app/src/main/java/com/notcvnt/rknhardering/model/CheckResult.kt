@@ -1,6 +1,7 @@
 package com.notcvnt.rknhardering.model
 
 import com.notcvnt.rknhardering.probe.ProxyEndpoint
+import com.notcvnt.rknhardering.probe.TunProbeDiagnostics
 import com.notcvnt.rknhardering.probe.XrayApiScanResult
 
 enum class EvidenceConfidence {
@@ -202,4 +203,5 @@ data class CheckResult(
     val locationSignals: CategoryResult,
     val bypassResult: BypassResult,
     val verdict: Verdict,
+    val tunProbeDiagnostics: TunProbeDiagnostics? = null,
 )

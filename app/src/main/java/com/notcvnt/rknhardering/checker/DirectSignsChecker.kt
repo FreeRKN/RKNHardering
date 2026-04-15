@@ -7,6 +7,7 @@ import android.net.Proxy
 import android.net.ProxyInfo
 import android.os.Build
 import com.notcvnt.rknhardering.R
+import com.notcvnt.rknhardering.TunProbeDiagnosticsFormatter
 import com.notcvnt.rknhardering.model.CategoryResult
 import com.notcvnt.rknhardering.model.EvidenceConfidence
 import com.notcvnt.rknhardering.model.EvidenceItem
@@ -78,6 +79,7 @@ object DirectSignsChecker {
         tunActiveProbeResult
             ?.takeIf { it.vpnActive }
             ?.let { result ->
+                addDebugTunProbeFinding(context, result, findings)
                 val tunActiveProbeOutcome = reportTunActiveProbe(context, result, findings, evidence)
                 detected = detected || tunActiveProbeOutcome.detected
                 needsReview = needsReview || tunActiveProbeOutcome.needsReview
@@ -642,7 +644,7 @@ object DirectSignsChecker {
     ): SignalOutcome {
         val comparison = result.vpnIpComparison
         result.vpnIp?.let { vpnIp ->
-            val transportOnly = comparison?.selectedMode == PublicIpProbeMode.CURL_COMPATIBLE
+            val transportOnly = comparison?.usedCurlCompatibleFallback() == true
             val description = context.getString(
                 if (transportOnly) R.string.checker_bypass_tun_probe_success_transport_only
                 else R.string.checker_bypass_tun_probe_success,
@@ -708,6 +710,27 @@ object DirectSignsChecker {
             ),
         )
         return SignalOutcome()
+    }
+
+    private fun addDebugTunProbeFinding(
+        context: Context,
+        result: UnderlyingNetworkProber.ProbeResult,
+        findings: MutableList<Finding>,
+    ) {
+        val diagnostics = result.tunProbeDiagnostics ?: return
+        val vpnPath = diagnostics.vpnPath ?: return
+        findings.add(
+            Finding(
+                description = TunProbeDiagnosticsFormatter.formatUiSummary(
+                    context = context,
+                    pathLabel = context.getString(R.string.checker_tun_probe_path_vpn),
+                    modeOverride = diagnostics.modeOverride,
+                    path = vpnPath,
+                ),
+                isInformational = true,
+                source = EvidenceSource.TUN_ACTIVE_PROBE,
+            ),
+        )
     }
 
     internal fun isKnownProxyPort(port: String?): Boolean {

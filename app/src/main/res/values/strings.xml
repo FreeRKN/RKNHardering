@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">RKNHardering</string>
     <string name="github_repo_url">https://github.com/xtclovver/RKNHardering</string>
-    <string name="run_check_notice">During a check, the app will make network requests to these domains:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nIf a custom DNS resolver is selected in settings, the app will also connect to its IP addresses or DoH domain.\n\nIf Call transport leak probe is enabled, the app may additionally send UDP/STUN requests to bundled Telegram targets. WhatsApp targets are used only in debug or experimental builds.\n\nBy tapping "Run check", you agree that these network requests will be made from your device.\n\nThe app does not keep logs of these requests. Network access can be disabled in the app settings.</string>
+    <string name="run_check_notice">During a check, the app will make network requests to these domains:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nIf a custom DNS resolver is selected in settings, the app will also connect to its IP addresses or DoH domain.\n\nIf Call transport leak probe is enabled, the app may additionally send UDP/STUN requests to bundled Telegram targets. WhatsApp targets are used only in debug or experimental builds.\n\nIf Debug diagnostics is enabled, the app can also prepare a copyable diagnostics report from the last completed scan, even when the scan finished successfully. That report is kept only in memory until you copy it.\n\nBy tapping "Run check", you agree that these network requests will be made from your device.\n\nThe app does not keep logs of these requests. Network access can be disabled in the app settings.</string>
 
     <string name="settings_title">Settings</string>
     <string name="settings_section_checks">Checks</string>
@@ -10,6 +10,13 @@
     <string name="settings_section_about">About</string>
     <string name="settings_split_tunnel">Split tunnel bypass</string>
     <string name="settings_split_tunnel_desc">Port scanning takes a long time</string>
+    <string name="settings_tun_probe_debug">Debug diagnostics</string>
+    <string name="settings_tun_probe_debug_desc">Keeps an in-memory diagnostics snapshot from the last completed scan and enables the Copy diagnostics button on the main screen.</string>
+    <string name="settings_tun_probe_mode_title">TUN probe method</string>
+    <string name="settings_tun_probe_mode_desc">Overrides the TUN public-IP probe method used during split tunnel checks.</string>
+    <string name="settings_tun_probe_mode_auto">Auto</string>
+    <string name="settings_tun_probe_mode_strict">Strict same-path</string>
+    <string name="settings_tun_probe_mode_curl">Curl-compatible</string>
     <string name="settings_proxy_scan_title">Local proxy scan</string>
     <string name="settings_proxy_scan_desc">Scans localhost for open SOCKS5/HTTP proxy ports.</string>
     <string name="settings_xray_api_scan_title">Xray gRPC API scan</string>
@@ -58,6 +65,8 @@
     <string name="settings_permissions">Permissions</string>
     <string name="settings_permissions_desc">Manage app permissions</string>
     <string name="settings_github">GitHub</string>
+    <string name="main_copy_diagnostics">Copy diagnostics</string>
+    <string name="main_diagnostics_copied">Diagnostics copied</string>
     <string name="settings_github_desc">xtclovver/RKNHardering</string>
     <string name="settings_port_range_from">From</string>
     <string name="settings_port_range_to">To</string>
@@ -366,6 +375,13 @@
     <string name="checker_bypass_transport_only_used">Split tunnel comparison used a curl-compatible transport-only fallback for: %1$s</string>
     <string name="checker_bypass_transport_only_vpn_path">VPN path</string>
     <string name="checker_bypass_transport_only_underlying_path">underlying path</string>
+    <string name="checker_tun_probe_debug_summary">%1$s debug: effective mode %2$s, selected mode %3$s, strict %4$s, curl-compatible %5$s, dnsPathMismatch %6$s</string>
+    <string name="checker_tun_probe_path_vpn">VPN path</string>
+    <string name="checker_tun_probe_path_underlying">underlying path</string>
+    <string name="checker_tun_probe_mode_none">none</string>
+    <string name="checker_tun_probe_status_succeeded">succeeded</string>
+    <string name="checker_tun_probe_status_failed">failed</string>
+    <string name="checker_tun_probe_status_skipped">skipped</string>
 
     <!-- InstalledVpnAppDetector -->
     <string name="checker_vpn_known_apps_none">Known VPN/Proxy apps and VpnService providers: none detected</string>

@@ -2,11 +2,14 @@ package com.notcvnt.rknhardering.checker
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.notcvnt.rknhardering.model.EvidenceConfidence
 import com.notcvnt.rknhardering.model.EvidenceSource
 import com.notcvnt.rknhardering.probe.PublicIpModeProbeResult
 import com.notcvnt.rknhardering.probe.PublicIpNetworkComparison
 import com.notcvnt.rknhardering.probe.PublicIpProbeMode
 import com.notcvnt.rknhardering.probe.PublicIpProbeStatus
+import com.notcvnt.rknhardering.probe.TunProbeDiagnostics
+import com.notcvnt.rknhardering.probe.TunProbeModeOverride
 import com.notcvnt.rknhardering.probe.UnderlyingNetworkProber
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -238,6 +241,59 @@ class DirectSignsCheckerTest {
     }
 
     @Test
+    fun `forced curl mode is treated as selected path instead of fallback`() {
+        val comparison = PublicIpNetworkComparison(
+            strict = PublicIpModeProbeResult(
+                mode = PublicIpProbeMode.STRICT_SAME_PATH,
+                status = PublicIpProbeStatus.SKIPPED,
+                error = "Disabled by override",
+            ),
+            curlCompatible = PublicIpModeProbeResult(
+                mode = PublicIpProbeMode.CURL_COMPATIBLE,
+                status = PublicIpProbeStatus.SUCCEEDED,
+                ip = "198.51.100.31",
+            ),
+            selectedMode = PublicIpProbeMode.CURL_COMPATIBLE,
+            selectedIp = "198.51.100.31",
+        )
+        val result = DirectSignsChecker.check(
+            context = context,
+            tunActiveProbeResult = UnderlyingNetworkProber.ProbeResult(
+                vpnActive = true,
+                underlyingReachable = false,
+                vpnIp = "198.51.100.31",
+                vpnIpComparison = comparison,
+                activeNetworkIsVpn = true,
+                tunProbeDiagnostics = TunProbeDiagnostics(
+                    enabled = true,
+                    modeOverride = TunProbeModeOverride.CURL_COMPATIBLE,
+                    activeNetworkIsVpn = true,
+                    vpnNetworkPresent = true,
+                    underlyingNetworkPresent = false,
+                    vpnPath = comparison.toPathDiagnostics("tun0"),
+                ),
+            ),
+        )
+
+        assertTrue(result.detected)
+        assertFalse(result.needsReview)
+        assertTrue(
+            result.findings.any {
+                it.detected &&
+                    it.source == EvidenceSource.TUN_ACTIVE_PROBE &&
+                    it.confidence == EvidenceConfidence.HIGH
+            },
+        )
+        assertFalse(
+            result.findings.any {
+                it.detected &&
+                    it.source == EvidenceSource.TUN_ACTIVE_PROBE &&
+                    it.description.contains("transport-only")
+            },
+        )
+    }
+
+    @Test
     fun `check marks curl compatible tun probe success as detected and needs review`() {
         val result = DirectSignsChecker.check(
             context = context,
@@ -261,6 +317,28 @@ class DirectSignsCheckerTest {
                     dnsPathMismatch = true,
                 ),
                 activeNetworkIsVpn = true,
+                tunProbeDiagnostics = TunProbeDiagnostics(
+                    enabled = true,
+                    modeOverride = TunProbeModeOverride.AUTO,
+                    activeNetworkIsVpn = true,
+                    vpnNetworkPresent = true,
+                    underlyingNetworkPresent = false,
+                    vpnPath = PublicIpNetworkComparison(
+                        strict = PublicIpModeProbeResult(
+                            mode = PublicIpProbeMode.STRICT_SAME_PATH,
+                            status = PublicIpProbeStatus.FAILED,
+                            error = "strict timeout",
+                        ),
+                        curlCompatible = PublicIpModeProbeResult(
+                            mode = PublicIpProbeMode.CURL_COMPATIBLE,
+                            status = PublicIpProbeStatus.SUCCEEDED,
+                            ip = "198.51.100.30",
+                        ),
+                        selectedMode = PublicIpProbeMode.CURL_COMPATIBLE,
+                        selectedIp = "198.51.100.30",
+                        dnsPathMismatch = true,
+                    ).toPathDiagnostics("tun0"),
+                ),
             ),
         )
 
@@ -278,6 +356,20 @@ class DirectSignsCheckerTest {
                 it.needsReview &&
                     it.source == EvidenceSource.TUN_ACTIVE_PROBE &&
                     it.description.contains("strict timeout")
+            },
+        )
+        assertTrue(
+            result.findings.any {
+                it.isInformational &&
+                    it.description.contains("effective mode Curl-compatible") &&
+                    it.description.contains("selected mode Curl-compatible") &&
+                    it.description.contains("dnsPathMismatch true")
+            },
+        )
+        assertFalse(
+            result.findings.any {
+                it.isInformational &&
+                    it.description.contains("effective mode Auto")
             },
         )
     }

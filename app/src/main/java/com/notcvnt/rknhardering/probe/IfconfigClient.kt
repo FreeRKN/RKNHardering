@@ -11,6 +11,7 @@ import java.net.Proxy
 object IfconfigClient {
     private const val CURL_COMPATIBLE_UNAVAILABLE_MESSAGE =
         "OS device bind fallback is unavailable because interfaceName is missing"
+    private const val DISABLED_BY_OVERRIDE_MESSAGE = "Disabled by override"
 
     private val ENDPOINTS = listOf(
         IpEndpointSpec("https://ifconfig.me/ip"),
@@ -49,11 +50,13 @@ object IfconfigClient {
         fallbackBinding: ResolverBinding.OsDeviceBinding? = null,
         timeoutMs: Int = 7000,
         resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
+        modeOverride: TunProbeModeOverride = TunProbeModeOverride.AUTO,
     ): Result<String> = fetchIpViaNetworkComparison(
         primaryBinding = primaryBinding,
         fallbackBinding = fallbackBinding,
         timeoutMs = timeoutMs,
         resolverConfig = resolverConfig,
+        modeOverride = modeOverride,
     ).asResult()
 
     suspend fun fetchIpViaNetworkComparison(
@@ -61,31 +64,55 @@ object IfconfigClient {
         fallbackBinding: ResolverBinding.OsDeviceBinding? = null,
         timeoutMs: Int = 7000,
         resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
+        modeOverride: TunProbeModeOverride = TunProbeModeOverride.AUTO,
+        collectTrace: Boolean = false,
     ): PublicIpNetworkComparison = withContext(Dispatchers.IO) {
-        val strict = fetchModeProbeResult(
-            mode = PublicIpProbeMode.STRICT_SAME_PATH,
-            timeoutMs = timeoutMs,
-            resolverConfig = resolverConfig,
-            binding = primaryBinding,
-        )
-        val curlCompatible = fallbackBinding?.let { binding ->
+        val strict = if (modeOverride == TunProbeModeOverride.CURL_COMPATIBLE) {
+            PublicIpModeProbeResult(
+                mode = PublicIpProbeMode.STRICT_SAME_PATH,
+                status = PublicIpProbeStatus.SKIPPED,
+                error = DISABLED_BY_OVERRIDE_MESSAGE,
+            )
+        } else {
             fetchModeProbeResult(
+                mode = PublicIpProbeMode.STRICT_SAME_PATH,
+                timeoutMs = timeoutMs,
+                resolverConfig = resolverConfig,
+                binding = primaryBinding,
+                collectTrace = collectTrace,
+            )
+        }
+        val curlCompatible = when {
+            modeOverride == TunProbeModeOverride.STRICT_SAME_PATH -> PublicIpModeProbeResult(
+                mode = PublicIpProbeMode.CURL_COMPATIBLE,
+                status = PublicIpProbeStatus.SKIPPED,
+                error = DISABLED_BY_OVERRIDE_MESSAGE,
+            )
+            fallbackBinding != null -> fetchModeProbeResult(
                 mode = PublicIpProbeMode.CURL_COMPATIBLE,
                 timeoutMs = timeoutMs,
                 resolverConfig = resolverConfig,
-                binding = binding,
+                binding = fallbackBinding,
+                collectTrace = collectTrace,
             )
-        } ?: PublicIpModeProbeResult(
-            mode = PublicIpProbeMode.CURL_COMPATIBLE,
-            status = PublicIpProbeStatus.SKIPPED,
-            error = CURL_COMPATIBLE_UNAVAILABLE_MESSAGE,
-        )
+            else -> PublicIpModeProbeResult(
+                mode = PublicIpProbeMode.CURL_COMPATIBLE,
+                status = PublicIpProbeStatus.SKIPPED,
+                error = CURL_COMPATIBLE_UNAVAILABLE_MESSAGE,
+            )
+        }
 
-        val selectedMode = when {
-            strict.status == PublicIpProbeStatus.SUCCEEDED -> PublicIpProbeMode.STRICT_SAME_PATH
-            strict.status == PublicIpProbeStatus.FAILED &&
-                curlCompatible.status == PublicIpProbeStatus.SUCCEEDED -> PublicIpProbeMode.CURL_COMPATIBLE
-            else -> null
+        val selectedMode = when (modeOverride) {
+            TunProbeModeOverride.AUTO -> when {
+                strict.status == PublicIpProbeStatus.SUCCEEDED -> PublicIpProbeMode.STRICT_SAME_PATH
+                strict.status == PublicIpProbeStatus.FAILED &&
+                    curlCompatible.status == PublicIpProbeStatus.SUCCEEDED -> PublicIpProbeMode.CURL_COMPATIBLE
+                else -> null
+            }
+            TunProbeModeOverride.STRICT_SAME_PATH ->
+                PublicIpProbeMode.STRICT_SAME_PATH.takeIf { strict.status == PublicIpProbeStatus.SUCCEEDED }
+            TunProbeModeOverride.CURL_COMPATIBLE ->
+                PublicIpProbeMode.CURL_COMPATIBLE.takeIf { curlCompatible.status == PublicIpProbeStatus.SUCCEEDED }
         }
         val selectedIp = when (selectedMode) {
             PublicIpProbeMode.STRICT_SAME_PATH -> strict.ip
@@ -95,11 +122,15 @@ object IfconfigClient {
         val selectedError = if (selectedIp != null) {
             null
         } else {
-            mergeNetworkProbeFailure(
-                strict = strict,
-                curlCompatible = curlCompatible,
-                fallbackBinding = fallbackBinding,
-            )
+            when (modeOverride) {
+                TunProbeModeOverride.AUTO -> mergeNetworkProbeFailure(
+                    strict = strict,
+                    curlCompatible = curlCompatible,
+                    fallbackBinding = fallbackBinding,
+                )
+                TunProbeModeOverride.STRICT_SAME_PATH -> strict.error ?: "Public IP probe failed"
+                TunProbeModeOverride.CURL_COMPATIBLE -> curlCompatible.error ?: CURL_COMPATIBLE_UNAVAILABLE_MESSAGE
+            }
         }
 
         PublicIpNetworkComparison(
@@ -108,7 +139,8 @@ object IfconfigClient {
             selectedMode = selectedMode,
             selectedIp = selectedIp,
             selectedError = selectedError,
-            dnsPathMismatch = strict.status == PublicIpProbeStatus.FAILED &&
+            dnsPathMismatch = modeOverride == TunProbeModeOverride.AUTO &&
+                strict.status == PublicIpProbeStatus.FAILED &&
                 curlCompatible.status == PublicIpProbeStatus.SUCCEEDED,
         )
     }
@@ -169,14 +201,17 @@ object IfconfigClient {
         resolverConfig: DnsResolverConfig,
         proxy: Proxy? = null,
         binding: ResolverBinding? = null,
+        onEndpointResult: ((IpEndpointSpec, Result<String>) -> Unit)? = null,
     ): Result<String> = fetchFirstSuccessfulIp(ENDPOINTS) { endpoint ->
-        PublicIpClient.fetchIp(
+        val result = PublicIpClient.fetchIp(
             endpoint = endpoint.url,
             timeoutMs = timeoutMs,
             proxy = proxy,
             resolverConfig = resolverConfig,
             binding = binding,
         )
+        onEndpointResult?.invoke(endpoint, result)
+        result
     }
 
     private suspend fun fetchModeProbeResult(
@@ -184,23 +219,42 @@ object IfconfigClient {
         timeoutMs: Int,
         resolverConfig: DnsResolverConfig,
         binding: ResolverBinding,
+        collectTrace: Boolean = false,
     ): PublicIpModeProbeResult {
+        val endpointAttempts = if (collectTrace) mutableListOf<TunEndpointAttempt>() else null
         val result = fetchIpForBinding(
             timeoutMs = timeoutMs,
             resolverConfig = resolverConfig,
             binding = binding,
+            onEndpointResult = endpointAttempts?.let { attempts ->
+                { endpoint, endpointResult ->
+                    attempts += TunEndpointAttempt(
+                        endpoint = endpoint.url,
+                        familyHint = endpoint.familyHint.name,
+                        status = if (endpointResult.isSuccess) {
+                            PublicIpProbeStatus.SUCCEEDED
+                        } else {
+                            PublicIpProbeStatus.FAILED
+                        },
+                        ip = endpointResult.getOrNull(),
+                        error = endpointResult.exceptionOrNull().renderMessage(),
+                    )
+                }
+            },
         )
         return if (result.isSuccess) {
             PublicIpModeProbeResult(
                 mode = mode,
                 status = PublicIpProbeStatus.SUCCEEDED,
                 ip = result.getOrNull(),
+                endpointAttempts = endpointAttempts.orEmpty(),
             )
         } else {
             PublicIpModeProbeResult(
                 mode = mode,
                 status = PublicIpProbeStatus.FAILED,
                 error = result.exceptionOrNull().renderMessage(),
+                endpointAttempts = endpointAttempts.orEmpty(),
             )
         }
     }

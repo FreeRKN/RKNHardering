@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">RKNHardering</string>
     <string name="github_repo_url">https://github.com/xtclovver/RKNHardering</string>
-    <string name="run_check_notice">در زمان اجرای بررسی، برنامه به این دامنه‌ها درخواست شبکه ارسال می‌کند:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nاگر در تنظیمات یک DNS resolver سفارشی انتخاب شده باشد، برنامه همچنین به آدرس‌های IP آن یا دامنه DoH متصل می‌شود.\n\nبا لمس دکمه «اجرای بررسی»، موافقت می‌کنید که این درخواست‌های شبکه از دستگاه شما ارسال شوند.\n\nبرنامه لاگ این درخواست‌ها را نگه نمی‌دارد. دسترسی به شبکه را می‌توان از تنظیمات برنامه غیرفعال کرد.</string>
+    <string name="run_check_notice">در زمان اجرای بررسی، برنامه به این دامنه‌ها درخواست شبکه ارسال می‌کند:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nاگر در تنظیمات یک DNS resolver سفارشی انتخاب شده باشد، برنامه همچنین به آدرس‌های IP آن یا دامنه DoH متصل می‌شود.\n\nاگر Debug diagnostics فعال باشد، برنامه می‌تواند از آخرین بررسی تکمیل‌شده یک گزارش تشخیصی قابل کپی بسازد، حتی اگر بررسی با موفقیت تمام شده باشد. این گزارش فقط تا زمان کپی شدن در حافظه نگه داشته می‌شود.\n\nبا لمس دکمه «اجرای بررسی»، موافقت می‌کنید که این درخواست‌های شبکه از دستگاه شما ارسال شوند.\n\nبرنامه لاگ این درخواست‌ها را نگه نمی‌دارد. دسترسی به شبکه را می‌توان از تنظیمات برنامه غیرفعال کرد.</string>
 
     <string name="settings_title">تنظیمات</string>
     <string name="settings_section_checks">بررسی‌ها</string>
@@ -10,6 +10,13 @@
     <string name="settings_section_about">درباره</string>
     <string name="settings_split_tunnel">Split tunnel bypass</string>
     <string name="settings_split_tunnel_desc">اسکن پورت زمان زیادی می‌گیرد</string>
+    <string name="settings_tun_probe_debug">Debug diagnostics</string>
+    <string name="settings_tun_probe_debug_desc">یک گزارش تشخیصی از آخرین بررسی تکمیل‌شده را فقط در حافظه نگه می‌دارد و دکمه Copy diagnostics را در صفحه اصلی فعال می‌کند.</string>
+    <string name="settings_tun_probe_mode_title">روش TUN probe</string>
+    <string name="settings_tun_probe_mode_desc">روش TUN public-IP probe را که در بررسی‌های split tunnel استفاده می‌شود تغییر می‌دهد.</string>
+    <string name="settings_tun_probe_mode_auto">Auto</string>
+    <string name="settings_tun_probe_mode_strict">Strict same-path</string>
+    <string name="settings_tun_probe_mode_curl">Curl-compatible</string>
     <string name="settings_proxy_scan_title">اسکن پراکسی محلی</string>
     <string name="settings_proxy_scan_desc">localhost را برای پورت‌های باز SOCKS5/HTTP proxy اسکن می‌کند.</string>
     <string name="settings_xray_api_scan_title">اسکن API gRPC Xray</string>
@@ -58,6 +65,8 @@
     <string name="settings_permissions">مجوزها</string>
     <string name="settings_permissions_desc">مدیریت مجوزهای برنامه</string>
     <string name="settings_github">GitHub</string>
+    <string name="main_copy_diagnostics">کپی تشخیص</string>
+    <string name="main_diagnostics_copied">تشخیص کپی شد</string>
     <string name="settings_github_desc">xtclovver/RKNHardering</string>
     <string name="settings_port_range_from">از</string>
     <string name="settings_port_range_to">تا</string>
@@ -350,6 +359,13 @@
     <string name="checker_bypass_transport_only_used">مقایسه split tunnel برای این مسیرها به fallback transport-only سازگار با curl تکیه کرد: %1$s</string>
     <string name="checker_bypass_transport_only_vpn_path">مسیر VPN</string>
     <string name="checker_bypass_transport_only_underlying_path">مسیر underlying</string>
+    <string name="checker_tun_probe_debug_summary">debug %1$s: حالت مؤثر %2$s، حالت انتخاب‌شده %3$s، strict %4$s، curl-compatible %5$s، dnsPathMismatch %6$s</string>
+    <string name="checker_tun_probe_path_vpn">مسیر VPN</string>
+    <string name="checker_tun_probe_path_underlying">مسیر underlying</string>
+    <string name="checker_tun_probe_mode_none">none</string>
+    <string name="checker_tun_probe_status_succeeded">succeeded</string>
+    <string name="checker_tun_probe_status_failed">failed</string>
+    <string name="checker_tun_probe_status_skipped">skipped</string>
 
     <string name="checker_vpn_known_apps_none">برنامه‌های شناخته‌شده VPN/Proxy و ارائه‌دهندگان VpnService: موردی پیدا نشد</string>
     <string name="checker_vpn_installed_app">برنامه نصب‌شده: %1$s (%2$s)</string>

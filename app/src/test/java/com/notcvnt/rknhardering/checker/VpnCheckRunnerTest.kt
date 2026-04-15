@@ -150,7 +150,7 @@ class VpnCheckRunnerTest {
         VpnCheckRunner.dependenciesOverride = VpnCheckRunner.Dependencies(
             geoIpCheck = { _, _ -> category("geo") },
             ipComparisonCheck = { _, _ -> emptyIpComparison() },
-            underlyingProbe = { _, _ ->
+            underlyingProbe = { _, _, _, _ ->
                 probeCalls += 1
                 sharedProbe
             },

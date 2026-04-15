@@ -25,6 +25,7 @@ import com.notcvnt.rknhardering.network.DnsResolverMode
 import com.notcvnt.rknhardering.network.DnsResolverPreset
 import com.notcvnt.rknhardering.network.DnsResolverPresets
 import com.notcvnt.rknhardering.probe.PortScanPlanner
+import com.notcvnt.rknhardering.probe.TunProbeModeOverride
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -34,6 +35,8 @@ class SettingsActivity : AppCompatActivity() {
 
     private lateinit var scrollView: ScrollView
     private lateinit var switchSplitTunnel: MaterialSwitch
+    private lateinit var switchTunProbeDebug: MaterialSwitch
+    private lateinit var cardTunProbeMode: MaterialCardView
     private lateinit var cardProxyScan: MaterialCardView
     private lateinit var switchProxyScan: MaterialSwitch
     private lateinit var cardXrayApiScan: MaterialCardView
@@ -48,6 +51,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var cardCallTransportProbe: MaterialCardView
     private lateinit var switchCallTransportProbe: MaterialSwitch
     private lateinit var cardResolver: MaterialCardView
+    private lateinit var chipGroupTunProbeMode: ChipGroup
     private lateinit var chipGroupResolverMode: ChipGroup
     private lateinit var chipGroupResolverPreset: ChipGroup
     private lateinit var inputResolverDirectServersLayout: TextInputLayout
@@ -89,6 +93,8 @@ class SettingsActivity : AppCompatActivity() {
     private fun bindViews() {
         scrollView = findViewById(R.id.scrollView)
         switchSplitTunnel = findViewById(R.id.switchSplitTunnel)
+        switchTunProbeDebug = findViewById(R.id.switchTunProbeDebug)
+        cardTunProbeMode = findViewById(R.id.cardTunProbeMode)
         cardProxyScan = findViewById(R.id.cardProxyScan)
         switchProxyScan = findViewById(R.id.switchProxyScan)
         cardXrayApiScan = findViewById(R.id.cardXrayApiScan)
@@ -103,6 +109,7 @@ class SettingsActivity : AppCompatActivity() {
         cardCallTransportProbe = findViewById(R.id.cardCallTransportProbe)
         switchCallTransportProbe = findViewById(R.id.switchCallTransportProbe)
         cardResolver = findViewById(R.id.cardResolver)
+        chipGroupTunProbeMode = findViewById(R.id.chipGroupTunProbeMode)
         chipGroupResolverMode = findViewById(R.id.chipGroupResolverMode)
         chipGroupResolverPreset = findViewById(R.id.chipGroupResolverPreset)
         inputResolverDirectServersLayout = findViewById(R.id.inputResolverDirectServersLayout)
@@ -118,6 +125,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun loadSettings() {
         switchSplitTunnel.isChecked = prefs.getBoolean(PREF_SPLIT_TUNNEL_ENABLED, true)
+        switchTunProbeDebug.isChecked = prefs.getBoolean(PREF_TUN_PROBE_DEBUG_ENABLED, false)
         switchProxyScan.isChecked = prefs.getBoolean(PREF_PROXY_SCAN_ENABLED, true)
         switchXrayApiScan.isChecked = prefs.getBoolean(PREF_XRAY_API_SCAN_ENABLED, true)
         switchNetworkRequests.isChecked = prefs.getBoolean(PREF_NETWORK_REQUESTS_ENABLED, true)
@@ -125,8 +133,10 @@ class SettingsActivity : AppCompatActivity() {
         switchPrivacyMode.isChecked = prefs.getBoolean(PREF_PRIVACY_MODE, false)
 
         updateLocalScanTogglesEnabled(switchSplitTunnel.isChecked)
+        updateTunProbeModeEnabled(switchSplitTunnel.isChecked)
         updatePortRangeEnabled(switchSplitTunnel.isChecked && isAnyLocalScanEnabled())
         updateCallTransportEnabled(switchNetworkRequests.isChecked)
+        loadTunProbeSettings()
 
         val portRange = prefs.getString(PREF_PORT_RANGE, "full") ?: "full"
         val chipId = when (portRange) {
@@ -168,7 +178,12 @@ class SettingsActivity : AppCompatActivity() {
         switchSplitTunnel.setOnCheckedChangeListener { _, isChecked ->
             prefs.edit { putBoolean(PREF_SPLIT_TUNNEL_ENABLED, isChecked) }
             updateLocalScanTogglesEnabled(isChecked)
+            updateTunProbeModeEnabled(isChecked)
             updatePortRangeEnabled(isChecked && isAnyLocalScanEnabled())
+        }
+
+        switchTunProbeDebug.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit { putBoolean(PREF_TUN_PROBE_DEBUG_ENABLED, isChecked) }
         }
 
         switchProxyScan.setOnCheckedChangeListener { _, isChecked ->
@@ -224,6 +239,13 @@ class SettingsActivity : AppCompatActivity() {
             prefs.edit { putString(PREF_PORT_RANGE, value) }
             customPortRangeContainer.visibility = if (value == "custom") View.VISIBLE else View.GONE
             updatePortRangePreview()
+        }
+
+        chipGroupTunProbeMode.setOnCheckedStateChangeListener { _, checkedIds ->
+            if (checkedIds.isEmpty()) return@setOnCheckedStateChangeListener
+            prefs.edit {
+                putString(PREF_TUN_PROBE_MODE_OVERRIDE, selectedTunProbeModeOverride().prefValue)
+            }
         }
 
         chipGroupResolverMode.setOnCheckedStateChangeListener { _, checkedIds ->
@@ -414,6 +436,19 @@ class SettingsActivity : AppCompatActivity() {
         refreshResolverUi(restoreCustomValues = false)
     }
 
+    private fun loadTunProbeSettings() {
+        val mode = TunProbeModeOverride.fromPref(
+            prefs.getString(PREF_TUN_PROBE_MODE_OVERRIDE, TunProbeModeOverride.AUTO.prefValue),
+        )
+        chipGroupTunProbeMode.check(
+            when (mode) {
+                TunProbeModeOverride.AUTO -> R.id.chipTunProbeModeAuto
+                TunProbeModeOverride.STRICT_SAME_PATH -> R.id.chipTunProbeModeStrict
+                TunProbeModeOverride.CURL_COMPATIBLE -> R.id.chipTunProbeModeCurl
+            },
+        )
+    }
+
     private fun loadCustomResolverFields() {
         editResolverDirectServers.setText(prefs.getString(PREF_DNS_RESOLVER_DIRECT_SERVERS, "").orEmpty())
         editResolverDohUrl.setText(prefs.getString(PREF_DNS_RESOLVER_DOH_URL, "").orEmpty())
@@ -476,6 +511,11 @@ class SettingsActivity : AppCompatActivity() {
         cardResolver.alpha = 1.0f
     }
 
+    private fun updateTunProbeModeEnabled(enabled: Boolean) {
+        cardTunProbeMode.alpha = if (enabled) 1.0f else 0.5f
+        setViewAndChildrenEnabled(cardTunProbeMode, enabled)
+    }
+
     private fun selectedResolverMode(): DnsResolverMode {
         return when (chipGroupResolverMode.checkedChipId) {
             R.id.chipResolverDirect -> DnsResolverMode.DIRECT
@@ -490,6 +530,14 @@ class SettingsActivity : AppCompatActivity() {
             R.id.chipResolverPresetGoogle -> DnsResolverPreset.GOOGLE
             R.id.chipResolverPresetYandex -> DnsResolverPreset.YANDEX
             else -> DnsResolverPreset.CUSTOM
+        }
+    }
+
+    private fun selectedTunProbeModeOverride(): TunProbeModeOverride {
+        return when (chipGroupTunProbeMode.checkedChipId) {
+            R.id.chipTunProbeModeStrict -> TunProbeModeOverride.STRICT_SAME_PATH
+            R.id.chipTunProbeModeCurl -> TunProbeModeOverride.CURL_COMPATIBLE
+            else -> TunProbeModeOverride.AUTO
         }
     }
 
@@ -517,6 +565,8 @@ class SettingsActivity : AppCompatActivity() {
         const val PREF_PORT_RANGE_END = "pref_port_range_end"
         const val PREF_NETWORK_REQUESTS_ENABLED = "pref_network_requests_enabled"
         const val PREF_CALL_TRANSPORT_PROBE_ENABLED = "pref_call_transport_probe_enabled"
+        const val PREF_TUN_PROBE_DEBUG_ENABLED = "pref_tun_probe_debug_enabled"
+        const val PREF_TUN_PROBE_MODE_OVERRIDE = "pref_tun_probe_mode_override"
         const val PREF_DNS_RESOLVER_MODE = "pref_dns_resolver_mode"
         const val PREF_DNS_RESOLVER_PRESET = "pref_dns_resolver_preset"
         const val PREF_DNS_RESOLVER_DIRECT_SERVERS = "pref_dns_resolver_direct_servers"

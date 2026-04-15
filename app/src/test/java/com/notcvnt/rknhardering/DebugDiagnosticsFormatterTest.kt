@@ -1,0 +1,341 @@
+package com.notcvnt.rknhardering
+
+import com.notcvnt.rknhardering.checker.CheckSettings
+import com.notcvnt.rknhardering.model.ActiveVpnApp
+import com.notcvnt.rknhardering.model.BypassResult
+import com.notcvnt.rknhardering.model.CallTransportLeakResult
+import com.notcvnt.rknhardering.model.CallTransportNetworkPath
+import com.notcvnt.rknhardering.model.CallTransportProbeKind
+import com.notcvnt.rknhardering.model.CallTransportStatus
+import com.notcvnt.rknhardering.model.CategoryResult
+import com.notcvnt.rknhardering.model.Finding
+import com.notcvnt.rknhardering.model.EvidenceConfidence
+import com.notcvnt.rknhardering.model.EvidenceItem
+import com.notcvnt.rknhardering.model.EvidenceSource
+import com.notcvnt.rknhardering.model.IpCheckerGroupResult
+import com.notcvnt.rknhardering.model.IpCheckerResponse
+import com.notcvnt.rknhardering.model.IpCheckerScope
+import com.notcvnt.rknhardering.model.IpComparisonResult
+import com.notcvnt.rknhardering.model.CheckResult
+import com.notcvnt.rknhardering.model.MatchedVpnApp
+import com.notcvnt.rknhardering.model.Verdict
+import com.notcvnt.rknhardering.model.VpnAppKind
+import com.notcvnt.rknhardering.network.DnsResolverConfig
+import com.notcvnt.rknhardering.network.DnsResolverMode
+import com.notcvnt.rknhardering.probe.ProxyEndpoint
+import com.notcvnt.rknhardering.probe.ProxyType
+import com.notcvnt.rknhardering.probe.XrayApiEndpoint
+import com.notcvnt.rknhardering.probe.XrayApiScanResult
+import com.notcvnt.rknhardering.probe.XrayOutboundSummary
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class DebugDiagnosticsFormatterTest {
+
+    @Test
+    fun `formatter builds general report even without tun diagnostics`() {
+        val result = CheckResult(
+            geoIp = CategoryResult(
+                name = "GeoIP",
+                detected = false,
+                findings = listOf(Finding("GeoIP says 203.0.113.64")),
+            ),
+            ipComparison = IpComparisonResult(
+                detected = false,
+                summary = "All checkers returned 203.0.113.64",
+                ruGroup = IpCheckerGroupResult(
+                    title = "RU",
+                    detected = false,
+                    statusLabel = "clean",
+                    summary = "RU sees 203.0.113.64",
+                    canonicalIp = "203.0.113.64",
+                    responses = listOf(
+                        IpCheckerResponse(
+                            label = "ru",
+                            url = "https://ru.example",
+                            scope = IpCheckerScope.RU,
+                            ip = "203.0.113.64",
+                        ),
+                    ),
+                ),
+                nonRuGroup = IpCheckerGroupResult(
+                    title = "NON_RU",
+                    detected = false,
+                    statusLabel = "clean",
+                    summary = "NON_RU sees 203.0.113.64",
+                    canonicalIp = "203.0.113.64",
+                    responses = listOf(
+                        IpCheckerResponse(
+                            label = "non-ru",
+                            url = "https://non-ru.example",
+                            scope = IpCheckerScope.NON_RU,
+                            ip = "203.0.113.64",
+                        ),
+                    ),
+                ),
+            ),
+            directSigns = CategoryResult(
+                name = "Direct",
+                detected = false,
+                findings = listOf(Finding("No direct signs")),
+            ),
+            indirectSigns = CategoryResult(
+                name = "Indirect",
+                detected = false,
+                findings = listOf(Finding("No indirect signs")),
+            ),
+            locationSignals = CategoryResult(
+                name = "Location",
+                detected = false,
+                findings = listOf(Finding("No location conflict")),
+            ),
+            bypassResult = BypassResult(
+                proxyEndpoint = null,
+                directIp = "203.0.113.64",
+                proxyIp = null,
+                vpnNetworkIp = null,
+                underlyingIp = null,
+                xrayApiScanResult = null,
+                findings = listOf(Finding("No bypass for 203.0.113.64")),
+                detected = false,
+            ),
+            verdict = Verdict.NOT_DETECTED,
+            tunProbeDiagnostics = null,
+        )
+
+        val report = DebugDiagnosticsFormatter.format(
+            result = result,
+            settings = CheckSettings(tunProbeDebugEnabled = true),
+            privacyMode = true,
+            timestampMillis = 0L,
+            appVersionName = "1.0",
+            buildType = "debug",
+        )
+
+        assertTrue(report.contains("debugDiagnosticsEnabled: true"))
+        assertTrue(report.contains("[geoIp]"))
+        assertTrue(report.contains("[bypass]"))
+        assertTrue(report.contains("[tunProbe]"))
+        assertTrue(report.contains("collected: false"))
+        assertTrue(report.contains("203.0.*.*"))
+        assertFalse(report.contains("203.0.113.64"))
+    }
+
+    @Test
+    fun `formatter includes detailed errors evidence and network sources`() {
+        val result = CheckResult(
+            geoIp = CategoryResult(
+                name = "GeoIP",
+                detected = true,
+                findings = listOf(
+                    Finding(
+                        description = "GeoIP fetch failed for 198.51.100.7",
+                        isError = true,
+                        source = EvidenceSource.GEO_IP,
+                        confidence = EvidenceConfidence.LOW,
+                    ),
+                ),
+                evidence = listOf(
+                    EvidenceItem(
+                        source = EvidenceSource.GEO_IP,
+                        detected = true,
+                        confidence = EvidenceConfidence.MEDIUM,
+                        description = "Resolver used 8.8.8.8",
+                    ),
+                ),
+            ),
+            ipComparison = IpComparisonResult(
+                detected = true,
+                needsReview = true,
+                summary = "Mismatch between 198.51.100.7 and 203.0.113.64",
+                ruGroup = IpCheckerGroupResult(
+                    title = "RU",
+                    detected = true,
+                    needsReview = true,
+                    statusLabel = "error",
+                    summary = "RU checker failed for 198.51.100.7",
+                    canonicalIp = "198.51.100.7",
+                    responses = listOf(
+                        IpCheckerResponse(
+                            label = "ru-main",
+                            url = "https://ru.example/check",
+                            scope = IpCheckerScope.RU,
+                            error = "timeout 198.51.100.7",
+                            ipv4Records = listOf("198.51.100.7"),
+                            ipv6Records = listOf("2001:db8:85a3:8d3:1319:8a2e:370:7348"),
+                            ignoredIpv6Error = true,
+                        ),
+                    ),
+                    ignoredIpv6ErrorCount = 1,
+                ),
+                nonRuGroup = IpCheckerGroupResult(
+                    title = "NON_RU",
+                    detected = true,
+                    statusLabel = "ok",
+                    summary = "NON_RU returned 203.0.113.64",
+                    canonicalIp = "203.0.113.64",
+                    responses = listOf(
+                        IpCheckerResponse(
+                            label = "non-ru-main",
+                            url = "https://non-ru.example/check",
+                            scope = IpCheckerScope.NON_RU,
+                            ip = "203.0.113.64",
+                        ),
+                    ),
+                ),
+            ),
+            directSigns = CategoryResult(
+                name = "Direct",
+                detected = true,
+                findings = listOf(
+                    Finding(
+                        description = "Detected app com.example.vpn at 198.51.100.7",
+                        detected = true,
+                        source = EvidenceSource.INSTALLED_APP,
+                        confidence = EvidenceConfidence.HIGH,
+                        family = "v2ray",
+                        packageName = "com.example.vpn",
+                    ),
+                ),
+                evidence = listOf(
+                    EvidenceItem(
+                        source = EvidenceSource.ACTIVE_VPN,
+                        detected = true,
+                        confidence = EvidenceConfidence.HIGH,
+                        description = "VPN service active",
+                        packageName = "com.example.vpn",
+                        family = "v2ray",
+                        kind = VpnAppKind.TARGETED_BYPASS,
+                    ),
+                ),
+                matchedApps = listOf(
+                    MatchedVpnApp(
+                        packageName = "com.example.vpn",
+                        appName = "Example VPN",
+                        family = "v2ray",
+                        kind = VpnAppKind.TARGETED_BYPASS,
+                        source = EvidenceSource.INSTALLED_APP,
+                        active = true,
+                        confidence = EvidenceConfidence.HIGH,
+                    ),
+                ),
+                activeApps = listOf(
+                    ActiveVpnApp(
+                        packageName = "com.example.vpn",
+                        serviceName = "ExampleService",
+                        family = "v2ray",
+                        kind = VpnAppKind.TARGETED_BYPASS,
+                        source = EvidenceSource.ACTIVE_VPN,
+                        confidence = EvidenceConfidence.HIGH,
+                    ),
+                ),
+            ),
+            indirectSigns = CategoryResult(
+                name = "Indirect",
+                detected = true,
+                findings = listOf(Finding("Indirect route mismatch 198.51.100.7")),
+                callTransportLeaks = listOf(
+                    CallTransportLeakResult(
+                        service = com.notcvnt.rknhardering.model.CallTransportService.TELEGRAM,
+                        probeKind = CallTransportProbeKind.DIRECT_UDP_STUN,
+                        networkPath = CallTransportNetworkPath.UNDERLYING,
+                        status = CallTransportStatus.ERROR,
+                        targetHost = "198.51.100.7",
+                        targetPort = 3478,
+                        resolvedIps = listOf("198.51.100.7"),
+                        mappedIp = "203.0.113.64",
+                        observedPublicIp = "198.51.100.8",
+                        summary = "STUN error from 198.51.100.7",
+                        confidence = EvidenceConfidence.MEDIUM,
+                        experimental = true,
+                    ),
+                ),
+            ),
+            locationSignals = CategoryResult(
+                name = "Location",
+                detected = false,
+                findings = emptyList(),
+            ),
+            bypassResult = BypassResult(
+                proxyEndpoint = ProxyEndpoint(
+                    host = "127.0.0.1",
+                    port = 1080,
+                    type = ProxyType.SOCKS5,
+                ),
+                directIp = "198.51.100.7",
+                proxyIp = "203.0.113.64",
+                vpnNetworkIp = "198.51.100.9",
+                underlyingIp = "192.168.1.55",
+                xrayApiScanResult = XrayApiScanResult(
+                    endpoint = XrayApiEndpoint(host = "127.0.0.1", port = 8080),
+                    outbounds = listOf(
+                        XrayOutboundSummary(
+                            tag = "proxy",
+                            protocolName = "vless",
+                            address = "198.51.100.7",
+                            port = 443,
+                            uuid = "secret-uuid",
+                            sni = "example.org",
+                            publicKey = "secret-public-key",
+                            senderSettingsType = "tcp",
+                            proxySettingsType = "none",
+                        ),
+                    ),
+                ),
+                findings = listOf(
+                    Finding(
+                        description = "Bypass via 198.51.100.7",
+                        detected = true,
+                        source = EvidenceSource.SPLIT_TUNNEL_BYPASS,
+                        confidence = EvidenceConfidence.HIGH,
+                    ),
+                ),
+                detected = true,
+                needsReview = true,
+                evidence = listOf(
+                    EvidenceItem(
+                        source = EvidenceSource.XRAY_API,
+                        detected = true,
+                        confidence = EvidenceConfidence.HIGH,
+                        description = "Xray exposed 198.51.100.7",
+                    ),
+                ),
+            ),
+            verdict = Verdict.DETECTED,
+            tunProbeDiagnostics = null,
+        )
+
+        val report = DebugDiagnosticsFormatter.format(
+            result = result,
+            settings = CheckSettings(
+                tunProbeDebugEnabled = true,
+                resolverConfig = DnsResolverConfig(
+                    mode = DnsResolverMode.DIRECT,
+                    customDirectServers = listOf("8.8.8.8"),
+                ),
+            ),
+            privacyMode = false,
+            timestampMillis = 0L,
+            appVersionName = "1.0",
+            buildType = "debug",
+        )
+
+        assertTrue(report.contains("resolverMode: DIRECT"))
+        assertTrue(report.contains("error=true"))
+        assertTrue(report.contains("source=GEO_IP"))
+        assertTrue(report.contains("matchedApps:"))
+        assertTrue(report.contains("activeApps:"))
+        assertTrue(report.contains("callTransport:"))
+        assertTrue(report.contains("service=TELEGRAM"))
+        assertTrue(report.contains("ignoredIpv6Error=true"))
+        assertTrue(report.contains("proxyEndpoint: 127.0.0.1:1080 (SOCKS5)"))
+        assertTrue(report.contains("endpoint=127.0.0.1:8080 outboundCount=1"))
+        assertTrue(report.contains("uuidPresent=true"))
+        assertTrue(report.contains("publicKeyPresent=true"))
+        assertTrue(report.contains("198.51.*.*"))
+        assertFalse(report.contains("198.51.100.7"))
+        assertFalse(report.contains("secret-uuid"))
+        assertFalse(report.contains("secret-public-key"))
+    }
+}

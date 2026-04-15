@@ -3,6 +3,7 @@ package com.notcvnt.rknhardering.checker
 import android.content.Context
 import com.notcvnt.rknhardering.LocalProxyOwnerFormatter
 import com.notcvnt.rknhardering.R
+import com.notcvnt.rknhardering.TunProbeDiagnosticsFormatter
 import com.notcvnt.rknhardering.model.BypassResult
 import com.notcvnt.rknhardering.model.EvidenceConfidence
 import com.notcvnt.rknhardering.model.EvidenceItem
@@ -16,7 +17,9 @@ import com.notcvnt.rknhardering.probe.LocalSocketListener
 import com.notcvnt.rknhardering.probe.MtProtoProber
 import com.notcvnt.rknhardering.probe.PortScanPlanner
 import com.notcvnt.rknhardering.probe.ProxyEndpoint
+import com.notcvnt.rknhardering.probe.PublicIpNetworkComparison
 import com.notcvnt.rknhardering.probe.PublicIpProbeMode
+import com.notcvnt.rknhardering.probe.PublicIpProbeStatus
 import com.notcvnt.rknhardering.probe.ProxyScanner
 import com.notcvnt.rknhardering.probe.ProxyType
 import com.notcvnt.rknhardering.probe.ScanMode
@@ -496,6 +499,7 @@ object BypassChecker {
             )
         }
         val usedTransportOnlyFallback = addTransportOnlyFinding(context, result, findings)
+        addDebugTunProbeFindings(context, result, findings)
 
         if (result.activeNetworkIsVpn == false) {
             when {
@@ -700,13 +704,13 @@ object BypassChecker {
         val pathLabels = mutableListOf<String>()
         if (
             result.vpnIp != null &&
-            result.vpnIpComparison?.selectedMode == PublicIpProbeMode.CURL_COMPATIBLE
+            result.vpnIpComparison?.usedCurlCompatibleFallback() == true
         ) {
             pathLabels += context.getString(R.string.checker_bypass_transport_only_vpn_path)
         }
         if (
             result.underlyingIp != null &&
-            result.underlyingIpComparison?.selectedMode == PublicIpProbeMode.CURL_COMPATIBLE
+            result.underlyingIpComparison?.usedCurlCompatibleFallback() == true
         ) {
             pathLabels += context.getString(R.string.checker_bypass_transport_only_underlying_path)
         }
@@ -722,6 +726,40 @@ object BypassChecker {
             ),
         )
         return true
+    }
+
+    private fun addDebugTunProbeFindings(
+        context: Context,
+        result: UnderlyingNetworkProber.ProbeResult,
+        findings: MutableList<Finding>,
+    ) {
+        val diagnostics = result.tunProbeDiagnostics ?: return
+        diagnostics.vpnPath?.let { vpnPath ->
+            findings.add(
+                Finding(
+                    description = TunProbeDiagnosticsFormatter.formatUiSummary(
+                        context = context,
+                        pathLabel = context.getString(R.string.checker_tun_probe_path_vpn),
+                        modeOverride = diagnostics.modeOverride,
+                        path = vpnPath,
+                    ),
+                    isInformational = true,
+                ),
+            )
+        }
+        diagnostics.underlyingPath?.let { underlyingPath ->
+            findings.add(
+                Finding(
+                    description = TunProbeDiagnosticsFormatter.formatUiSummary(
+                        context = context,
+                        pathLabel = context.getString(R.string.checker_tun_probe_path_underlying),
+                        modeOverride = diagnostics.modeOverride,
+                        path = underlyingPath,
+                    ),
+                    isInformational = true,
+                ),
+            )
+        }
     }
 
     private fun resolveProxyOwner(context: Context, proxyEndpoint: ProxyEndpoint): ProxyOwnerMatch {

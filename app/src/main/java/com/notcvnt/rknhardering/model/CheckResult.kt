@@ -126,6 +126,36 @@ data class LocalProxyOwner(
     val confidence: EvidenceConfidence,
 )
 
+enum class LocalProxyOwnerStatus {
+    RESOLVED,
+    UNRESOLVED,
+    AMBIGUOUS,
+}
+
+enum class LocalProxyCheckStatus {
+    CONFIRMED_BYPASS,
+    SAME_IP,
+    PROXY_IP_UNAVAILABLE,
+    DIRECT_IP_UNAVAILABLE,
+}
+
+enum class LocalProxySummaryReason {
+    CONFIRMED_BYPASS,
+    FIRST_WITH_PROXY_IP,
+    FIRST_DISCOVERED,
+}
+
+data class LocalProxyCheckResult(
+    val endpoint: ProxyEndpoint,
+    val owner: LocalProxyOwner? = null,
+    val ownerStatus: LocalProxyOwnerStatus = LocalProxyOwnerStatus.UNRESOLVED,
+    val proxyIp: String? = null,
+    val status: LocalProxyCheckStatus,
+    val mtProtoReachable: Boolean? = null,
+    val mtProtoTarget: String? = null,
+    val summaryReason: LocalProxySummaryReason? = null,
+)
+
 data class CategoryResult(
     val name: String,
     val detected: Boolean,
@@ -154,6 +184,7 @@ data class BypassResult(
     val vpnNetworkIp: String? = null,
     val underlyingIp: String? = null,
     val xrayApiScanResult: XrayApiScanResult?,
+    val proxyChecks: List<LocalProxyCheckResult> = emptyList(),
     val findings: List<Finding>,
     val detected: Boolean,
     val needsReview: Boolean = false,

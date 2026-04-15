@@ -9,7 +9,11 @@ import com.notcvnt.rknhardering.model.EvidenceConfidence
 import com.notcvnt.rknhardering.model.EvidenceItem
 import com.notcvnt.rknhardering.model.EvidenceSource
 import com.notcvnt.rknhardering.model.Finding
+import com.notcvnt.rknhardering.model.LocalProxyCheckResult
+import com.notcvnt.rknhardering.model.LocalProxyCheckStatus
 import com.notcvnt.rknhardering.model.LocalProxyOwner
+import com.notcvnt.rknhardering.model.LocalProxyOwnerStatus
+import com.notcvnt.rknhardering.model.LocalProxySummaryReason
 import com.notcvnt.rknhardering.network.DnsResolverConfig
 import com.notcvnt.rknhardering.probe.IfconfigClient
 import com.notcvnt.rknhardering.probe.LocalSocketInspector
@@ -40,15 +44,18 @@ object BypassChecker {
         val needsReview: Boolean,
     )
 
-    internal enum class ProxyOwnerStatus {
-        RESOLVED,
-        UNRESOLVED,
-        AMBIGUOUS,
-    }
-
     internal data class ProxyOwnerMatch(
         val owner: LocalProxyOwner? = null,
-        val status: ProxyOwnerStatus,
+        val status: LocalProxyOwnerStatus,
+    )
+
+    internal data class ProxyScanEvaluation(
+        val directIp: String? = null,
+        val summaryProxyEndpoint: ProxyEndpoint? = null,
+        val summaryProxyOwner: LocalProxyOwner? = null,
+        val summaryProxyIp: String? = null,
+        val proxyChecks: List<LocalProxyCheckResult> = emptyList(),
+        val confirmedBypass: Boolean = false,
     )
 
     private enum class IpComparisonOutcome {
@@ -123,7 +130,7 @@ object BypassChecker {
                     ),
                 )
                 if (scanPlan.mode == ScanMode.POPULAR_ONLY) {
-                    scanner.findOpenProxyEndpoint(
+                    scanner.findOpenProxyEndpoints(
                         mode = ScanMode.POPULAR_ONLY,
                         manualPort = null,
                         onProgress = { progress ->
@@ -142,7 +149,7 @@ object BypassChecker {
                         },
                     )
                 } else {
-                    scanner.findOpenProxyEndpoint(
+                    scanner.findOpenProxyEndpoints(
                         mode = scanPlan.mode,
                         manualPort = null,
                         onProgress = { progress ->
@@ -209,16 +216,24 @@ object BypassChecker {
             null
         }
 
-        val proxyEndpoint = proxyDeferred?.await()
+        val proxyEndpoints = proxyDeferred?.await().orEmpty()
         val xrayApiScanResult = xrayDeferred?.await()
         val underlyingResult = underlyingDeferred?.await() ?: UnderlyingNetworkProber.ProbeResult(
             vpnActive = false,
             underlyingReachable = false,
         )
-        val proxyOwnerMatch = proxyEndpoint?.let { resolveProxyOwner(context, it) }
 
-        if (splitTunnelEnabled && proxyScanEnabled) {
-            reportProxyResult(context, proxyEndpoint, proxyOwnerMatch, findings, evidence)
+        val proxyEvaluation = if (splitTunnelEnabled && proxyScanEnabled) {
+            evaluateProxyEndpoints(
+                context = context,
+                resolverConfig = resolverConfig,
+                proxyEndpoints = proxyEndpoints,
+                findings = findings,
+                evidence = evidence,
+                onProgress = onProgress,
+            )
+        } else {
+            ProxyScanEvaluation()
         }
         if (splitTunnelEnabled && xrayApiScanEnabled) {
             reportXrayApiResult(context, xrayApiScanResult, findings, evidence)
@@ -229,106 +244,21 @@ object BypassChecker {
             UnderlyingEvaluation(detected = false, needsReview = false)
         }
 
-        var directIp: String? = null
-        var proxyIp: String? = null
-        var confirmedBypass = false
-
-        if (splitTunnelEnabled && proxyEndpoint != null) {
-            onProgress?.invoke(
-                Progress(
-                    line = ProgressLine.BYPASS,
-                    phase = context.getString(R.string.checker_bypass_progress_ip_phase),
-                    detail = context.getString(R.string.checker_bypass_progress_ip_detail),
-                ),
-            )
-
-            val directDeferred = async { IfconfigClient.fetchDirectIp(resolverConfig = resolverConfig) }
-            val proxyIpDeferred = async {
-                IfconfigClient.fetchIpViaProxy(proxyEndpoint, resolverConfig = resolverConfig)
-            }
-
-            directIp = directDeferred.await().getOrNull()
-            proxyIp = proxyIpDeferred.await().getOrNull()
-
-            val unavailable = context.getString(R.string.checker_bypass_ip_unavailable)
-            findings.add(Finding(context.getString(R.string.checker_bypass_direct_ip, directIp ?: unavailable)))
-            findings.add(Finding(context.getString(R.string.checker_bypass_proxy_ip, proxyIp ?: unavailable)))
-
-            if (directIp != null && proxyIp != null && directIp != proxyIp) {
-                confirmedBypass = true
-                findings.add(
-                    Finding(
-                        description = context.getString(R.string.checker_bypass_split_confirmed),
-                        detected = true,
-                        source = EvidenceSource.SPLIT_TUNNEL_BYPASS,
-                        confidence = EvidenceConfidence.HIGH,
-                    ),
-                )
-                evidence.add(
-                    EvidenceItem(
-                        source = EvidenceSource.SPLIT_TUNNEL_BYPASS,
-                        detected = true,
-                        confidence = EvidenceConfidence.HIGH,
-                        description = "Direct IP differs from proxy IP",
-                    ),
-                )
-            } else if (directIp != null && proxyIp != null) {
-                findings.add(Finding(context.getString(R.string.checker_bypass_split_disabled)))
-            }
-
-            // MTProto probe: if SOCKS5 proxy found but HTTP didn't work through it,
-            // check if it forwards Telegram DC traffic (MTProto-only proxy like tg-ws-proxy).
-            // Skip if the port is already identified as Xray/V2Ray — that proxy is a full SOCKS5
-            // tunnel, not an MTProto-only one; failed IP fetch just means the test site was blocked.
-            // Informational only — does not contribute to verdict scoring.
-            val isXrayPort = VpnAppCatalog.familiesForPort(proxyEndpoint.port)
-                .contains(VpnAppCatalog.FAMILY_XRAY)
-            if (proxyEndpoint.type == ProxyType.SOCKS5 && proxyIp == null && !isXrayPort) {
-                onProgress?.invoke(
-                    Progress(
-                        line = ProgressLine.BYPASS,
-                        phase = "MTProto probe",
-                        detail = context.getString(R.string.checker_bypass_progress_mtproto_detail),
-                    ),
-                )
-                val mtResult = MtProtoProber.probe(proxyEndpoint.host, proxyEndpoint.port)
-                if (mtResult.reachable) {
-                    val addr = mtResult.targetAddress
-                    val targetAddress = addr?.let { "${it.address.hostAddress}:${it.port}" }
-                        ?: unavailable
-                    findings.add(
-                        Finding(
-                            description = context.getString(
-                                R.string.checker_bypass_mtproto_reachable,
-                                formatHostPort(proxyEndpoint.host, proxyEndpoint.port),
-                                targetAddress,
-                            ),
-                            detected = true,
-                            source = EvidenceSource.LOCAL_PROXY,
-                            confidence = EvidenceConfidence.HIGH,
-                            family = VpnAppCatalog.FAMILY_TG_WS_PROXY,
-                        ),
-                    )
-                } else {
-                    findings.add(Finding(context.getString(R.string.checker_bypass_mtproto_unreachable)))
-                }
-            }
-        }
-
-        val detected = confirmedBypass || xrayApiScanResult != null || underlyingEvaluation.detected
+        val detected = proxyEvaluation.confirmedBypass || xrayApiScanResult != null || underlyingEvaluation.detected
         val needsReview = !detected && (
-            proxyEndpoint != null ||
+            proxyEvaluation.proxyChecks.isNotEmpty() ||
                 underlyingEvaluation.needsReview
             )
 
         BypassResult(
-            proxyEndpoint = proxyEndpoint,
-            proxyOwner = proxyOwnerMatch?.owner,
-            directIp = directIp,
-            proxyIp = proxyIp,
+            proxyEndpoint = proxyEvaluation.summaryProxyEndpoint,
+            proxyOwner = proxyEvaluation.summaryProxyOwner,
+            directIp = proxyEvaluation.directIp,
+            proxyIp = proxyEvaluation.summaryProxyIp,
             vpnNetworkIp = underlyingResult.vpnIp,
             underlyingIp = underlyingResult.underlyingIp,
             xrayApiScanResult = xrayApiScanResult,
+            proxyChecks = proxyEvaluation.proxyChecks,
             findings = findings,
             detected = detected,
             needsReview = needsReview,
@@ -336,18 +266,138 @@ object BypassChecker {
         )
     }
 
-    private fun reportProxyResult(
+    internal suspend fun evaluateProxyEndpoints(
         context: Context,
-        proxyEndpoint: ProxyEndpoint?,
-        proxyOwnerMatch: ProxyOwnerMatch?,
+        resolverConfig: DnsResolverConfig,
+        proxyEndpoints: List<ProxyEndpoint>,
+        findings: MutableList<Finding>,
+        evidence: MutableList<EvidenceItem>,
+        onProgress: (suspend (Progress) -> Unit)? = null,
+        fetchDirectIp: suspend () -> Result<String> = {
+            IfconfigClient.fetchDirectIp(resolverConfig = resolverConfig)
+        },
+        fetchProxyIp: suspend (ProxyEndpoint) -> Result<String> = { endpoint ->
+            IfconfigClient.fetchIpViaProxy(endpoint, resolverConfig = resolverConfig)
+        },
+        resolveProxyOwnerMatch: suspend (ProxyEndpoint) -> ProxyOwnerMatch = { endpoint ->
+            resolveProxyOwner(context, endpoint)
+        },
+        probeMtProto: suspend (ProxyEndpoint) -> MtProtoProber.ProbeResult = { endpoint ->
+            MtProtoProber.probe(endpoint.host, endpoint.port)
+        },
+    ): ProxyScanEvaluation {
+        if (proxyEndpoints.isEmpty()) {
+            reportProxyResults(context, directIp = null, proxyChecks = emptyList(), findings = findings, evidence = evidence)
+            return ProxyScanEvaluation()
+        }
+
+        onProgress?.invoke(
+            Progress(
+                line = ProgressLine.BYPASS,
+                phase = context.getString(R.string.checker_bypass_progress_ip_phase),
+                detail = context.getString(R.string.checker_bypass_progress_ip_detail),
+            ),
+        )
+
+        val directIp = fetchDirectIp().getOrNull()
+        val rawChecks = mutableListOf<LocalProxyCheckResult>()
+
+        for (proxyEndpoint in proxyEndpoints) {
+            val proxyOwnerMatch = resolveProxyOwnerMatch(proxyEndpoint)
+            val proxyIp = fetchProxyIp(proxyEndpoint).getOrNull()
+
+            val isXrayPort = VpnAppCatalog.familiesForPort(proxyEndpoint.port)
+                .contains(VpnAppCatalog.FAMILY_XRAY)
+            val mtProtoResult = if (proxyEndpoint.type == ProxyType.SOCKS5 && proxyIp == null && !isXrayPort) {
+                onProgress?.invoke(
+                    Progress(
+                        line = ProgressLine.BYPASS,
+                        phase = "MTProto probe",
+                        detail = context.getString(R.string.checker_bypass_progress_mtproto_detail),
+                    ),
+                )
+                probeMtProto(proxyEndpoint)
+            } else {
+                null
+            }
+
+            val status = when {
+                directIp == null -> LocalProxyCheckStatus.DIRECT_IP_UNAVAILABLE
+                proxyIp == null -> LocalProxyCheckStatus.PROXY_IP_UNAVAILABLE
+                directIp != proxyIp -> LocalProxyCheckStatus.CONFIRMED_BYPASS
+                else -> LocalProxyCheckStatus.SAME_IP
+            }
+
+            rawChecks += LocalProxyCheckResult(
+                endpoint = proxyEndpoint,
+                owner = proxyOwnerMatch.owner,
+                ownerStatus = proxyOwnerMatch.status,
+                proxyIp = proxyIp,
+                status = status,
+                mtProtoReachable = mtProtoResult?.reachable,
+                mtProtoTarget = mtProtoResult?.targetAddress?.let { "${it.address.hostAddress}:${it.port}" },
+            )
+        }
+
+        val summarySelection = when {
+            rawChecks.any { it.status == LocalProxyCheckStatus.CONFIRMED_BYPASS } ->
+                rawChecks.indexOfFirst { it.status == LocalProxyCheckStatus.CONFIRMED_BYPASS } to
+                    LocalProxySummaryReason.CONFIRMED_BYPASS
+            rawChecks.any { it.proxyIp != null } ->
+                rawChecks.indexOfFirst { it.proxyIp != null } to LocalProxySummaryReason.FIRST_WITH_PROXY_IP
+            rawChecks.isNotEmpty() -> 0 to LocalProxySummaryReason.FIRST_DISCOVERED
+            else -> null
+        }
+
+        val proxyChecks = rawChecks.mapIndexed { index, check ->
+            if (summarySelection != null && index == summarySelection.first) {
+                check.copy(summaryReason = summarySelection.second)
+            } else {
+                check
+            }
+        }
+
+        reportProxyResults(context, directIp = directIp, proxyChecks = proxyChecks, findings = findings, evidence = evidence)
+
+        val summaryCheck = summarySelection?.first?.let(proxyChecks::get)
+        return ProxyScanEvaluation(
+            directIp = directIp,
+            summaryProxyEndpoint = summaryCheck?.endpoint,
+            summaryProxyOwner = summaryCheck?.owner,
+            summaryProxyIp = summaryCheck?.proxyIp,
+            proxyChecks = proxyChecks,
+            confirmedBypass = proxyChecks.any { it.status == LocalProxyCheckStatus.CONFIRMED_BYPASS },
+        )
+    }
+
+    private fun reportProxyResults(
+        context: Context,
+        directIp: String?,
+        proxyChecks: List<LocalProxyCheckResult>,
         findings: MutableList<Finding>,
         evidence: MutableList<EvidenceItem>,
     ) {
-        if (proxyEndpoint == null) {
+        if (proxyChecks.isEmpty()) {
             findings.add(Finding(context.getString(R.string.checker_bypass_no_open_proxy)))
             return
         }
 
+        val unavailable = context.getString(R.string.checker_bypass_ip_unavailable)
+        findings.add(Finding(context.getString(R.string.checker_bypass_direct_ip, directIp ?: unavailable)))
+
+        proxyChecks.forEach { proxyCheck ->
+            reportProxyCheck(context, proxyCheck, findings, evidence, unavailable)
+        }
+    }
+
+    private fun reportProxyCheck(
+        context: Context,
+        proxyCheck: LocalProxyCheckResult,
+        findings: MutableList<Finding>,
+        evidence: MutableList<EvidenceItem>,
+        unavailable: String,
+    ) {
+        val proxyEndpoint = proxyCheck.endpoint
         val candidateFamilies = VpnAppCatalog.familiesForPort(proxyEndpoint.port)
         val familySuffix = candidateFamilies.takeIf { it.isNotEmpty() }?.joinToString()
         val description = buildString {
@@ -363,18 +413,20 @@ object BypassChecker {
                 append(familySuffix)
                 append("]")
             }
-            append(formatOwnerSuffix(context, proxyOwnerMatch))
-            append(context.getString(R.string.checker_bypass_open_proxy_review_suffix))
+            append(formatOwnerSuffix(context, proxyCheck.owner, proxyCheck.ownerStatus))
+            if (proxyCheck.status != LocalProxyCheckStatus.CONFIRMED_BYPASS) {
+                append(context.getString(R.string.checker_bypass_open_proxy_review_suffix))
+            }
         }
 
         findings.add(
             Finding(
                 description = description,
-                needsReview = true,
+                needsReview = proxyCheck.status != LocalProxyCheckStatus.CONFIRMED_BYPASS,
                 source = EvidenceSource.LOCAL_PROXY,
                 confidence = EvidenceConfidence.MEDIUM,
                 family = familySuffix,
-                packageName = LocalProxyOwnerFormatter.packageName(proxyOwnerMatch?.owner),
+                packageName = LocalProxyOwnerFormatter.packageName(proxyCheck.owner),
             ),
         )
         evidence.add(
@@ -384,12 +436,61 @@ object BypassChecker {
                 confidence = EvidenceConfidence.MEDIUM,
                 description = buildString {
                     append("Detected open ${proxyEndpoint.type.name} proxy at ${formatHostPort(proxyEndpoint.host, proxyEndpoint.port)}")
-                    append(formatOwnerSuffix(context, proxyOwnerMatch))
+                    append(formatOwnerSuffix(context, proxyCheck.owner, proxyCheck.ownerStatus))
                 },
                 family = familySuffix,
-                packageName = LocalProxyOwnerFormatter.packageName(proxyOwnerMatch?.owner),
+                packageName = LocalProxyOwnerFormatter.packageName(proxyCheck.owner),
             ),
         )
+
+        findings.add(Finding(context.getString(R.string.checker_bypass_proxy_ip, proxyCheck.proxyIp ?: unavailable)))
+
+        when (proxyCheck.status) {
+            LocalProxyCheckStatus.CONFIRMED_BYPASS -> {
+                findings.add(
+                    Finding(
+                        description = context.getString(R.string.checker_bypass_split_confirmed),
+                        detected = true,
+                        source = EvidenceSource.SPLIT_TUNNEL_BYPASS,
+                        confidence = EvidenceConfidence.HIGH,
+                    ),
+                )
+                evidence.add(
+                    EvidenceItem(
+                        source = EvidenceSource.SPLIT_TUNNEL_BYPASS,
+                        detected = true,
+                        confidence = EvidenceConfidence.HIGH,
+                        description = "Direct IP differs from proxy IP at ${formatHostPort(proxyEndpoint.host, proxyEndpoint.port)}",
+                    ),
+                )
+            }
+            LocalProxyCheckStatus.SAME_IP -> {
+                findings.add(Finding(context.getString(R.string.checker_bypass_split_disabled)))
+            }
+            LocalProxyCheckStatus.PROXY_IP_UNAVAILABLE,
+            LocalProxyCheckStatus.DIRECT_IP_UNAVAILABLE,
+            -> Unit
+        }
+
+        when (proxyCheck.mtProtoReachable) {
+            true -> {
+                findings.add(
+                    Finding(
+                        description = context.getString(
+                            R.string.checker_bypass_mtproto_reachable,
+                            formatHostPort(proxyEndpoint.host, proxyEndpoint.port),
+                            proxyCheck.mtProtoTarget ?: unavailable,
+                        ),
+                        detected = true,
+                        source = EvidenceSource.LOCAL_PROXY,
+                        confidence = EvidenceConfidence.HIGH,
+                        family = VpnAppCatalog.FAMILY_TG_WS_PROXY,
+                    ),
+                )
+            }
+            false -> findings.add(Finding(context.getString(R.string.checker_bypass_mtproto_unreachable)))
+            null -> Unit
+        }
     }
 
     private fun reportXrayApiResult(
@@ -771,29 +872,41 @@ object BypassChecker {
         val samePortListeners = listeners.filter { it.port == proxyEndpoint.port }
         val exactMatches = samePortListeners.filter { normalizeHost(it.host) == normalizeHost(proxyEndpoint.host) }
         if (exactMatches.size == 1) {
-            return exactMatches.single().owner?.let { ProxyOwnerMatch(it, ProxyOwnerStatus.RESOLVED) }
-                ?: ProxyOwnerMatch(status = ProxyOwnerStatus.UNRESOLVED)
+            return exactMatches.single().owner?.let { ProxyOwnerMatch(it, LocalProxyOwnerStatus.RESOLVED) }
+                ?: ProxyOwnerMatch(status = LocalProxyOwnerStatus.UNRESOLVED)
         }
         if (exactMatches.size > 1) {
-            return ProxyOwnerMatch(status = ProxyOwnerStatus.AMBIGUOUS)
+            return ProxyOwnerMatch(status = LocalProxyOwnerStatus.AMBIGUOUS)
         }
 
         val fallbackMatches = samePortListeners.filter { listener ->
             isAnyAddress(listener.host) || (isLoopback(listener.host) && isLoopback(proxyEndpoint.host))
         }
         return when (fallbackMatches.size) {
-            1 -> fallbackMatches.single().owner?.let { ProxyOwnerMatch(it, ProxyOwnerStatus.RESOLVED) }
-                ?: ProxyOwnerMatch(status = ProxyOwnerStatus.UNRESOLVED)
-            0 -> ProxyOwnerMatch(status = ProxyOwnerStatus.UNRESOLVED)
-            else -> ProxyOwnerMatch(status = ProxyOwnerStatus.AMBIGUOUS)
+            1 -> fallbackMatches.single().owner?.let { ProxyOwnerMatch(it, LocalProxyOwnerStatus.RESOLVED) }
+                ?: ProxyOwnerMatch(status = LocalProxyOwnerStatus.UNRESOLVED)
+            0 -> ProxyOwnerMatch(status = LocalProxyOwnerStatus.UNRESOLVED)
+            else -> ProxyOwnerMatch(status = LocalProxyOwnerStatus.AMBIGUOUS)
         }
     }
 
     private fun formatOwnerSuffix(context: Context, proxyOwnerMatch: ProxyOwnerMatch?): String {
-        val ownerText = when (proxyOwnerMatch?.status) {
-            ProxyOwnerStatus.RESOLVED -> proxyOwnerMatch.owner?.let { LocalProxyOwnerFormatter.format(context, it) }
-            ProxyOwnerStatus.AMBIGUOUS -> context.getString(R.string.checker_proxy_owner_ambiguous)
-            ProxyOwnerStatus.UNRESOLVED, null -> context.getString(R.string.checker_proxy_owner_unresolved)
+        return formatOwnerSuffix(
+            context = context,
+            owner = proxyOwnerMatch?.owner,
+            status = proxyOwnerMatch?.status ?: LocalProxyOwnerStatus.UNRESOLVED,
+        )
+    }
+
+    private fun formatOwnerSuffix(
+        context: Context,
+        owner: LocalProxyOwner?,
+        status: LocalProxyOwnerStatus,
+    ): String {
+        val ownerText = when (status) {
+            LocalProxyOwnerStatus.RESOLVED -> owner?.let { LocalProxyOwnerFormatter.format(context, it) }
+            LocalProxyOwnerStatus.AMBIGUOUS -> context.getString(R.string.checker_proxy_owner_ambiguous)
+            LocalProxyOwnerStatus.UNRESOLVED -> context.getString(R.string.checker_proxy_owner_unresolved)
         } ?: context.getString(R.string.checker_proxy_owner_unresolved)
         return context.getString(R.string.checker_proxy_owner_suffix, ownerText)
     }

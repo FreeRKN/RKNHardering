@@ -79,4 +79,69 @@ class ProxyScannerTest {
         assertEquals(listOf(8080, 1080), probedPorts.distinct())
         assertEquals(ProxyEndpoint("127.0.0.1", 1080, ProxyType.SOCKS5), result)
     }
+
+    @Test
+    fun `auto scan returns all found proxy endpoints`() = runBlocking {
+        val scanner = ProxyScanner(
+            popularPorts = listOf(1080, 2080),
+            scanRange = 1080..2082,
+            maxConcurrency = 1,
+            progressUpdateEvery = 1,
+            probePort = { _, port, _, _ ->
+                when (port) {
+                    1080 -> ProxyType.SOCKS5
+                    2080 -> ProxyType.HTTP
+                    2082 -> ProxyType.SOCKS5
+                    else -> null
+                }
+            },
+        )
+
+        val result = scanner.findOpenProxyEndpoints(
+            mode = ScanMode.AUTO,
+            manualPort = null,
+            onProgress = {},
+        )
+
+        assertEquals(
+            listOf(
+                ProxyEndpoint("127.0.0.1", 1080, ProxyType.SOCKS5),
+                ProxyEndpoint("127.0.0.1", 2080, ProxyType.HTTP),
+                ProxyEndpoint("127.0.0.1", 2082, ProxyType.SOCKS5),
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun `scan skips non proxy ports and duplicate loopback hosts for the same port`() = runBlocking {
+        val scanner = ProxyScanner(
+            loopbackHosts = listOf("127.0.0.1", "::1"),
+            popularPorts = listOf(1080),
+            scanRange = 1080..1082,
+            maxConcurrency = 1,
+            progressUpdateEvery = 1,
+            probePort = { host, port, _, _ ->
+                when {
+                    port == 1080 -> ProxyType.SOCKS5
+                    port == 1082 && host == "::1" -> ProxyType.HTTP
+                    else -> null
+                }
+            },
+        )
+
+        val result = scanner.findOpenProxyEndpoints(
+            mode = ScanMode.AUTO,
+            manualPort = null,
+            onProgress = {},
+        )
+
+        assertEquals(
+            listOf(
+                ProxyEndpoint("127.0.0.1", 1080, ProxyType.SOCKS5),
+                ProxyEndpoint("::1", 1082, ProxyType.HTTP),
+            ),
+            result,
+        )
+    }
 }

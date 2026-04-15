@@ -2,11 +2,16 @@ package com.notcvnt.rknhardering.checker
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.notcvnt.rknhardering.R
 import com.notcvnt.rknhardering.model.EvidenceItem
 import com.notcvnt.rknhardering.model.EvidenceSource
 import com.notcvnt.rknhardering.model.Finding
+import com.notcvnt.rknhardering.model.LocalProxyCheckStatus
 import com.notcvnt.rknhardering.model.LocalProxyOwner
+import com.notcvnt.rknhardering.model.LocalProxyOwnerStatus
+import com.notcvnt.rknhardering.model.LocalProxySummaryReason
 import com.notcvnt.rknhardering.probe.LocalSocketListener
+import com.notcvnt.rknhardering.probe.MtProtoProber
 import com.notcvnt.rknhardering.probe.PublicIpModeProbeResult
 import com.notcvnt.rknhardering.probe.PublicIpNetworkComparison
 import com.notcvnt.rknhardering.probe.PublicIpProbeMode
@@ -16,6 +21,7 @@ import com.notcvnt.rknhardering.probe.ProxyType
 import com.notcvnt.rknhardering.probe.TunProbeDiagnostics
 import com.notcvnt.rknhardering.probe.TunProbeModeOverride
 import com.notcvnt.rknhardering.probe.UnderlyingNetworkProber
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
@@ -24,6 +30,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.net.InetSocketAddress
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -432,6 +439,139 @@ class BypassCheckerTest {
     }
 
     @Test
+    fun `proxy evaluation continues after mtproto only endpoint and confirms later bypass`() = runBlocking {
+        val findings = mutableListOf<Finding>()
+        val evidence = mutableListOf<EvidenceItem>()
+
+        val evaluation = BypassChecker.evaluateProxyEndpoints(
+            context = context,
+            resolverConfig = com.notcvnt.rknhardering.network.DnsResolverConfig.system(),
+            proxyEndpoints = listOf(
+                ProxyEndpoint(host = "127.0.0.1", port = 2080, type = ProxyType.SOCKS5),
+                ProxyEndpoint(host = "127.0.0.1", port = 39365, type = ProxyType.SOCKS5),
+            ),
+            findings = findings,
+            evidence = evidence,
+            fetchDirectIp = { Result.success("109.236.0.10") },
+            fetchProxyIp = { endpoint ->
+                when (endpoint.port) {
+                    2080 -> Result.failure(IllegalStateException("blocked"))
+                    39365 -> Result.success("45.80.0.20")
+                    else -> Result.failure(IllegalArgumentException("unexpected port"))
+                }
+            },
+            resolveProxyOwnerMatch = { endpoint ->
+                when (endpoint.port) {
+                    39365 -> BypassChecker.ProxyOwnerMatch(
+                        owner = owner(uid = 10127, packageName = "com.nekobox", appLabel = "NekoBox"),
+                        status = LocalProxyOwnerStatus.RESOLVED,
+                    )
+                    else -> BypassChecker.ProxyOwnerMatch(status = LocalProxyOwnerStatus.UNRESOLVED)
+                }
+            },
+            probeMtProto = { endpoint ->
+                when (endpoint.port) {
+                    2080 -> MtProtoProber.ProbeResult(
+                        reachable = true,
+                        targetAddress = InetSocketAddress("149.154.167.51", 443),
+                    )
+                    else -> MtProtoProber.ProbeResult(reachable = false, targetAddress = null)
+                }
+            },
+        )
+
+        assertTrue(evaluation.confirmedBypass)
+        assertEquals(39365, evaluation.summaryProxyEndpoint?.port)
+        assertEquals("45.80.0.20", evaluation.summaryProxyIp)
+        assertEquals(2, evaluation.proxyChecks.size)
+        assertEquals(LocalProxyCheckStatus.PROXY_IP_UNAVAILABLE, evaluation.proxyChecks[0].status)
+        assertEquals(LocalProxyCheckStatus.CONFIRMED_BYPASS, evaluation.proxyChecks[1].status)
+        assertEquals(LocalProxySummaryReason.CONFIRMED_BYPASS, evaluation.proxyChecks[1].summaryReason)
+        assertTrue(evidence.any { it.source == EvidenceSource.SPLIT_TUNNEL_BYPASS && it.detected })
+        assertTrue(findings.any { it.description.contains("127.0.0.1:2080") })
+        assertTrue(
+            findings.any {
+                it.description == context.getString(
+                    R.string.checker_bypass_mtproto_reachable,
+                    "127.0.0.1:2080",
+                    "149.154.167.51:443",
+                )
+            },
+        )
+        assertTrue(findings.any { it.description.contains("127.0.0.1:39365") })
+        assertTrue(findings.any { it.description == context.getString(R.string.checker_bypass_split_confirmed) && it.detected })
+    }
+
+    @Test
+    fun `proxy evaluation keeps all proxies when public ips match`() = runBlocking {
+        val findings = mutableListOf<Finding>()
+        val evidence = mutableListOf<EvidenceItem>()
+
+        val evaluation = BypassChecker.evaluateProxyEndpoints(
+            context = context,
+            resolverConfig = com.notcvnt.rknhardering.network.DnsResolverConfig.system(),
+            proxyEndpoints = listOf(
+                ProxyEndpoint(host = "127.0.0.1", port = 2080, type = ProxyType.SOCKS5),
+                ProxyEndpoint(host = "127.0.0.1", port = 39365, type = ProxyType.HTTP),
+            ),
+            findings = findings,
+            evidence = evidence,
+            fetchDirectIp = { Result.success("109.236.0.10") },
+            fetchProxyIp = { Result.success("109.236.0.10") },
+            resolveProxyOwnerMatch = { BypassChecker.ProxyOwnerMatch(status = LocalProxyOwnerStatus.UNRESOLVED) },
+        )
+
+        assertFalse(evaluation.confirmedBypass)
+        assertEquals(2, evaluation.proxyChecks.size)
+        assertTrue(evaluation.proxyChecks.all { it.status == LocalProxyCheckStatus.SAME_IP })
+        assertEquals(2080, evaluation.summaryProxyEndpoint?.port)
+        assertEquals(LocalProxySummaryReason.FIRST_WITH_PROXY_IP, evaluation.proxyChecks[0].summaryReason)
+        assertFalse(evidence.any { it.source == EvidenceSource.SPLIT_TUNNEL_BYPASS && it.detected })
+        assertEquals(2, findings.count { it.description == context.getString(R.string.checker_bypass_split_disabled) })
+    }
+
+    @Test
+    fun `proxy evaluation inspects every candidate when proxy ip is unavailable`() = runBlocking {
+        val findings = mutableListOf<Finding>()
+        val evidence = mutableListOf<EvidenceItem>()
+        val mtProtoPorts = mutableListOf<Int>()
+
+        val evaluation = BypassChecker.evaluateProxyEndpoints(
+            context = context,
+            resolverConfig = com.notcvnt.rknhardering.network.DnsResolverConfig.system(),
+            proxyEndpoints = listOf(
+                ProxyEndpoint(host = "127.0.0.1", port = 2080, type = ProxyType.SOCKS5),
+                ProxyEndpoint(host = "127.0.0.1", port = 39365, type = ProxyType.SOCKS5),
+            ),
+            findings = findings,
+            evidence = evidence,
+            fetchDirectIp = { Result.success("109.236.0.10") },
+            fetchProxyIp = { Result.failure(IllegalStateException("timeout")) },
+            resolveProxyOwnerMatch = { BypassChecker.ProxyOwnerMatch(status = LocalProxyOwnerStatus.UNRESOLVED) },
+            probeMtProto = { endpoint ->
+                mtProtoPorts += endpoint.port
+                MtProtoProber.ProbeResult(reachable = false, targetAddress = null)
+            },
+        )
+
+        assertFalse(evaluation.confirmedBypass)
+        assertEquals(listOf(2080, 39365), mtProtoPorts)
+        assertEquals(2, evaluation.proxyChecks.size)
+        assertTrue(evaluation.proxyChecks.all { it.status == LocalProxyCheckStatus.PROXY_IP_UNAVAILABLE })
+        assertEquals(LocalProxySummaryReason.FIRST_DISCOVERED, evaluation.proxyChecks[0].summaryReason)
+        assertEquals(
+            2,
+            findings.count {
+                it.description == context.getString(
+                    R.string.checker_bypass_proxy_ip,
+                    context.getString(R.string.checker_bypass_ip_unavailable),
+                )
+            },
+        )
+        assertEquals(2, findings.count { it.description == context.getString(R.string.checker_bypass_mtproto_unreachable) })
+    }
+
+    @Test
     fun `proxy owner matches exact host and port`() {
         val owner = owner(uid = 10123, packageName = "com.whatsapp", appLabel = "WhatsApp")
 
@@ -443,7 +583,7 @@ class BypassCheckerTest {
             ),
         )
 
-        assertEquals(BypassChecker.ProxyOwnerStatus.RESOLVED, match.status)
+        assertEquals(LocalProxyOwnerStatus.RESOLVED, match.status)
         assertEquals(owner, match.owner)
     }
 
@@ -458,7 +598,7 @@ class BypassCheckerTest {
             ),
         )
 
-        assertEquals(BypassChecker.ProxyOwnerStatus.RESOLVED, match.status)
+        assertEquals(LocalProxyOwnerStatus.RESOLVED, match.status)
         assertEquals(owner, match.owner)
     }
 
@@ -472,7 +612,7 @@ class BypassCheckerTest {
             ),
         )
 
-        assertEquals(BypassChecker.ProxyOwnerStatus.AMBIGUOUS, match.status)
+        assertEquals(LocalProxyOwnerStatus.AMBIGUOUS, match.status)
         assertNull(match.owner)
     }
 

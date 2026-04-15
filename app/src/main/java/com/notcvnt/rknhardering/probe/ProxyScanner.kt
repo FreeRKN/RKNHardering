@@ -8,7 +8,7 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.coroutineContext
 import kotlin.math.max
 
@@ -45,10 +45,22 @@ class ProxyScanner(
         manualPort: Int?,
         onProgress: suspend (ScanProgress) -> Unit,
         preferredType: ProxyType? = null,
-    ): ProxyEndpoint? {
+    ): ProxyEndpoint? = findOpenProxyEndpoints(
+        mode = mode,
+        manualPort = manualPort,
+        onProgress = onProgress,
+        preferredType = preferredType,
+    ).firstOrNull()
+
+    suspend fun findOpenProxyEndpoints(
+        mode: ScanMode,
+        manualPort: Int?,
+        onProgress: suspend (ScanProgress) -> Unit,
+        preferredType: ProxyType? = null,
+    ): List<ProxyEndpoint> {
         return when (mode) {
             ScanMode.MANUAL -> {
-                val port = manualPort ?: return null
+                val port = manualPort ?: return emptyList()
                 onProgress(
                     ScanProgress(
                         phase = ScanPhase.POPULAR_PORTS,
@@ -57,25 +69,22 @@ class ProxyScanner(
                         currentPort = port,
                     ),
                 )
-                tryPort(port, preferredType)
+                listOfNotNull(tryPort(port, preferredType))
             }
 
             ScanMode.AUTO -> {
-                val foundOnPopular = scanPopularPorts(onProgress, preferredType)
-                if (foundOnPopular != null) return foundOnPopular
-                scanFullRange(onProgress, preferredType)
+                scanPopularPorts(onProgress, preferredType) + scanFullRange(onProgress, preferredType)
             }
 
-            ScanMode.POPULAR_ONLY -> {
-                scanPopularPorts(onProgress, preferredType)
-            }
+            ScanMode.POPULAR_ONLY -> scanPopularPorts(onProgress, preferredType)
         }
     }
 
     private suspend fun scanPopularPorts(
         onProgress: suspend (ScanProgress) -> Unit,
         preferredType: ProxyType?,
-    ): ProxyEndpoint? {
+    ): List<ProxyEndpoint> {
+        val found = mutableListOf<ProxyEndpoint>()
         for ((index, port) in filteredPopularPorts.withIndex()) {
             coroutineContext.ensureActive()
             onProgress(
@@ -86,21 +95,20 @@ class ProxyScanner(
                     currentPort = port,
                 ),
             )
-            val found = tryPort(port, preferredType)
-            if (found != null) return found
+            tryPort(port, preferredType)?.let(found::add)
         }
-        return null
+        return found
     }
 
     private suspend fun scanFullRange(
         onProgress: suspend (ScanProgress) -> Unit,
         preferredType: ProxyType?,
-    ): ProxyEndpoint? = withContext(Dispatchers.IO) {
+    ): List<ProxyEndpoint> = withContext(Dispatchers.IO) {
         coroutineScope {
             val popularSet = filteredPopularPorts.toHashSet()
             val total = scanRange.count { it !in popularSet }
             val scanned = AtomicInteger(0)
-            val found = AtomicReference<ProxyEndpoint?>(null)
+            val found = ConcurrentHashMap<Int, ProxyEndpoint>()
 
             val dispatcher = Dispatchers.IO.limitedParallelism(max(1, maxConcurrency))
 
@@ -118,7 +126,6 @@ class ProxyScanner(
                     var port = scanRange.first + workerIndex
                     while (port <= scanRange.last) {
                         coroutineContext.ensureActive()
-                        if (found.get() != null) return@launch
                         if (port !in popularSet) {
                             val count = scanned.incrementAndGet()
                             if (count % progressUpdateEvery == 0) {
@@ -134,8 +141,7 @@ class ProxyScanner(
 
                             val candidate = tryPort(port, preferredType)
                             if (candidate != null) {
-                                found.compareAndSet(null, candidate)
-                                return@launch
+                                found.putIfAbsent(port, candidate)
                             }
                         }
                         port += maxConcurrency
@@ -144,7 +150,9 @@ class ProxyScanner(
             }
             jobs.joinAll()
 
-            found.get()
+            found.entries
+                .sortedBy { it.key }
+                .map { it.value }
         }
     }
 

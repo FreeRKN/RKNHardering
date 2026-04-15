@@ -16,6 +16,11 @@ import com.notcvnt.rknhardering.model.IpCheckerGroupResult
 import com.notcvnt.rknhardering.model.IpCheckerResponse
 import com.notcvnt.rknhardering.model.IpCheckerScope
 import com.notcvnt.rknhardering.model.IpComparisonResult
+import com.notcvnt.rknhardering.model.LocalProxyCheckResult
+import com.notcvnt.rknhardering.model.LocalProxyCheckStatus
+import com.notcvnt.rknhardering.model.LocalProxyOwner
+import com.notcvnt.rknhardering.model.LocalProxyOwnerStatus
+import com.notcvnt.rknhardering.model.LocalProxySummaryReason
 import com.notcvnt.rknhardering.model.CheckResult
 import com.notcvnt.rknhardering.model.MatchedVpnApp
 import com.notcvnt.rknhardering.model.Verdict
@@ -97,6 +102,7 @@ class DebugDiagnosticsFormatterTest {
                 vpnNetworkIp = null,
                 underlyingIp = null,
                 xrayApiScanResult = null,
+                proxyChecks = emptyList(),
                 findings = listOf(Finding("No bypass for 203.0.113.64")),
                 detected = false,
             ),
@@ -118,6 +124,7 @@ class DebugDiagnosticsFormatterTest {
         assertTrue(report.contains("[bypass]"))
         assertTrue(report.contains("[tunProbe]"))
         assertTrue(report.contains("collected: false"))
+        assertTrue(report.contains("proxyChecks:"))
         assertTrue(report.contains("203.0.*.*"))
         assertFalse(report.contains("203.0.113.64"))
     }
@@ -283,6 +290,27 @@ class DebugDiagnosticsFormatterTest {
                         ),
                     ),
                 ),
+                proxyChecks = listOf(
+                    LocalProxyCheckResult(
+                        endpoint = ProxyEndpoint(
+                            host = "127.0.0.1",
+                            port = 1080,
+                            type = ProxyType.SOCKS5,
+                        ),
+                        owner = LocalProxyOwner(
+                            uid = 10123,
+                            packageNames = listOf("com.example.vpn"),
+                            appLabels = listOf("Example VPN"),
+                            confidence = EvidenceConfidence.HIGH,
+                        ),
+                        ownerStatus = LocalProxyOwnerStatus.RESOLVED,
+                        proxyIp = "203.0.113.64",
+                        status = LocalProxyCheckStatus.CONFIRMED_BYPASS,
+                        mtProtoReachable = true,
+                        mtProtoTarget = "149.154.167.51:443",
+                        summaryReason = LocalProxySummaryReason.CONFIRMED_BYPASS,
+                    ),
+                ),
                 findings = listOf(
                     Finding(
                         description = "Bypass via 198.51.100.7",
@@ -330,6 +358,10 @@ class DebugDiagnosticsFormatterTest {
         assertTrue(report.contains("service=TELEGRAM"))
         assertTrue(report.contains("ignoredIpv6Error=true"))
         assertTrue(report.contains("proxyEndpoint: 127.0.0.1:1080 (SOCKS5)"))
+        assertTrue(report.contains("proxyChecks:"))
+        assertTrue(report.contains("ownerStatus=RESOLVED"))
+        assertTrue(report.contains("status=CONFIRMED_BYPASS"))
+        assertTrue(report.contains("summaryReason=CONFIRMED_BYPASS"))
         assertTrue(report.contains("endpoint=127.0.0.1:8080 outboundCount=1"))
         assertTrue(report.contains("uuidPresent=true"))
         assertTrue(report.contains("publicKeyPresent=true"))

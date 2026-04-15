@@ -12,6 +12,7 @@ import com.notcvnt.rknhardering.model.IpCheckerGroupResult
 import com.notcvnt.rknhardering.model.IpCheckerResponse
 import com.notcvnt.rknhardering.model.IpComparisonResult
 import com.notcvnt.rknhardering.model.LocalProxyOwner
+import com.notcvnt.rknhardering.model.LocalProxyCheckResult
 import com.notcvnt.rknhardering.model.MatchedVpnApp
 import com.notcvnt.rknhardering.probe.XrayApiScanResult
 import com.notcvnt.rknhardering.probe.XrayOutboundSummary
@@ -135,6 +136,12 @@ object DebugDiagnosticsFormatter {
             label = "evidence",
             items = bypass.evidence,
             formatter = ::formatEvidence,
+        )
+        appendNamedCollection(
+            builder = builder,
+            label = "proxyChecks",
+            items = bypass.proxyChecks,
+            formatter = ::formatProxyCheck,
         )
         appendNamedCollection(
             builder = builder,
@@ -272,6 +279,20 @@ object DebugDiagnosticsFormatter {
         }.joinToString(" ")
     }
 
+    private fun formatProxyCheck(proxyCheck: LocalProxyCheckResult): String {
+        return buildList {
+            add("endpoint=${formatHostPort(proxyCheck.endpoint.host, proxyCheck.endpoint.port)}")
+            add("type=${proxyCheck.endpoint.type}")
+            add("ownerStatus=${proxyCheck.ownerStatus}")
+            add("owner=${formatProxyOwner(proxyCheck.owner)}")
+            add("proxyIp=${proxyCheck.proxyIp?.let(::maskIp) ?: "<none>"}")
+            add("status=${proxyCheck.status}")
+            add("mtProtoReachable=${proxyCheck.mtProtoReachable?.toString() ?: "<not-run>"}")
+            add("mtProtoTarget=${proxyCheck.mtProtoTarget?.let(::maskHostPort) ?: "<none>"}")
+            add("summaryReason=${proxyCheck.summaryReason ?: "<none>"}")
+        }.joinToString(" ")
+    }
+
     private fun formatIpCheckerResponse(response: IpCheckerResponse): String {
         return buildList {
             add("label=${response.label}")
@@ -311,6 +332,23 @@ object DebugDiagnosticsFormatter {
     private fun formatXrayApiHeader(scanResult: XrayApiScanResult?): String {
         if (scanResult == null) return "<none>"
         return "endpoint=${maskHostOrIp(scanResult.endpoint.host)}:${scanResult.endpoint.port} outboundCount=${scanResult.outbounds.size}"
+    }
+
+    private fun formatHostPort(host: String, port: Int): String {
+        return if (host.contains(':')) "[${maskHostOrIp(host)}]:$port" else "${maskHostOrIp(host)}:$port"
+    }
+
+    private fun maskHostPort(value: String): String {
+        val separatorIndex = value.lastIndexOf(':')
+        if (separatorIndex <= 0 || separatorIndex == value.lastIndex) {
+            return maskHostOrIp(value)
+        }
+        val port = value.substring(separatorIndex + 1)
+        if (!port.all(Char::isDigit)) {
+            return maskHostOrIp(value)
+        }
+        val host = value.substring(0, separatorIndex)
+        return "${maskHostOrIp(host)}:$port"
     }
 
     private fun formatXrayOutbound(outbound: XrayOutboundSummary): String {

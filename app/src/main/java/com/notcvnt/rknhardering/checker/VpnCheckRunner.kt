@@ -23,6 +23,7 @@ data class CheckSettings(
     val networkRequestsEnabled: Boolean = true,
     val callTransportProbeEnabled: Boolean = false,
     val cdnPullingEnabled: Boolean = false,
+    val cdnPullingMeduzaEnabled: Boolean = true,
     val tunProbeDebugEnabled: Boolean = false,
     val tunProbeModeOverride: TunProbeModeOverride = TunProbeModeOverride.AUTO,
     val resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
@@ -50,8 +51,8 @@ object VpnCheckRunner {
             { ctx, resolverConfig -> GeoIpChecker.check(ctx, resolverConfig) },
         val ipComparisonCheck: suspend (Context, DnsResolverConfig) -> IpComparisonResult =
             { ctx, resolverConfig -> IpComparisonChecker.check(ctx, resolverConfig = resolverConfig) },
-        val cdnPullingCheck: suspend (Context, DnsResolverConfig) -> CdnPullingResult =
-            { ctx, resolverConfig -> CdnPullingChecker.check(ctx, resolverConfig = resolverConfig) },
+        val cdnPullingCheck: suspend (Context, DnsResolverConfig, Boolean) -> CdnPullingResult =
+            { ctx, resolverConfig, meduzaEnabled -> CdnPullingChecker.check(ctx, resolverConfig = resolverConfig, meduzaEnabled = meduzaEnabled) },
         val underlyingProbe: suspend (
             Context,
             DnsResolverConfig,
@@ -131,7 +132,7 @@ object VpnCheckRunner {
         } else null
 
         val cdnPullingDeferred = if (settings.networkRequestsEnabled && settings.cdnPullingEnabled) {
-            async { dependencies.cdnPullingCheck(context, settings.resolverConfig) }
+            async { dependencies.cdnPullingCheck(context, settings.resolverConfig, settings.cdnPullingMeduzaEnabled) }
         } else null
 
         val tunActiveProbeDeferred = if (settings.splitTunnelEnabled) {

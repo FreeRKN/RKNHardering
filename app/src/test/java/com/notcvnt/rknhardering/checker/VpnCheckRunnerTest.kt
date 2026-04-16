@@ -236,7 +236,7 @@ class VpnCheckRunnerTest {
         VpnCheckRunner.dependenciesOverride = VpnCheckRunner.Dependencies(
             geoIpCheck = { _, _ -> category("geo") },
             ipComparisonCheck = { _, _ -> emptyIpComparison() },
-            cdnPullingCheck = { _, _ ->
+            cdnPullingCheck = { _, _, _ ->
                 cdnCalls += 1
                 CdnPullingResult(
                     detected = true,
@@ -285,7 +285,7 @@ class VpnCheckRunnerTest {
         VpnCheckRunner.dependenciesOverride = VpnCheckRunner.Dependencies(
             geoIpCheck = { _, _ -> category("geo") },
             ipComparisonCheck = { _, _ -> emptyIpComparison() },
-            cdnPullingCheck = { _, _ ->
+            cdnPullingCheck = { _, _, _ ->
                 cdnCalls += 1
                 error("CDN pulling should not run when disabled")
             },

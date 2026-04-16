@@ -80,6 +80,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var switchNetworkRequests: MaterialSwitch
     private lateinit var cardCdnPulling: MaterialCardView
     private lateinit var switchCdnPulling: MaterialSwitch
+    private lateinit var cardCdnPullingMeduza: MaterialCardView
+    private lateinit var switchCdnPullingMeduza: MaterialSwitch
     private lateinit var cardCallTransportProbe: MaterialCardView
     private lateinit var switchCallTransportProbe: MaterialSwitch
     private lateinit var cardResolver: MaterialCardView
@@ -141,6 +143,8 @@ class SettingsActivity : AppCompatActivity() {
         switchNetworkRequests = findViewById(R.id.switchNetworkRequests)
         cardCdnPulling = findViewById(R.id.cardCdnPulling)
         switchCdnPulling = findViewById(R.id.switchCdnPulling)
+        cardCdnPullingMeduza = findViewById(R.id.cardCdnPullingMeduza)
+        switchCdnPullingMeduza = findViewById(R.id.switchCdnPullingMeduza)
         cardCallTransportProbe = findViewById(R.id.cardCallTransportProbe)
         switchCallTransportProbe = findViewById(R.id.switchCallTransportProbe)
         cardResolver = findViewById(R.id.cardResolver)
@@ -165,6 +169,7 @@ class SettingsActivity : AppCompatActivity() {
         switchXrayApiScan.isChecked = prefs.getBoolean(PREF_XRAY_API_SCAN_ENABLED, true)
         switchNetworkRequests.isChecked = prefs.getBoolean(PREF_NETWORK_REQUESTS_ENABLED, true)
         switchCdnPulling.isChecked = prefs.getBoolean(PREF_CDN_PULLING_ENABLED, false)
+        switchCdnPullingMeduza.isChecked = prefs.getBoolean(PREF_CDN_PULLING_MEDUZA_ENABLED, true)
         switchCallTransportProbe.isChecked = prefs.getBoolean(PREF_CALL_TRANSPORT_PROBE_ENABLED, false)
         switchPrivacyMode.isChecked = prefs.getBoolean(PREF_PRIVACY_MODE, false)
 
@@ -172,6 +177,7 @@ class SettingsActivity : AppCompatActivity() {
         updateTunProbeModeEnabled(switchSplitTunnel.isChecked)
         updatePortRangeEnabled(switchSplitTunnel.isChecked && isAnyLocalScanEnabled())
         updateCdnPullingEnabled(switchNetworkRequests.isChecked)
+        updateCdnPullingMeduzaVisible(switchCdnPulling.isChecked)
         updateCallTransportEnabled(switchNetworkRequests.isChecked)
         loadTunProbeSettings()
 
@@ -263,7 +269,12 @@ class SettingsActivity : AppCompatActivity() {
                 showCdnPullingWarning()
             } else {
                 prefs.edit { putBoolean(PREF_CDN_PULLING_ENABLED, false) }
+                updateCdnPullingMeduzaVisible(false)
             }
+        }
+
+        switchCdnPullingMeduza.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit { putBoolean(PREF_CDN_PULLING_MEDUZA_ENABLED, isChecked) }
         }
 
         switchCallTransportProbe.setOnCheckedChangeListener { _, isChecked ->
@@ -388,6 +399,11 @@ class SettingsActivity : AppCompatActivity() {
     private fun updateCdnPullingEnabled(enabled: Boolean) {
         cardCdnPulling.alpha = if (enabled) 1.0f else 0.5f
         setViewAndChildrenEnabled(cardCdnPulling, enabled)
+        if (!enabled) updateCdnPullingMeduzaVisible(false)
+    }
+
+    private fun updateCdnPullingMeduzaVisible(visible: Boolean) {
+        cardCdnPullingMeduza.visibility = if (visible) View.VISIBLE else View.GONE
     }
 
     private fun showCdnPullingWarning() {
@@ -396,6 +412,7 @@ class SettingsActivity : AppCompatActivity() {
             .setMessage(buildCdnPullingWarningMessage(this))
             .setPositiveButton(R.string.settings_cdn_pulling_warning_confirm) { _, _ ->
                 prefs.edit { putBoolean(PREF_CDN_PULLING_ENABLED, true) }
+                updateCdnPullingMeduzaVisible(true)
             }
             .setNegativeButton(android.R.string.cancel) { _, _ ->
                 setCdnPullingSwitch(false)
@@ -639,6 +656,7 @@ class SettingsActivity : AppCompatActivity() {
         const val PREF_PORT_RANGE_END = "pref_port_range_end"
         const val PREF_NETWORK_REQUESTS_ENABLED = "pref_network_requests_enabled"
         const val PREF_CDN_PULLING_ENABLED = "pref_cdn_pulling_enabled"
+        const val PREF_CDN_PULLING_MEDUZA_ENABLED = "pref_cdn_pulling_meduza_enabled"
         const val PREF_CALL_TRANSPORT_PROBE_ENABLED = "pref_call_transport_probe_enabled"
         const val PREF_TUN_PROBE_DEBUG_ENABLED = "pref_tun_probe_debug_enabled"
         const val PREF_TUN_PROBE_MODE_OVERRIDE = "pref_tun_probe_mode_override"

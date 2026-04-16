@@ -36,6 +36,8 @@
     <string name="settings_cdn_pulling_warning_title">Enable CDN pulling?</string>
     <string name="settings_cdn_pulling_warning_message">The app will send normal web requests to Google/YouTube, rutracker.org and meduza.io. These sites may see your device public IP and return short network details like country, datacenter, or proxy mode.</string>
     <string name="settings_cdn_pulling_warning_confirm">Enable</string>
+    <string name="settings_cdn_pulling_meduza">Include meduza.io</string>
+    <string name="settings_cdn_pulling_meduza_desc">Send a request to meduza.io/cdn-cgi/trace as part of CDN pulling.</string>
     <string name="settings_call_transport_probe">Call transport leak probe</string>
     <string name="settings_call_transport_probe_desc">Sends additional UDP/STUN requests to bundled Telegram targets. WhatsApp tracing runs only in debug or experimental builds.</string>
     <string name="settings_network_disable_confirm">Disable</string>

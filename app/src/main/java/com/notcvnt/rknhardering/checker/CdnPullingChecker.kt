@@ -48,9 +48,11 @@ object CdnPullingChecker {
         context: Context,
         timeoutMs: Int = 7000,
         resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
+        meduzaEnabled: Boolean = true,
     ): CdnPullingResult = withContext(Dispatchers.IO) {
         coroutineScope {
-            val responses = ENDPOINTS.map { endpoint ->
+            val activeEndpoints = if (meduzaEnabled) ENDPOINTS else ENDPOINTS.filter { it.label != "meduza.io" }
+            val responses = activeEndpoints.map { endpoint ->
                 async {
                     val bodyResult = fetchBodyWithRetries(
                         endpoint = endpoint.url,

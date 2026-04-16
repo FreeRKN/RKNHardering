@@ -37,6 +37,8 @@
     <string name="settings_cdn_pulling_warning_title">Включить CDN pulling?</string>
     <string name="settings_cdn_pulling_warning_message">Приложение отправит обычные веб-запросы на Google/YouTube, rutracker.org и meduza.io. Эти сайты смогут увидеть внешний IP вашего устройства и вернуть короткие сетевые данные вроде страны, дата-центра или режима прокси.</string>
     <string name="settings_cdn_pulling_warning_confirm">Включить</string>
+    <string name="settings_cdn_pulling_meduza">Включить meduza.io</string>
+    <string name="settings_cdn_pulling_meduza_desc">Отправлять запрос на meduza.io/cdn-cgi/trace в рамках CDN pulling.</string>
     <string name="settings_call_transport_probe">Утечки call transport</string>
     <string name="settings_call_transport_probe_desc">Отправляет дополнительные UDP/STUN-запросы к встроенным Telegram-целям. Трассировка WhatsApp работает только в debug или experimental сборках.</string>
     <string name="settings_dns_resolver">DNS-резолвер</string>

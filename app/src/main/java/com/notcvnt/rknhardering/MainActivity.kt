@@ -586,6 +586,7 @@ class MainActivity : AppCompatActivity() {
         val networkRequestsEnabled = prefs.getBoolean(SettingsActivity.PREF_NETWORK_REQUESTS_ENABLED, true)
         val callTransportProbeEnabled = prefs.getBoolean(SettingsActivity.PREF_CALL_TRANSPORT_PROBE_ENABLED, false)
         val cdnPullingEnabled = prefs.getBoolean(SettingsActivity.PREF_CDN_PULLING_ENABLED, false)
+        val cdnPullingMeduzaEnabled = prefs.getBoolean(SettingsActivity.PREF_CDN_PULLING_MEDUZA_ENABLED, true)
         val tunProbeDebugEnabled = prefs.getBoolean(SettingsActivity.PREF_TUN_PROBE_DEBUG_ENABLED, false)
         val tunProbeModeOverride = com.notcvnt.rknhardering.probe.TunProbeModeOverride.fromPref(
             prefs.getString(
@@ -613,6 +614,7 @@ class MainActivity : AppCompatActivity() {
             networkRequestsEnabled = networkRequestsEnabled,
             callTransportProbeEnabled = callTransportProbeEnabled,
             cdnPullingEnabled = cdnPullingEnabled,
+            cdnPullingMeduzaEnabled = cdnPullingMeduzaEnabled,
             tunProbeDebugEnabled = tunProbeDebugEnabled,
             tunProbeModeOverride = tunProbeModeOverride,
             resolverConfig = resolverConfig,

@@ -197,6 +197,7 @@ class IpComparisonCheckerTest {
             endpoint = "https://example.com/ip",
             timeoutMs = 1_000,
             resolverConfig = DnsResolverConfig.system(),
+            maxAttempts = 3,
             retryDelayMs = 0,
         ) { _, _, _ ->
             attempts += 1

@@ -18,7 +18,7 @@ import org.json.JSONObject
 
 object GeoIpChecker {
 
-    private const val MAX_FETCH_ATTEMPTS = 3
+    private const val MAX_FETCH_ATTEMPTS = 1
     private const val RETRY_DELAY_MS = 250L
     private const val GEOIP_TIMEOUT_MS = 10_000
 

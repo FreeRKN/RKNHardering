@@ -58,6 +58,10 @@ object NativeCurlBridge {
         return isLibraryLoadedOverride?.invoke() ?: libraryLoaded
     }
 
+    fun canExecute(): Boolean {
+        return executeOverride != null || (isLibraryLoaded() && caBundleInfo?.absolutePath?.isNotBlank() == true)
+    }
+
     fun execute(requestJson: String): String {
         val request = NativeCurlRequest.fromJson(requestJson)
         return execute(request).toJson()
@@ -75,6 +79,12 @@ object NativeCurlBridge {
         val raw = nativeExecuteRaw(
             url = request.url,
             interfaceName = request.interfaceName,
+            method = request.method,
+            headers = request.headers.toTypedArray(),
+            body = request.body.orEmpty(),
+            followRedirects = request.followRedirects,
+            proxyUrl = request.proxyUrl.orEmpty(),
+            proxyType = request.proxyType.nativeValue,
             resolveRules = request.resolveRules.map(NativeCurlResolveRule::toCurlRule).toTypedArray(),
             ipResolveMode = request.ipResolveMode.nativeValue,
             timeoutMs = request.timeoutMs,
@@ -114,6 +124,12 @@ object NativeCurlBridge {
     private external fun nativeExecuteRaw(
         url: String,
         interfaceName: String,
+        method: String,
+        headers: Array<String>,
+        body: String,
+        followRedirects: Boolean,
+        proxyUrl: String,
+        proxyType: Int,
         resolveRules: Array<String>,
         ipResolveMode: Int,
         timeoutMs: Int,

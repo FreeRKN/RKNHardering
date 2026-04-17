@@ -7,6 +7,12 @@ jobjectArray ExecuteNativeCurlRequest(
     JNIEnv* env,
     jstring url,
     jstring interface_name,
+    jstring method,
+    jobjectArray headers,
+    jstring body,
+    jboolean follow_redirects,
+    jstring proxy_url,
+    jint proxy_type,
     jobjectArray resolve_rules,
     jint ip_resolve_mode,
     jint timeout_ms,
@@ -16,4 +22,3 @@ jobjectArray ExecuteNativeCurlRequest(
 );
 
 #endif
-

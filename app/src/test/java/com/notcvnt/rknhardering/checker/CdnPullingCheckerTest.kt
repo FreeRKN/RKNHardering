@@ -6,6 +6,8 @@ import com.notcvnt.rknhardering.R
 import com.notcvnt.rknhardering.model.CdnPullingResponse
 import com.notcvnt.rknhardering.network.DnsResolverConfig
 import java.io.IOException
+import java.security.cert.CertPathValidatorException
+import javax.net.ssl.SSLHandshakeException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -113,5 +115,39 @@ class CdnPullingCheckerTest {
         assertTrue(result.isSuccess)
         assertEquals("ip=203.0.113.64", result.getOrNull())
         assertEquals(3, attempts)
+    }
+
+    @Test
+    fun `fetchBodyWithRetries does not retry untrusted tls certificate failures`() = runBlocking {
+        var attempts = 0
+        val error = SSLHandshakeException("Handshake failed").apply {
+            initCause(CertPathValidatorException("Trust anchor for certification path not found"))
+        }
+
+        val result = CdnPullingChecker.fetchBodyWithRetries(
+            endpoint = "https://rutracker.org/cdn-cgi/trace",
+            timeoutMs = 1000,
+            resolverConfig = DnsResolverConfig.system(),
+            maxAttempts = 3,
+            retryDelayMs = 0,
+        ) { _, _, _ ->
+            attempts += 1
+            Result.failure(error)
+        }
+
+        assertTrue(result.isFailure)
+        assertEquals(1, attempts)
+    }
+
+    @Test
+    fun `formatError explains tls trust failures`() {
+        val error = SSLHandshakeException("Handshake failed").apply {
+            initCause(CertPathValidatorException("Trust anchor for certification path not found"))
+        }
+
+        val message = CdnPullingChecker.formatError(context, error)
+
+        assertTrue(message.contains(context.getString(R.string.checker_cdn_pulling_error_tls_certificate)))
+        assertTrue(message.contains("Trust anchor for certification path not found"))
     }
 }

@@ -109,18 +109,40 @@
                 android:textSize="12sp"
                 android:visibility="gone" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnCopyDiagnostics"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:id="@+id/resultActionsContainer"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
-                android:minWidth="0dp"
-                android:paddingStart="0dp"
-                android:paddingEnd="0dp"
-                android:text="@string/main_copy_diagnostics"
-                android:textAllCaps="false"
-                android:visibility="gone" />
+                android:gravity="start|center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCopyDiagnostics"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="0dp"
+                    android:paddingStart="0dp"
+                    android:paddingEnd="0dp"
+                    android:text="@string/main_copy_diagnostics"
+                    android:textAllCaps="false"
+                    android:visibility="gone" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnExport"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:minWidth="0dp"
+                    android:paddingStart="0dp"
+                    android:paddingEnd="0dp"
+                    android:text="@string/main_export"
+                    android:textAllCaps="false"
+                    android:visibility="gone" />
+            </LinearLayout>
 
             <!-- GeoIP Card -->
             <com.google.android.material.card.MaterialCardView

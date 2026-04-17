@@ -306,7 +306,7 @@ class GeoIpCheckerTest {
     fun `geoip fetch retries up to third attempt before succeeding`() = runBlocking {
         var attempts = 0
 
-        val result = GeoIpChecker.fetchWithRetries(retryDelayMs = 0) {
+        val result = GeoIpChecker.fetchWithRetries(maxAttempts = 3, retryDelayMs = 0) {
             attempts += 1
             if (attempts < 3) null else "ok"
         }

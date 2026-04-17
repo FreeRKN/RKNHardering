@@ -3,9 +3,11 @@
 #include <curl/curl.h>
 #include <jni.h>
 
+#include <cctype>
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <algorithm>
 #include <vector>
 
 namespace {
@@ -66,6 +68,28 @@ long CurlIpResolveMode(jint mode) {
   }
 }
 
+long CurlProxyType(jint mode) {
+  switch (mode) {
+    case 1:
+      return CURLPROXY_HTTP;
+    case 2:
+      return CURLPROXY_SOCKS5_HOSTNAME;
+    default:
+      return CURLPROXY_HTTP;
+  }
+}
+
+std::string NormalizeMethod(const std::string& method) {
+  if (method.empty()) {
+    return "GET";
+  }
+  std::string normalized = method;
+  std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch) {
+    return static_cast<char>(std::toupper(ch));
+  });
+  return normalized;
+}
+
 std::string AddressesFromResolveRule(const std::string& rule) {
   const size_t first = rule.find(':');
   if (first == std::string::npos) {
@@ -81,6 +105,12 @@ std::string AddressesFromResolveRule(const std::string& rule) {
 CurlExecutionResult ExecuteRequest(
     const std::string& url,
     const std::string& interface_name,
+    const std::string& method,
+    const std::vector<std::string>& headers,
+    const std::string& body,
+    bool follow_redirects,
+    const std::string& proxy_url,
+    jint proxy_type,
     const std::vector<std::string>& resolve_rules,
     jint ip_resolve_mode,
     jint timeout_ms,
@@ -91,10 +121,6 @@ CurlExecutionResult ExecuteRequest(
 
   if (url.empty()) {
     result.local_error = "url is empty";
-    return result;
-  }
-  if (interface_name.empty()) {
-    result.local_error = "interfaceName is empty";
     return result;
   }
   if (ca_bundle_path.empty()) {
@@ -111,20 +137,24 @@ CurlExecutionResult ExecuteRequest(
   }
 
   curl_slist* resolve_list = nullptr;
+  curl_slist* header_list = nullptr;
   for (const std::string& rule : resolve_rules) {
     resolve_list = curl_slist_append(resolve_list, rule.c_str());
     if (result.resolved_addresses_csv.empty()) {
       result.resolved_addresses_csv = AddressesFromResolveRule(rule);
     }
   }
+  for (const std::string& header : headers) {
+    header_list = curl_slist_append(header_list, header.c_str());
+  }
 
   char error_buffer[CURL_ERROR_SIZE] = {0};
   std::string response_body;
-  const std::string interface_option = "if!" + interface_name;
+  const std::string normalized_method = NormalizeMethod(method);
+  const std::string interface_option = interface_name.empty() ? "" : "if!" + interface_name;
 
   curl_easy_setopt(handle, CURLOPT_URL, url.c_str());
-  curl_easy_setopt(handle, CURLOPT_HTTPGET, 1L);
-  curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 0L);
+  curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, follow_redirects ? 1L : 0L);
   curl_easy_setopt(handle, CURLOPT_NOSIGNAL, 1L);
   curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, static_cast<long>(timeout_ms));
   curl_easy_setopt(handle, CURLOPT_CONNECTTIMEOUT_MS, static_cast<long>(connect_timeout_ms));
@@ -135,10 +165,35 @@ CurlExecutionResult ExecuteRequest(
   curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 1L);
   curl_easy_setopt(handle, CURLOPT_SSL_VERIFYHOST, 2L);
   curl_easy_setopt(handle, CURLOPT_IPRESOLVE, CurlIpResolveMode(ip_resolve_mode));
-  curl_easy_setopt(handle, CURLOPT_INTERFACE, interface_option.c_str());
-  curl_easy_setopt(handle, CURLOPT_PROXY, "");
-  curl_easy_setopt(handle, CURLOPT_NOPROXY, "*");
   curl_easy_setopt(handle, CURLOPT_VERBOSE, debug_verbose ? 1L : 0L);
+  if (!interface_option.empty()) {
+    curl_easy_setopt(handle, CURLOPT_INTERFACE, interface_option.c_str());
+  }
+  if (header_list != nullptr) {
+    curl_easy_setopt(handle, CURLOPT_HTTPHEADER, header_list);
+  }
+
+  if (normalized_method == "GET") {
+    curl_easy_setopt(handle, CURLOPT_HTTPGET, 1L);
+  } else if (normalized_method == "POST") {
+    curl_easy_setopt(handle, CURLOPT_POST, 1L);
+    curl_easy_setopt(handle, CURLOPT_POSTFIELDS, body.c_str());
+    curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
+  } else {
+    curl_easy_setopt(handle, CURLOPT_CUSTOMREQUEST, normalized_method.c_str());
+    if (!body.empty()) {
+      curl_easy_setopt(handle, CURLOPT_POSTFIELDS, body.c_str());
+      curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
+    }
+  }
+
+  if (!proxy_url.empty()) {
+    curl_easy_setopt(handle, CURLOPT_PROXY, proxy_url.c_str());
+    curl_easy_setopt(handle, CURLOPT_PROXYTYPE, CurlProxyType(proxy_type));
+  } else {
+    curl_easy_setopt(handle, CURLOPT_PROXY, "");
+    curl_easy_setopt(handle, CURLOPT_NOPROXY, "*");
+  }
 
   if (resolve_list != nullptr) {
     curl_easy_setopt(handle, CURLOPT_RESOLVE, resolve_list);
@@ -159,6 +214,7 @@ CurlExecutionResult ExecuteRequest(
     result.error_buffer = curl_easy_strerror(result.curl_code);
   }
 
+  curl_slist_free_all(header_list);
   curl_slist_free_all(resolve_list);
   curl_easy_cleanup(handle);
   return result;
@@ -170,6 +226,12 @@ jobjectArray ExecuteNativeCurlRequest(
     JNIEnv* env,
     jstring url,
     jstring interface_name,
+    jstring method,
+    jobjectArray headers,
+    jstring body,
+    jboolean follow_redirects,
+    jstring proxy_url,
+    jint proxy_type,
     jobjectArray resolve_rules,
     jint ip_resolve_mode,
     jint timeout_ms,
@@ -177,6 +239,16 @@ jobjectArray ExecuteNativeCurlRequest(
     jstring ca_bundle_path,
     jboolean debug_verbose) {
   std::vector<std::string> parsed_rules;
+  std::vector<std::string> parsed_headers;
+  if (headers != nullptr) {
+    const jsize header_count = env->GetArrayLength(headers);
+    parsed_headers.reserve(static_cast<size_t>(header_count));
+    for (jsize index = 0; index < header_count; ++index) {
+      auto* header = static_cast<jstring>(env->GetObjectArrayElement(headers, index));
+      parsed_headers.push_back(JStringToStdString(env, header));
+      env->DeleteLocalRef(header);
+    }
+  }
   if (resolve_rules != nullptr) {
     const jsize rule_count = env->GetArrayLength(resolve_rules);
     parsed_rules.reserve(static_cast<size_t>(rule_count));
@@ -190,6 +262,12 @@ jobjectArray ExecuteNativeCurlRequest(
   const CurlExecutionResult result = ExecuteRequest(
       JStringToStdString(env, url),
       JStringToStdString(env, interface_name),
+      JStringToStdString(env, method),
+      parsed_headers,
+      JStringToStdString(env, body),
+      follow_redirects == JNI_TRUE,
+      JStringToStdString(env, proxy_url),
+      proxy_type,
       parsed_rules,
       ip_resolve_mode,
       timeout_ms,
@@ -214,6 +292,12 @@ Java_com_notcvnt_rknhardering_probe_NativeCurlBridge_nativeExecuteRaw(
     jobject /* this */,
     jstring url,
     jstring interface_name,
+    jstring method,
+    jobjectArray headers,
+    jstring body,
+    jboolean follow_redirects,
+    jstring proxy_url,
+    jint proxy_type,
     jobjectArray resolve_rules,
     jint ip_resolve_mode,
     jint timeout_ms,
@@ -224,6 +308,12 @@ Java_com_notcvnt_rknhardering_probe_NativeCurlBridge_nativeExecuteRaw(
       env,
       url,
       interface_name,
+      method,
+      headers,
+      body,
+      follow_redirects,
+      proxy_url,
+      proxy_type,
       resolve_rules,
       ip_resolve_mode,
       timeout_ms,
@@ -231,4 +321,3 @@ Java_com_notcvnt_rknhardering_probe_NativeCurlBridge_nativeExecuteRaw(
       ca_bundle_path,
       debug_verbose);
 }
-

@@ -18,7 +18,7 @@ import java.net.URL
 
 object IpComparisonChecker {
 
-    private const val MAX_FETCH_ATTEMPTS = 3
+    private const val MAX_FETCH_ATTEMPTS = 1
     private const val RETRY_DELAY_MS = 250L
 
     private enum class IpFamily {

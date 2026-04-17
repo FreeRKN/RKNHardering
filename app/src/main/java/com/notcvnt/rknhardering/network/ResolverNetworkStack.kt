@@ -28,10 +28,27 @@ data class ResolverHttpResponse(
     val body: String,
 )
 
+internal data class ResolverHttpRequest(
+    val url: String,
+    val method: String,
+    val headers: Map<String, String>,
+    val body: String?,
+    val bodyContentType: String?,
+    val timeoutMs: Int,
+    val config: DnsResolverConfig,
+    val proxy: Proxy?,
+    val binding: ResolverBinding?,
+)
+
 object ResolverNetworkStack {
+    internal const val OKHTTP_RETRY_COUNT = 2
+    internal const val NATIVE_CURL_RETRY_COUNT = 2
+
     private val lock = Any()
     @Volatile
     internal var dnsFactoryOverride: ((DnsResolverConfig, ResolverBinding?) -> Dns)? = null
+    @Volatile
+    internal var okHttpExecuteOverride: ((ResolverHttpRequest) -> ResolverHttpResponse)? = null
     @Volatile
     private var cachedConfig: DnsResolverConfig? = null
     @Volatile
@@ -54,6 +71,7 @@ object ResolverNetworkStack {
             cachedDns = null
             cachedClient = null
         }
+        okHttpExecuteOverride = null
         ResolverSocketBinder.resetForTests()
     }
 
@@ -68,22 +86,69 @@ object ResolverNetworkStack {
         proxy: Proxy? = null,
         binding: ResolverBinding? = null,
     ): ResolverHttpResponse {
-        val requestBuilder = Request.Builder().url(url)
-        headers.forEach { (name, value) -> requestBuilder.header(name, value) }
-        val requestBody = body?.toRequestBody(bodyContentType?.toMediaTypeOrNull())
-        when (method.uppercase()) {
-            "GET" -> requestBuilder.get()
-            "POST" -> requestBuilder.post(requestBody ?: ByteArray(0).toRequestBody(bodyContentType?.toMediaTypeOrNull()))
-            else -> requestBuilder.method(method.uppercase(), requestBody)
+        val request = ResolverHttpRequest(
+            url = url,
+            method = method,
+            headers = headers,
+            body = body,
+            bodyContentType = bodyContentType,
+            timeoutMs = timeoutMs,
+            config = config,
+            proxy = proxy,
+            binding = binding,
+        )
+        return executeWithFallback(request)
+    }
+
+    private fun executeWithFallback(request: ResolverHttpRequest): ResolverHttpResponse {
+        var okHttpError: Throwable? = null
+        repeat(OKHTTP_RETRY_COUNT + 1) {
+            try {
+                return executeWithOkHttp(request)
+            } catch (error: Exception) {
+                okHttpError = error
+            }
         }
-        val client = baseClient(config, binding)
+
+        if (NativeCurlHttpClient.canExecute(request)) {
+            var nativeCurlError: Throwable? = null
+            repeat(NATIVE_CURL_RETRY_COUNT + 1) {
+                try {
+                    return NativeCurlHttpClient.execute(request)
+                } catch (error: Exception) {
+                    nativeCurlError = error
+                }
+            }
+            throw CombinedTransportIOException(
+                okHttpError = okHttpError,
+                nativeCurlError = nativeCurlError,
+                okHttpAttempts = OKHTTP_RETRY_COUNT + 1,
+                nativeCurlAttempts = NATIVE_CURL_RETRY_COUNT + 1,
+            )
+        }
+
+        throw (okHttpError as? IOException ?: IOException(okHttpError?.message ?: "HTTP request failed", okHttpError))
+    }
+
+    private fun executeWithOkHttp(request: ResolverHttpRequest): ResolverHttpResponse {
+        okHttpExecuteOverride?.let { return it(request) }
+
+        val requestBuilder = Request.Builder().url(request.url)
+        request.headers.forEach { (name, value) -> requestBuilder.header(name, value) }
+        val requestBody = request.body?.toRequestBody(request.bodyContentType?.toMediaTypeOrNull())
+        when (request.method.uppercase()) {
+            "GET" -> requestBuilder.get()
+            "POST" -> requestBuilder.post(requestBody ?: ByteArray(0).toRequestBody(request.bodyContentType?.toMediaTypeOrNull()))
+            else -> requestBuilder.method(request.method.uppercase(), requestBody)
+        }
+        val client = baseClient(request.config, request.binding)
             .newBuilder()
-            .connectTimeout(timeoutMs.toLong(), TimeUnit.MILLISECONDS)
-            .readTimeout(timeoutMs.toLong(), TimeUnit.MILLISECONDS)
-            .callTimeout((timeoutMs * 2L).coerceAtLeast(timeoutMs.toLong()), TimeUnit.MILLISECONDS)
+            .connectTimeout(request.timeoutMs.toLong(), TimeUnit.MILLISECONDS)
+            .readTimeout(request.timeoutMs.toLong(), TimeUnit.MILLISECONDS)
+            .callTimeout((request.timeoutMs * 2L).coerceAtLeast(request.timeoutMs.toLong()), TimeUnit.MILLISECONDS)
             .apply {
-                if (proxy != null) {
-                    proxy(proxy)
+                if (request.proxy != null) {
+                    proxy(request.proxy)
                 }
             }
             .build()
@@ -224,6 +289,21 @@ object ResolverNetworkStack {
         }
     }
 }
+
+private class CombinedTransportIOException(
+    okHttpError: Throwable?,
+    nativeCurlError: Throwable?,
+    okHttpAttempts: Int,
+    nativeCurlAttempts: Int,
+) : IOException(
+    buildString {
+        append("OkHttp failed after ").append(okHttpAttempts).append(" attempts")
+        okHttpError?.message?.takeIf { it.isNotBlank() }?.let { append(": ").append(it) }
+        append("; native curl failed after ").append(nativeCurlAttempts).append(" attempts")
+        nativeCurlError?.message?.takeIf { it.isNotBlank() }?.let { append(": ").append(it) }
+    },
+    nativeCurlError ?: okHttpError,
+)
 
 /**
  * SocketFactory that applies SO_BINDTODEVICE to each unconnected socket before OkHttp connects it.

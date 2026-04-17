@@ -291,15 +291,15 @@ class GeoIpCheckerTest {
     }
 
     @Test
-    fun `no provider result is review and not error`() {
+    fun `no provider result is undetected and not error`() {
         val result = GeoIpChecker.noProviderResult(
             context.getString(R.string.checker_geo_error_no_provider),
         )
 
         assertFalse(result.detected)
-        assertTrue(result.needsReview)
+        assertFalse(result.needsReview)
         assertFalse(result.hasError)
-        assertTrue(result.findings.all { it.needsReview && !it.isError })
+        assertTrue(result.findings.all { !it.needsReview && !it.isError })
     }
 
     @Test

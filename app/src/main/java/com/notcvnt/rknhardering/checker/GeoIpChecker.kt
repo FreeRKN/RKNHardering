@@ -325,8 +325,7 @@ object GeoIpChecker {
         return CategoryResult(
             name = "GeoIP",
             detected = false,
-            needsReview = true,
-            findings = listOf(Finding(message, needsReview = true)),
+            findings = listOf(Finding(message)),
         )
     }
 

@@ -88,6 +88,15 @@
     <string name="settings_github">GitHub</string>
     <string name="main_copy_diagnostics">复制诊断</string>
     <string name="main_diagnostics_copied">诊断已复制</string>
+    <string name="main_export">导出</string>
+    <string name="main_export_title">导出结果</string>
+    <string name="main_export_markdown">Markdown (.md)</string>
+    <string name="main_export_json">JSON (.json)</string>
+    <string name="main_export_save_file">保存文件</string>
+    <string name="main_export_copy_to_clipboard">复制到剪贴板</string>
+    <string name="main_export_copied">导出已复制</string>
+    <string name="main_export_saved">导出已保存</string>
+    <string name="main_export_failed">保存导出失败</string>
     <string name="settings_github_desc">xtclovver/RKNHardering</string>
     <string name="settings_port_range_from">从</string>
     <string name="settings_port_range_to">到</string>

@@ -88,6 +88,15 @@
     <string name="settings_github">GitHub</string>
     <string name="main_copy_diagnostics">Копировать диагностику</string>
     <string name="main_diagnostics_copied">Диагностика скопирована</string>
+    <string name="main_export">Экспорт</string>
+    <string name="main_export_title">Экспорт результата</string>
+    <string name="main_export_markdown">Markdown (.md)</string>
+    <string name="main_export_json">JSON (.json)</string>
+    <string name="main_export_save_file">Сохранить файл</string>
+    <string name="main_export_copy_to_clipboard">Копировать в буфер</string>
+    <string name="main_export_copied">Экспорт скопирован</string>
+    <string name="main_export_saved">Экспорт сохранён</string>
+    <string name="main_export_failed">Не удалось сохранить экспорт</string>
     <string name="settings_github_desc">xtclovver/RKNHardering</string>
     <string name="settings_port_range_from">От</string>
     <string name="settings_port_range_to">До</string>
@@ -299,6 +308,8 @@
     <string name="checker_cdn_pulling_summary_detected_partial">%2$d из %3$d CDN-целей ответили и показали IP %1$s</string>
     <string name="checker_cdn_pulling_summary_detected_no_ip">%1$d из %2$d CDN-целей вернули trace-данные, но не во всех ответах был IP</string>
     <string name="checker_cdn_pulling_error_unrecognized">Формат ответа не распознан</string>
+    <string name="checker_cdn_pulling_error_tls_certificate">Не удалось проверить доверенную цепочку TLS-сертификата. Возможные причины: HTTPS-перехват, неверный DNS-ответ или устаревшее хранилище корневых сертификатов Android.</string>
+    <string name="checker_cdn_pulling_error_details">Детали: %1$s</string>
 
     <!-- DirectSignsChecker -->
     <string name="checker_direct_category_name">Прямые признаки</string>

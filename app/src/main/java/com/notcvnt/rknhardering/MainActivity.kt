@@ -2730,21 +2730,29 @@ class MainActivity : AppCompatActivity() {
         val status = statusFromCategory(result.detected, result.needsReview, hasError = false)
         val ru = result.ruGroup.responses.size
         val nonRu = result.nonRuGroup.responses.size
-        val hint = if (ru + nonRu > 0) {
-            getString(R.string.tile_hint_clean_count, ru + nonRu)
-        } else {
-            null
+        val total = ru + nonRu
+        val hint = when {
+            result.detected -> getString(R.string.tile_hint_review)
+            result.needsReview -> getString(R.string.tile_hint_review)
+            total > 0 -> getString(R.string.tile_hint_clean_count, total)
+            else -> null
         }
         setTileStatus(CATEGORY_IPC, status, hint)
     }
 
     private fun updateTileFromCdn(result: CdnPullingResult) {
-        val status = statusFromCategory(result.detected, result.needsReview, result.hasError)
+        val status = when {
+            result.needsReview -> TILE_STATUS_REVIEW
+            result.hasError -> TILE_STATUS_REVIEW
+            result.detected -> TILE_STATUS_CLEAN
+            else -> TILE_STATUS_NEUTRAL
+        }
         val total = result.responses.size
-        val hint = if (total > 0) {
-            getString(R.string.tile_hint_clean_count, total)
-        } else {
-            null
+        val hint = when {
+            result.needsReview -> getString(R.string.tile_hint_review)
+            result.hasError -> getString(R.string.tile_hint_error)
+            total > 0 -> getString(R.string.tile_hint_clean_count, total)
+            else -> null
         }
         setTileStatus(CATEGORY_CDN, status, hint)
     }
@@ -2786,6 +2794,7 @@ class MainActivity : AppCompatActivity() {
         val total = nonInfo.size
         return when {
             category.detected && total > 0 -> getString(R.string.tile_hint_detected_count, detected, total)
+            category.detected -> getString(R.string.tile_hint_review)
             category.needsReview -> getString(R.string.tile_hint_review)
             category.hasError -> getString(R.string.tile_hint_error)
             total > 0 -> getString(R.string.tile_hint_clean_count, total)

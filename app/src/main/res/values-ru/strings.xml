@@ -117,6 +117,7 @@
     <string name="main_card_call_transport_path_active">Активная сеть</string>
     <string name="main_card_call_transport_path_underlying">Базовая сеть</string>
     <string name="main_card_call_transport_path_proxy">Локальный прокси</string>
+    <string name="main_card_call_transport_header">%1$s · %2$s · %3$s</string>
     <string name="main_card_call_transport_reason_no_response">STUN-ответ не получен</string>
     <string name="main_card_call_transport_reason_telegram_dc_unreachable">Telegram DC недостижим через локальный SOCKS5-прокси</string>
     <string name="main_card_call_transport_reason_release_only">Трассировка WhatsApp доступна только в debug или experimental сборке</string>
@@ -169,6 +170,7 @@
     <string name="main_verdict_hide_details">Скрыть детали</string>
 
     <string name="main_ipv6_error_ignored">IPv6-ошибка проигнорирована: </string>
+    <string name="main_ip_comparison_ipv4_unavailable">IPv4: н/д</string>
 
     <string name="settings_port_range_preview_proxy_xray">Будут сканироваться localhost-порты для proxy и Xray API: %1$s (%2$s)</string>
     <string name="settings_port_range_preview_proxy_only">Будут сканироваться localhost-порты для proxy: %1$s (%2$s)</string>

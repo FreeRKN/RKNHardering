@@ -1844,7 +1844,7 @@ class MainActivity : AppCompatActivity() {
         } else if (response.ipv4Unavailable && response.ipv6 != null) {
             container.addView(
                 TextView(themedContext()).apply {
-                    text = "IPv4: n/a"
+                    text = getString(R.string.main_ip_comparison_ipv4_unavailable)
                     textSize = 12f
                     typeface = Typeface.MONOSPACE
                     setPadding(0, 2.dp, 0, 0)
@@ -1964,7 +1964,12 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 0, 8.dp, 0)
         }
         val headerText = TextView(themedContext()).apply {
-            text = "$serviceLabel \u00B7 $pathLabel \u00B7 $statusLabel"
+            text = getString(
+                R.string.main_card_call_transport_header,
+                serviceLabel,
+                pathLabel,
+                statusLabel,
+            )
             textSize = 13f
             setTextColor(onSurfaceColor())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)

@@ -118,6 +118,7 @@
     <string name="main_card_call_transport_path_active">Active network</string>
     <string name="main_card_call_transport_path_underlying">Underlying network</string>
     <string name="main_card_call_transport_path_proxy">Local proxy</string>
+    <string name="main_card_call_transport_header">%1$s · %2$s · %3$s</string>
     <string name="main_card_call_transport_reason_no_response">No STUN response</string>
     <string name="main_card_call_transport_reason_telegram_dc_unreachable">Telegram DC is unreachable through the local SOCKS5 proxy</string>
     <string name="main_card_call_transport_reason_release_only">WhatsApp tracing is available only in debug or experimental builds</string>
@@ -171,6 +172,7 @@
     <string name="main_verdict_hide_details">Hide details</string>
 
     <string name="main_ipv6_error_ignored">IPv6 error ignored: </string>
+    <string name="main_ip_comparison_ipv4_unavailable">IPv4: n/a</string>
 
     <string name="settings_port_range_preview_proxy_xray">Localhost ports to scan for proxy and Xray API: %1$s (%2$s)</string>
     <string name="settings_port_range_preview_proxy_only">Localhost ports to scan for proxy: %1$s (%2$s)</string>

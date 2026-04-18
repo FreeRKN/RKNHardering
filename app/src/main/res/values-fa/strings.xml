@@ -117,6 +117,7 @@
     <string name="main_card_call_transport_path_active">شبکه فعال</string>
     <string name="main_card_call_transport_path_underlying">شبکه زیرین</string>
     <string name="main_card_call_transport_path_proxy">پروکسی محلی</string>
+    <string name="main_card_call_transport_header">%1$s · %2$s · %3$s</string>
     <string name="main_card_call_transport_reason_no_response">هیچ پاسخی از STUN دریافت نشد</string>
     <string name="main_card_call_transport_reason_telegram_dc_unreachable">Telegram DC از طریق پروکسی SOCKS5 محلی قابل دسترس نیست</string>
     <string name="main_card_call_transport_reason_release_only">ردیابی WhatsApp فقط در بیلدهای debug یا experimental در دسترس است</string>
@@ -169,6 +170,7 @@
     <string name="main_verdict_hide_details">پنهان کردن جزئیات</string>
 
     <string name="main_ipv6_error_ignored">خطای IPv6 نادیده گرفته شد: </string>
+    <string name="main_ip_comparison_ipv4_unavailable">IPv4: موجود نیست</string>
 
     <string name="settings_port_range_preview_proxy_xray">پورت‌های لوکال‌هاست برای اسکن proxy و API Xray: %1$s (%2$s)</string>
     <string name="settings_port_range_preview_proxy_only">پورت‌های لوکال‌هاست برای اسکن proxy: %1$s (%2$s)</string>
@@ -319,6 +321,8 @@
     <string name="checker_direct_proxyinfo_invalid">%1$s: پروفایل proxy نامعتبر</string>
     <string name="checker_direct_proxyinfo_unavailable">%1$s: بررسی ProxyInfo در دسترس نیست (%2$s)</string>
     <string name="checker_direct_proxyinfo_network_none">ProxyInfo روی شبکه‌های بررسی‌شده: پیدا نشد</string>
+    <string name="checker_cdn_pulling_error_tls_certificate">تأیید زنجیره گواهی TLS ممکن نشد. علت‌های احتمالی: رهگیری HTTPS، پاسخ نادرست DNS یا قدیمی بودن مخزن CA اندروید.</string>
+    <string name="checker_cdn_pulling_error_details">جزئیات: %1$s</string>
 
     <string name="checker_indirect_category_name">نشانه‌های غیرمستقیم</string>
     <string name="checker_indirect_capability_not_vpn">Capability NOT_VPN: %1$s</string>

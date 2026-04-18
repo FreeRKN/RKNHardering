@@ -117,6 +117,7 @@
     <string name="main_card_call_transport_path_active">活跃网络</string>
     <string name="main_card_call_transport_path_underlying">底层网络</string>
     <string name="main_card_call_transport_path_proxy">本地代理</string>
+    <string name="main_card_call_transport_header">%1$s · %2$s · %3$s</string>
     <string name="main_card_call_transport_reason_no_response">未收到 STUN 响应</string>
     <string name="main_card_call_transport_reason_telegram_dc_unreachable">无法通过本地 SOCKS5 代理访问 Telegram DC</string>
     <string name="main_card_call_transport_reason_release_only">WhatsApp 跟踪仅在 debug 或 experimental 构建中可用</string>
@@ -169,6 +170,7 @@
     <string name="main_verdict_hide_details">隐藏详情</string>
 
     <string name="main_ipv6_error_ignored">已忽略 IPv6 错误： </string>
+    <string name="main_ip_comparison_ipv4_unavailable">IPv4：不可用</string>
 
     <string name="settings_port_range_preview_proxy_xray">将扫描用于代理和 Xray API 的 localhost 端口：%1$s（%2$s）</string>
     <string name="settings_port_range_preview_proxy_only">将扫描用于代理的 localhost 端口：%1$s（%2$s）</string>
@@ -318,6 +320,8 @@
     <string name="checker_direct_proxyinfo_invalid">%1$s：代理配置无效</string>
     <string name="checker_direct_proxyinfo_unavailable">%1$s：ProxyInfo 检查不可用（%2$s）</string>
     <string name="checker_direct_proxyinfo_network_none">已跟踪网络上的 ProxyInfo：未发现</string>
+    <string name="checker_cdn_pulling_error_tls_certificate">无法验证 TLS 证书链。可能原因：HTTPS 被拦截、DNS 返回错误结果，或 Android CA 存储过旧。</string>
+    <string name="checker_cdn_pulling_error_details">详情：%1$s</string>
 
     <string name="checker_indirect_category_name">间接迹象</string>
     <string name="checker_indirect_capability_not_vpn">Capability NOT_VPN：%1$s</string>

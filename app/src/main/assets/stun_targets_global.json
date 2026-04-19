@@ -1,0 +1,22 @@
+[
+  { "host": "stun.l.google.com", "port": 19302, "enabled": true },
+  { "host": "stun1.l.google.com", "port": 19302, "enabled": true },
+  { "host": "stun2.l.google.com", "port": 19302, "enabled": true },
+  { "host": "stun3.l.google.com", "port": 19302, "enabled": true },
+  { "host": "stun4.l.google.com", "port": 19302, "enabled": true },
+  { "host": "stun.cloudflare.com", "port": 3478, "enabled": true },
+  { "host": "global.stun.twilio.com", "port": 3478, "enabled": true },
+  { "host": "stun.nextcloud.com", "port": 443, "enabled": true },
+  { "host": "stun.sipgate.net", "port": 3478, "enabled": true },
+  { "host": "stun.voip.blackberry.com", "port": 3478, "enabled": true },
+  { "host": "stun.voipgate.com", "port": 3478, "enabled": true },
+  { "host": "stun.antisip.com", "port": 3478, "enabled": true },
+  { "host": "stun.sip.us", "port": 3478, "enabled": true },
+  { "host": "stun.1und1.de", "port": 3478, "enabled": true },
+  { "host": "stun.voipbuster.com", "port": 3478, "enabled": true },
+  { "host": "stun.counterpath.net", "port": 3478, "enabled": true },
+  { "host": "stun.ekiga.net", "port": 3478, "enabled": true },
+  { "host": "stun.stunprotocol.org", "port": 3478, "enabled": true },
+  { "host": "stun.schlund.de", "port": 3478, "enabled": true },
+  { "host": "stun.linphone.org", "port": 3478, "enabled": true }
+]

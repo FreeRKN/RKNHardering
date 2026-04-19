@@ -19,6 +19,8 @@
     <color name="status_red_container">#FF5A1D1B</color>
     <color name="status_amber">#FFF1CC74</color>
     <color name="status_amber_container">#FF4B3900</color>
+    <color name="status_neutral">#FFB5B3BC</color>
+    <color name="status_neutral_container">#FF2E2C35</color>
 
     <color name="verdict_green">@color/status_green</color>
     <color name="verdict_green_bg">@color/status_green_container</color>

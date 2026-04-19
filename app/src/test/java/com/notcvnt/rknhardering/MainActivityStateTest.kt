@@ -7,8 +7,10 @@ import com.notcvnt.rknhardering.model.CheckResult
 import com.notcvnt.rknhardering.model.IpCheckerGroupResult
 import com.notcvnt.rknhardering.model.IpComparisonResult
 import com.notcvnt.rknhardering.model.Verdict
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MainActivityStateTest {
@@ -28,6 +30,35 @@ class MainActivityStateTest {
     @Test
     fun `retain completed diagnostics snapshot ignores missing settings`() {
         assertNull(retainCompletedDiagnosticsSnapshot(testCheckResult(), settings = null))
+    }
+
+    @Test
+    fun `create completed export snapshot keeps result privacy mode and timestamp`() {
+        val result = testCheckResult()
+
+        val snapshot = createCompletedExportSnapshot(
+            result = result,
+            privacyMode = true,
+            finishedAtMillis = 42L,
+        )
+
+        assertSame(result, snapshot.result)
+        assertTrue(snapshot.privacyMode)
+        assertEquals(42L, snapshot.finishedAtMillis)
+    }
+
+    @Test
+    fun `completed export snapshot does not depend on debug diagnostics setting`() {
+        val result = testCheckResult()
+
+        val exportSnapshot = createCompletedExportSnapshot(
+            result = result,
+            privacyMode = false,
+            finishedAtMillis = 7L,
+        )
+
+        assertSame(result, exportSnapshot.result)
+        assertNull(retainCompletedDiagnosticsSnapshot(result, CheckSettings(tunProbeDebugEnabled = false)))
     }
 
     private fun testCheckResult(): CheckResult {

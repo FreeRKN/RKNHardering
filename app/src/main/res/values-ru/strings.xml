@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">RKNHardering</string>
     <string name="github_repo_url">https://github.com/xtclovver/RKNHardering</string>
-    <string name="run_check_notice">Во время проверки приложение выполнит сетевые запросы к доменам:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nЕсли в настройках выбран кастомный DNS-резолвер, приложение также будет обращаться к его IP-адресам или DoH-домену.\n\nЕсли включён CDN pulling, приложение дополнительно отправит HTTPS-запросы к redirector.googlevideo.com, rutracker.org и meduza.io, чтобы проверить, какой внешний IP и trace-данные эти точки вернут.\n\nЕсли включена проверка утечек call transport, приложение дополнительно отправит UDP/STUN-запросы к встроенным Telegram-целям. Цели WhatsApp используются только в debug или experimental сборках.\n\nЕсли включена отладочная диагностика, приложение сможет сформировать копируемый диагностический отчёт по последней завершённой проверке, даже если она прошла успешно. Отчёт хранится только в памяти, пока вы его не скопируете. Ответы CDN pulling тоже попадут в этот отчёт.\n\nНажимая кнопку «Запустить проверку», вы соглашаетесь, что с вашего устройства будут выполнены эти сетевые запросы.\n\nПриложение не ведет логи этих запросов. Доступ к сети можно будет отключить в настройках приложения.</string>
+    <string name="run_check_notice">Во время проверки приложение выполнит сетевые запросы к доменам:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ipv4-internet.yandex.net\n• ipv6-internet.yandex.net\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nЕсли в настройках выбран кастомный DNS-резолвер, приложение также будет обращаться к его IP-адресам или DoH-домену.\n\nЕсли включён CDN pulling, приложение дополнительно отправит HTTPS-запросы к redirector.googlevideo.com, rutracker.org и meduza.io, чтобы проверить, какой внешний IP и trace-данные эти точки вернут.\n\nЕсли включена проверка утечек call transport, приложение дополнительно отправит UDP/STUN-запросы к встроенным Telegram-целям. Цели WhatsApp используются только в debug или experimental сборках.\n\nЕсли включена отладочная диагностика, приложение сможет сформировать копируемый диагностический отчёт по последней завершённой проверке, даже если она прошла успешно. Отчёт хранится только в памяти, пока вы его не скопируете. Ответы CDN pulling тоже попадут в этот отчёт.\n\nНажимая кнопку «Запустить проверку», вы соглашаетесь, что с вашего устройства будут выполнены эти сетевые запросы.\n\nПриложение не ведет логи этих запросов. Доступ к сети можно будет отключить в настройках приложения.</string>
 
     <string name="settings_title">Настройки</string>
     <string name="settings_section_checks">Проверки</string>
@@ -12,17 +12,23 @@
     <string name="settings_subsection_network">Сеть</string>
     <string name="settings_subsection_dns">DNS</string>
     <string name="settings_cat_split_tunnel">Split tunnel bypass</string>
-    <string name="settings_cat_split_tunnel_desc">Скан портов, TUN probe, proxy и Xray API</string>
+    <string name="settings_cat_split_tunnel_desc">Порты и probe</string>
     <string name="settings_cat_network">Сеть</string>
-    <string name="settings_cat_network_desc">Сетевые запросы, CDN pulling, call transport</string>
+    <string name="settings_cat_network_desc">Запросы и CDN</string>
     <string name="settings_cat_dns">DNS</string>
-    <string name="settings_cat_dns_desc">Режим и серверы DNS-резолвера</string>
+    <string name="settings_cat_dns_desc">Резолвер</string>
     <string name="settings_cat_privacy">Приватность</string>
-    <string name="settings_cat_privacy_desc">Маскировка IP в диагностике</string>
+    <string name="settings_cat_privacy_desc">Маскировка IP</string>
     <string name="settings_cat_appearance">Оформление</string>
     <string name="settings_cat_appearance_desc">Тема и язык</string>
     <string name="settings_cat_about">О приложении</string>
-    <string name="settings_cat_about_desc">Разрешения и GitHub</string>
+    <string name="settings_cat_about_desc">GitHub</string>
+    <string name="settings_cat_debug">Отладка</string>
+    <string name="settings_cat_debug_desc">Копия диагностики</string>
+    <string name="settings_group_checks">Проверки</string>
+    <string name="settings_group_app">Приложение</string>
+    <string name="settings_group_diagnostics">Диагностика</string>
+    <string name="settings_group_info">Информация</string>
     <string name="settings_split_tunnel">Split tunnel bypass</string>
     <string name="settings_split_tunnel_desc">Сканирование портов занимает много времени</string>
     <string name="settings_tun_probe_debug">Отладочная диагностика</string>
@@ -54,8 +60,8 @@
     <string name="settings_cdn_pulling_warning_confirm">Включить</string>
     <string name="settings_cdn_pulling_meduza">Включить meduza.io</string>
     <string name="settings_cdn_pulling_meduza_desc">Отправлять запрос на meduza.io/cdn-cgi/trace в рамках CDN pulling.</string>
-    <string name="settings_call_transport_probe">Утечки call transport</string>
-    <string name="settings_call_transport_probe_desc">Отправляет дополнительные UDP/STUN-запросы к встроенным Telegram-целям. Трассировка WhatsApp работает только в debug или experimental сборках.</string>
+    <string name="settings_call_transport_probe">Call transport и STUN-проверка</string>
+    <string name="settings_call_transport_probe_desc">Отправляет UDP/STUN-запросы к публичным STUN-серверам (глобальным и российским) и проверяет локальный SOCKS5-прокси на наличие трафика Telegram MTProto.</string>
     <string name="settings_dns_resolver">DNS-резолвер</string>
     <string name="settings_dns_resolver_desc">Применяется к GeoIP, IP Comparison и BeaconDB. Не меняет системный DNS Android и не влияет на локальные DNS-проверки.</string>
     <string name="settings_dns_mode_system">Системный</string>
@@ -88,6 +94,15 @@
     <string name="settings_github">GitHub</string>
     <string name="main_copy_diagnostics">Копировать диагностику</string>
     <string name="main_diagnostics_copied">Диагностика скопирована</string>
+    <string name="main_export">Экспорт</string>
+    <string name="main_export_title">Экспорт результата</string>
+    <string name="main_export_markdown">Markdown (.md)</string>
+    <string name="main_export_json">JSON (.json)</string>
+    <string name="main_export_save_file">Сохранить файл</string>
+    <string name="main_export_copy_to_clipboard">Копировать в буфер</string>
+    <string name="main_export_copied">Экспорт скопирован</string>
+    <string name="main_export_saved">Экспорт сохранён</string>
+    <string name="main_export_failed">Не удалось сохранить экспорт</string>
     <string name="settings_github_desc">xtclovver/RKNHardering</string>
     <string name="settings_port_range_from">От</string>
     <string name="settings_port_range_to">До</string>
@@ -99,7 +114,7 @@
     <string name="main_card_cdn_pulling">CDN pulling</string>
     <string name="main_card_direct_signs">Прямые признаки</string>
     <string name="main_card_indirect_signs">Косвенные признаки</string>
-    <string name="main_card_call_transport">STUN-серверы</string>
+    <string name="main_card_call_transport">STUN mapped IP</string>
     <string name="main_card_call_transport_status_baseline">Ответ есть</string>
     <string name="main_card_call_transport_status_no_signal">Нет ответа</string>
     <string name="main_card_call_transport_status_needs_review">Требует проверки</string>
@@ -108,10 +123,18 @@
     <string name="main_card_call_transport_path_active">Активная сеть</string>
     <string name="main_card_call_transport_path_underlying">Базовая сеть</string>
     <string name="main_card_call_transport_path_proxy">Локальный прокси</string>
+    <string name="main_card_call_transport_header">%1$s · %2$s · %3$s</string>
     <string name="main_card_call_transport_reason_no_response">STUN-ответ не получен</string>
     <string name="main_card_call_transport_reason_telegram_dc_unreachable">Telegram DC недостижим через локальный SOCKS5-прокси</string>
-    <string name="main_card_call_transport_reason_release_only">Трассировка WhatsApp доступна только в debug или experimental сборке</string>
     <string name="main_card_call_transport_reason_targets_unavailable">Цели для этой проверки недоступны</string>
+    <string name="main_card_call_transport_stun_group_global">Глобальный STUN</string>
+    <string name="main_card_call_transport_stun_group_ru">STUN (RU)</string>
+    <string name="main_card_call_transport_stun_responded">%1$d из %2$d ответили</string>
+    <string name="main_card_call_transport_stun_none_responded">Нет ответа</string>
+    <string name="main_card_call_transport_stun_ipv4">IPv4</string>
+    <string name="main_card_call_transport_stun_ipv6">IPv6</string>
+    <string name="main_card_call_transport_stun_no_response">Нет ответа</string>
+    <string name="main_card_call_transport_stun_error">Ошибка</string>
     <string name="main_card_location_signals">Сигналы местоположения</string>
     <string name="main_verdict_details">Подробнее</string>
 
@@ -160,6 +183,7 @@
     <string name="main_verdict_hide_details">Скрыть детали</string>
 
     <string name="main_ipv6_error_ignored">IPv6-ошибка проигнорирована: </string>
+    <string name="main_ip_comparison_ipv4_unavailable">IPv4: н/д</string>
 
     <string name="settings_port_range_preview_proxy_xray">Будут сканироваться localhost-порты для proxy и Xray API: %1$s (%2$s)</string>
     <string name="settings_port_range_preview_proxy_only">Будут сканироваться localhost-порты для proxy: %1$s (%2$s)</string>
@@ -299,6 +323,8 @@
     <string name="checker_cdn_pulling_summary_detected_partial">%2$d из %3$d CDN-целей ответили и показали IP %1$s</string>
     <string name="checker_cdn_pulling_summary_detected_no_ip">%1$d из %2$d CDN-целей вернули trace-данные, но не во всех ответах был IP</string>
     <string name="checker_cdn_pulling_error_unrecognized">Формат ответа не распознан</string>
+    <string name="checker_cdn_pulling_error_tls_certificate">Не удалось проверить доверенную цепочку TLS-сертификата. Возможные причины: HTTPS-перехват, неверный DNS-ответ или устаревшее хранилище корневых сертификатов Android.</string>
+    <string name="checker_cdn_pulling_error_details">Детали: %1$s</string>
 
     <!-- DirectSignsChecker -->
     <string name="checker_direct_category_name">Прямые признаки</string>
@@ -433,4 +459,25 @@
     <string name="checker_vpn_known_apps_none">Известные VPN/Proxy-приложения и VpnService-провайдеры: не обнаружены</string>
     <string name="checker_vpn_installed_app">Установлено приложение: %1$s (%2$s)</string>
     <string name="checker_vpn_declares_service">Приложение объявляет VpnService: %1$s (%2$s)</string>
+
+    <!-- Redesign: main screen -->
+    <string name="verdict_label">Вердикт</string>
+    <string name="verdict_title_clean">Обход не выявлен</string>
+    <string name="verdict_title_review">Требует проверки</string>
+    <string name="verdict_title_detected">Обход выявлен</string>
+    <string name="verdict_title_idle">Проверка не запущена</string>
+    <string name="verdict_subtitle_idle">Запустите проверку, чтобы увидеть вердикт</string>
+    <string name="verdict_subtitle_running">Проверка выполняется\u2026</string>
+    <string name="verdict_subtitle_done">Проверка завершена \u00b7 %1$d категорий</string>
+    <string name="section_check_details">Детали проверки</string>
+    <string name="privacy_footer_text">Проверка выполняется локально \u00b7 16 доменов</string>
+    <string name="privacy_footer_action">Что это?</string>
+    <string name="tile_hint_placeholder">\u2014</string>
+    <string name="tile_hint_loading">Проверка\u2026</string>
+    <string name="tile_hint_stopped">Остановлено</string>
+    <string name="tile_hint_clean">Чисто</string>
+    <string name="tile_hint_clean_count">%1$d проверок \u00b7 чисто</string>
+    <string name="tile_hint_detected_count">%1$d из %2$d выявлено</string>
+    <string name="tile_hint_review">Требует проверки</string>
+    <string name="tile_hint_error">Ошибка</string>
 </resources>

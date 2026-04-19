@@ -1,65 +1,45 @@
 package com.notcvnt.rknhardering.checker
 
 import android.content.Context
-import com.notcvnt.rknhardering.model.CallTransportService
+import com.notcvnt.rknhardering.model.StunScope
 import org.json.JSONArray
 
 object CallTransportTargetCatalog {
 
-    data class CallTransportTarget(
-        val service: CallTransportService,
+    data class StunTarget(
         val host: String,
         val port: Int,
-        val experimental: Boolean,
+        val scope: StunScope,
         val enabled: Boolean,
     )
 
     data class Catalog(
-        val telegramTargets: List<CallTransportTarget>,
-        val whatsappTargets: List<CallTransportTarget>,
+        val stunTargets: List<StunTarget>,
     )
 
-    fun load(context: Context, includeExperimental: Boolean): Catalog {
-        val telegramTargets = readTargets(
-            context = context,
-            assetName = "call_transport_targets_telegram.json",
-            service = CallTransportService.TELEGRAM,
-            experimental = false,
-        )
-        val whatsappTargets = if (includeExperimental) {
-            readTargets(
-                context = context,
-                assetName = "call_transport_targets_whatsapp_experimental.json",
-                service = CallTransportService.WHATSAPP,
-                experimental = true,
-            )
-        } else {
-            emptyList()
-        }
-
-        return Catalog(
-            telegramTargets = telegramTargets.filter { it.enabled },
-            whatsappTargets = whatsappTargets.filter { it.enabled },
-        )
+    fun load(context: Context): Catalog {
+        val stunGlobal = readStunTargets(context, "stun_targets_global.json", StunScope.GLOBAL)
+        val stunRu = readStunTargets(context, "stun_targets_ru.json", StunScope.RU)
+        return Catalog(stunTargets = (stunGlobal + stunRu).filter { it.enabled })
     }
 
-    private fun readTargets(
+    private fun readStunTargets(
         context: Context,
         assetName: String,
-        service: CallTransportService,
-        experimental: Boolean,
-    ): List<CallTransportTarget> {
-        val raw = context.assets.open(assetName).bufferedReader(Charsets.UTF_8).use { it.readText() }
+        scope: StunScope,
+    ): List<StunTarget> {
+        val raw = runCatching {
+            context.assets.open(assetName).bufferedReader(Charsets.UTF_8).use { it.readText() }
+        }.getOrElse { return emptyList() }
         val json = JSONArray(raw)
         return buildList(json.length()) {
             for (index in 0 until json.length()) {
                 val item = json.getJSONObject(index)
                 add(
-                    CallTransportTarget(
-                        service = service,
+                    StunTarget(
                         host = item.getString("host").trim(),
                         port = item.optInt("port", 3478),
-                        experimental = item.optBoolean("experimental", experimental),
+                        scope = scope,
                         enabled = item.optBoolean("enabled", true),
                     ),
                 )

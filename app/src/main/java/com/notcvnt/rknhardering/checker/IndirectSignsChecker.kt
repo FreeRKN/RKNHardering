@@ -99,6 +99,7 @@ object IndirectSignsChecker {
 
     internal data class CallTransportEvaluation(
         val results: List<CallTransportLeakResult> = emptyList(),
+        val stunGroups: List<com.notcvnt.rknhardering.model.StunProbeGroupResult> = emptyList(),
         val findings: List<Finding> = emptyList(),
         val evidence: List<EvidenceItem> = emptyList(),
         val needsReview: Boolean = false,
@@ -156,6 +157,7 @@ object IndirectSignsChecker {
         val evidence = mutableListOf<EvidenceItem>()
         val activeApps = mutableListOf<ActiveVpnApp>()
         val callTransportLeaks = mutableListOf<CallTransportLeakResult>()
+        val stunProbeGroups = mutableListOf<com.notcvnt.rknhardering.model.StunProbeGroupResult>()
         var detected = false
         var needsReview = false
 
@@ -204,6 +206,7 @@ object IndirectSignsChecker {
         findings += callTransportOutcome.findings
         evidence += callTransportOutcome.evidence
         callTransportLeaks += callTransportOutcome.results
+        stunProbeGroups += callTransportOutcome.stunGroups
         needsReview = needsReview || callTransportOutcome.needsReview
 
         val dumpsysVpnOutcome = checkDumpsysVpn(context, findings, evidence, activeApps)
@@ -222,6 +225,7 @@ object IndirectSignsChecker {
             evidence = evidence,
             activeApps = activeApps.distinctBy { Triple(it.packageName, it.serviceName, it.source) },
             callTransportLeaks = callTransportLeaks,
+            stunProbeGroups = stunProbeGroups,
         )
     }
 
@@ -242,6 +246,7 @@ object IndirectSignsChecker {
         )
         return CallTransportEvaluation(
             results = evaluation.results,
+            stunGroups = evaluation.stunGroups,
             findings = evaluation.findings,
             evidence = evaluation.evidence,
             needsReview = evaluation.needsReview,

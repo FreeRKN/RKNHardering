@@ -291,22 +291,22 @@ class GeoIpCheckerTest {
     }
 
     @Test
-    fun `no provider result is review and not error`() {
+    fun `no provider result is undetected and not error`() {
         val result = GeoIpChecker.noProviderResult(
             context.getString(R.string.checker_geo_error_no_provider),
         )
 
         assertFalse(result.detected)
-        assertTrue(result.needsReview)
+        assertFalse(result.needsReview)
         assertFalse(result.hasError)
-        assertTrue(result.findings.all { it.needsReview && !it.isError })
+        assertTrue(result.findings.all { !it.needsReview && !it.isError })
     }
 
     @Test
     fun `geoip fetch retries up to third attempt before succeeding`() = runBlocking {
         var attempts = 0
 
-        val result = GeoIpChecker.fetchWithRetries(retryDelayMs = 0) {
+        val result = GeoIpChecker.fetchWithRetries(maxAttempts = 3, retryDelayMs = 0) {
             attempts += 1
             if (attempts < 3) null else "ok"
         }

@@ -11,13 +11,14 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.AttrRes
+import androidx.annotation.ColorRes
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -37,6 +38,7 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.color.MaterialColors
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.notcvnt.rknhardering.checker.BypassChecker
 import com.notcvnt.rknhardering.checker.CheckUpdate
 import com.notcvnt.rknhardering.checker.CheckSettings
@@ -53,12 +55,15 @@ import com.notcvnt.rknhardering.model.Finding
 import com.notcvnt.rknhardering.model.IpCheckerGroupResult
 import com.notcvnt.rknhardering.model.IpCheckerResponse
 import com.notcvnt.rknhardering.model.IpComparisonResult
+import com.notcvnt.rknhardering.model.StunProbeGroupResult
+import com.notcvnt.rknhardering.model.StunScope
 import com.notcvnt.rknhardering.model.Verdict
 import com.notcvnt.rknhardering.network.DnsResolverConfig
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.IOException
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
@@ -139,8 +144,6 @@ internal fun formatCallTransportReason(
                 detail = summaryDetailAfterMarker(summary, CALL_TRANSPORT_TELEGRAM_DC_UNREACHABLE_MARKER),
                 privacyMode = privacyMode,
             )
-        summary.contains("experimental trace is disabled in release builds", ignoreCase = true) ->
-            context.getString(R.string.main_card_call_transport_reason_release_only)
         summary.contains("targets are unavailable", ignoreCase = true) ||
             summary.contains("target catalog is unavailable", ignoreCase = true) ->
             context.getString(R.string.main_card_call_transport_reason_targets_unavailable)
@@ -196,11 +199,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnRunCheck: MaterialButton
     private lateinit var btnStopCheck: MaterialButton
     private lateinit var btnCopyDiagnostics: MaterialButton
-    private lateinit var cardRunCheckNotice: MaterialCardView
+    private lateinit var btnExport: MaterialButton
+    private lateinit var resultActionsContainer: LinearLayout
     private lateinit var resultsScrollView: TouchAwareScrollView
     private lateinit var textCheckStatus: TextView
     private lateinit var viewModel: CheckViewModel
-    private var hasDismissedRunCheckNotice = false
     private var processedEventCount = 0
     private lateinit var cardGeoIp: MaterialCardView
     private lateinit var cardIpComparison: MaterialCardView
@@ -211,6 +214,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cardCallTransport: MaterialCardView
     private lateinit var iconCallTransport: ImageView
     private lateinit var statusCallTransport: TextView
+    private lateinit var textCallTransportSummary: TextView
+    private lateinit var stunGroupsContainer: LinearLayout
     private lateinit var findingsCallTransport: LinearLayout
     private lateinit var cardVerdict: MaterialCardView
     private lateinit var iconGeoIp: ImageView
@@ -266,7 +271,37 @@ class MainActivity : AppCompatActivity() {
     private var activeCheckPrivacyMode = false
     private var activeCheckSettings: CheckSettings? = null
     private var retainedDiagnosticsSnapshot: RetainedDiagnosticsSnapshot? = null
+    private var completedExportSnapshot: CompletedExportSnapshot? = null
     private var isVerdictDetailsExpanded = false
+
+    // Redesign
+    private lateinit var mainContentRoot: LinearLayout
+    private lateinit var categoryGrid: android.widget.GridLayout
+    private lateinit var verdictHero: MaterialCardView
+    private lateinit var verdictAvatar: View
+    private lateinit var verdictAvatarIcon: ImageView
+    private lateinit var verdictLabel: TextView
+    private lateinit var verdictTitle: TextView
+    private lateinit var verdictSubtitle: TextView
+    private lateinit var expandedDetail: MaterialCardView
+    private lateinit var detailIcon: ImageView
+    private lateinit var detailTitle: TextView
+    private lateinit var detailStatusChip: TextView
+    private lateinit var detailContentSlot: android.widget.FrameLayout
+    private lateinit var hiddenLegacyCardsHost: LinearLayout
+    private lateinit var btnPrivacyInfo: MaterialButton
+    private val tiles = mutableMapOf<String, TileHolder>()
+    private var expandedCategoryId: String? = null
+    private var lastCompletedResult: CheckResult? = null
+
+    private data class TileHolder(
+        val id: String,
+        val card: MaterialCardView,
+        val icon: ImageView,
+        val statusDot: View,
+        val title: TextView,
+        val hint: TextView,
+    )
 
     private val prefs by lazy { AppUiSettings.prefs(this) }
 
@@ -275,6 +310,18 @@ class MainActivity : AppCompatActivity() {
     ) { result ->
         markPermissionsRequested(result.keys)
         prefs.edit { putBoolean(PREF_RATIONALE_SHOWN, true) }
+    }
+
+    private val exportMarkdownLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument(ExportFormat.MARKDOWN.mimeType),
+    ) { uri ->
+        writeExportDocument(uri, ExportFormat.MARKDOWN)
+    }
+
+    private val exportJsonLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument(ExportFormat.JSON.mimeType),
+    ) { uri ->
+        writeExportDocument(uri, ExportFormat.JSON)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -296,12 +343,11 @@ class MainActivity : AppCompatActivity() {
 
         viewModel = ViewModelProvider(this)[CheckViewModel::class.java]
         bindViews()
-        hasDismissedRunCheckNotice = savedInstanceState?.getBoolean(STATE_RUN_CHECK_NOTICE_HIDDEN, false) ?: false
-        updateRunCheckNoticeVisibility()
 
         btnRunCheck.setOnClickListener { onRunCheckClicked() }
         btnStopCheck.setOnClickListener { viewModel.cancelScan() }
         btnCopyDiagnostics.setOnClickListener { copyTunProbeDiagnostics() }
+        btnExport.setOnClickListener { showExportFormatDialog() }
         observeScanEvents()
 
         if (intent.getBooleanExtra(SettingsActivity.EXTRA_REQUEST_PERMISSIONS, false)) {
@@ -321,7 +367,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        updateCopyDiagnosticsVisibility()
+        updateResultActionButtonsVisibility()
     }
 
     private fun bindViews() {
@@ -329,7 +375,8 @@ class MainActivity : AppCompatActivity() {
         btnRunCheck = findViewById(R.id.btnRunCheck)
         btnStopCheck = findViewById(R.id.btnStopCheck)
         btnCopyDiagnostics = findViewById(R.id.btnCopyDiagnostics)
-        cardRunCheckNotice = findViewById(R.id.cardRunCheckNotice)
+        btnExport = findViewById(R.id.btnExport)
+        resultActionsContainer = findViewById(R.id.resultActionsContainer)
         textCheckStatus = findViewById(R.id.textCheckStatus)
         cardGeoIp = findViewById(R.id.cardGeoIp)
         cardIpComparison = findViewById(R.id.cardIpComparison)
@@ -340,6 +387,8 @@ class MainActivity : AppCompatActivity() {
         cardCallTransport = findViewById(R.id.cardCallTransport)
         iconCallTransport = findViewById(R.id.iconCallTransport)
         statusCallTransport = findViewById(R.id.statusCallTransport)
+        textCallTransportSummary = findViewById(R.id.textCallTransportSummary)
+        stunGroupsContainer = findViewById(R.id.stunGroupsContainer)
         findingsCallTransport = findViewById(R.id.findingsCallTransport)
         cardVerdict = findViewById(R.id.cardVerdict)
         iconGeoIp = findViewById(R.id.iconGeoIp)
@@ -380,9 +429,86 @@ class MainActivity : AppCompatActivity() {
         directInfoSection = findViewById(R.id.directInfoSection)
         directDivider = findViewById(R.id.directDivider)
         btnVerdictDetails.setOnClickListener { toggleVerdictDetails() }
+
+        // Redesign bindings
+        mainContentRoot = findViewById(R.id.mainContentRoot)
+        categoryGrid = findViewById(R.id.categoryGrid)
+        verdictHero = findViewById(R.id.verdictHero)
+        verdictAvatar = findViewById(R.id.verdictAvatar)
+        verdictAvatarIcon = findViewById(R.id.verdictAvatarIcon)
+        verdictLabel = findViewById(R.id.verdictLabel)
+        verdictTitle = findViewById(R.id.verdictTitle)
+        verdictSubtitle = findViewById(R.id.verdictSubtitle)
+        expandedDetail = findViewById(R.id.expandedDetail)
+        detailIcon = findViewById(R.id.detailIcon)
+        detailTitle = findViewById(R.id.detailTitle)
+        detailStatusChip = findViewById(R.id.detailStatusChip)
+        detailContentSlot = findViewById(R.id.detailContentSlot)
+        hiddenLegacyCardsHost = findViewById(R.id.hiddenLegacyCardsHost)
+        btnPrivacyInfo = findViewById(R.id.btnPrivacyInfo)
+        btnPrivacyInfo.setOnClickListener { showPrivacyFooterDialog() }
+
+        setupCategoryGrid()
+        bindVerdictHeroIdle()
         setupResultsScrollTracking()
         updateCheckControls(isRunning = false)
-        updateCopyDiagnosticsVisibility()
+        updateResultActionButtonsVisibility()
+    }
+
+    private fun setupCategoryGrid() {
+        categoryGrid.removeAllViews()
+        tiles.clear()
+        val inflater = layoutInflater
+        val columnCount = 2
+        val gap = 8.dp
+        data class Spec(val id: String, val title: String, val iconRes: Int)
+        val specs = listOf(
+            Spec(CATEGORY_GEO, getString(R.string.main_card_geo_ip), R.drawable.ic_globe),
+            Spec(CATEGORY_IPC, getString(R.string.main_card_ip_comparison), R.drawable.ic_compare),
+            Spec(CATEGORY_CDN, getString(R.string.main_card_cdn_pulling), R.drawable.ic_cloud),
+            Spec(CATEGORY_DIR, getString(R.string.main_card_direct_signs), R.drawable.ic_shield),
+            Spec(CATEGORY_IND, getString(R.string.main_card_indirect_signs), R.drawable.ic_network),
+            Spec(CATEGORY_STN, getString(R.string.main_card_call_transport), R.drawable.ic_phone),
+            Spec(CATEGORY_LOC, getString(R.string.main_card_location_signals), R.drawable.ic_pin),
+            Spec(CATEGORY_BYP, getString(R.string.settings_split_tunnel), R.drawable.ic_split),
+        )
+        specs.forEachIndexed { index, spec ->
+            val tile = inflater.inflate(R.layout.view_category_tile, categoryGrid, false) as MaterialCardView
+            val row = index / columnCount
+            val col = index % columnCount
+            val lp = android.widget.GridLayout.LayoutParams().apply {
+                width = 0
+                height = android.widget.GridLayout.LayoutParams.WRAP_CONTENT
+                columnSpec = android.widget.GridLayout.spec(col, 1, 1f)
+                rowSpec = android.widget.GridLayout.spec(row)
+                setMargins(
+                    if (col == 0) 0 else gap / 2,
+                    if (row == 0) 0 else gap,
+                    if (col == columnCount - 1) 0 else gap / 2,
+                    0,
+                )
+            }
+            tile.layoutParams = lp
+            val tileIcon = tile.findViewById<ImageView>(R.id.tileIcon)
+            val tileStatusDot = tile.findViewById<View>(R.id.tileStatusDot)
+            val tileTitle = tile.findViewById<TextView>(R.id.tileTitle)
+            val tileHint = tile.findViewById<TextView>(R.id.tileHint)
+            tileIcon.setImageResource(spec.iconRes)
+            tileTitle.text = spec.title
+            tileHint.text = getString(R.string.tile_hint_placeholder)
+            val holder = TileHolder(spec.id, tile, tileIcon, tileStatusDot, tileTitle, tileHint)
+            tiles[spec.id] = holder
+            tile.setOnClickListener { onTileClicked(spec.id) }
+            categoryGrid.addView(tile)
+        }
+    }
+
+    private fun showPrivacyFooterDialog() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.privacy_footer_text))
+            .setMessage(getString(R.string.run_check_notice))
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     private fun setupResultsScrollTracking() {
@@ -506,13 +632,104 @@ class MainActivity : AppCompatActivity() {
 
     private fun onRunCheckClicked() {
         if (viewModel.isRunning.value) return
-        hasDismissedRunCheckNotice = true
-        updateRunCheckNoticeVisibility()
         runCheck()
     }
 
-    private fun updateRunCheckNoticeVisibility() {
-        cardRunCheckNotice.visibility = if (hasDismissedRunCheckNotice) View.GONE else View.VISIBLE
+    private fun showExportFormatDialog() {
+        if (completedExportSnapshot == null) return
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.main_export_title)
+            .setPositiveButton(R.string.main_export_markdown) { _, _ ->
+                onExportFormatSelected(ExportFormat.MARKDOWN)
+            }
+            .setNegativeButton(R.string.main_export_json) { _, _ ->
+                onExportFormatSelected(ExportFormat.JSON)
+            }
+            .setNeutralButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun onExportFormatSelected(format: ExportFormat) {
+        if (isDebugClipboardExportEnabled()) {
+            showExportActionDialog(format)
+        } else {
+            launchExport(format)
+        }
+    }
+
+    private fun showExportActionDialog(format: ExportFormat) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(
+                when (format) {
+                    ExportFormat.MARKDOWN -> R.string.main_export_markdown
+                    ExportFormat.JSON -> R.string.main_export_json
+                },
+            )
+            .setPositiveButton(R.string.main_export_save_file) { _, _ ->
+                launchExport(format)
+            }
+            .setNegativeButton(R.string.main_export_copy_to_clipboard) { _, _ ->
+                copyExportToClipboard(format)
+            }
+            .setNeutralButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun launchExport(format: ExportFormat) {
+        val snapshot = completedExportSnapshot ?: return
+        val defaultFileName = buildDefaultExportFileName(format, snapshot.finishedAtMillis)
+        when (format) {
+            ExportFormat.MARKDOWN -> exportMarkdownLauncher.launch(defaultFileName)
+            ExportFormat.JSON -> exportJsonLauncher.launch(defaultFileName)
+        }
+    }
+
+    private fun copyExportToClipboard(format: ExportFormat) {
+        val snapshot = completedExportSnapshot ?: return
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        val labelResId = when (format) {
+            ExportFormat.MARKDOWN -> R.string.main_export_markdown
+            ExportFormat.JSON -> R.string.main_export_json
+        }
+        clipboard.setPrimaryClip(
+            ClipData.newPlainText(
+                getString(labelResId),
+                buildExportContent(snapshot, format),
+            ),
+        )
+        Toast.makeText(this, R.string.main_export_copied, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun writeExportDocument(uri: Uri?, format: ExportFormat) {
+        val targetUri = uri ?: return
+        val snapshot = completedExportSnapshot ?: return
+        val content = buildExportContent(snapshot, format)
+        val exportResult = runCatching {
+            contentResolver.openOutputStream(targetUri)?.use { outputStream ->
+                outputStream.writer(Charsets.UTF_8).use { writer ->
+                    writer.write(content)
+                }
+            } ?: throw IOException("Unable to open export destination")
+        }
+        if (exportResult.isSuccess) {
+            Toast.makeText(this, R.string.main_export_saved, Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, R.string.main_export_failed, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun buildExportContent(
+        snapshot: CompletedExportSnapshot,
+        format: ExportFormat,
+    ): String {
+        return when (format) {
+            ExportFormat.MARKDOWN -> CheckResultMarkdownExportFormatter.format(this, snapshot)
+            ExportFormat.JSON -> CheckResultJsonExportFormatter.format(this, snapshot)
+        }
+    }
+
+    private fun isDebugClipboardExportEnabled(): Boolean {
+        return prefs.getBoolean(SettingsActivity.PREF_TUN_PROBE_DEBUG_ENABLED, false)
     }
 
     private fun updateCheckControls(isRunning: Boolean) {
@@ -547,6 +764,31 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkStatusStopped(): String = getString(R.string.main_check_stopped)
 
+    private fun themedContext(): android.content.Context = resultsScrollView.context
+
+    private fun themeColor(@AttrRes attrRes: Int, @ColorRes fallbackColorRes: Int): Int {
+        return MaterialColors.getColor(
+            resultsScrollView,
+            attrRes,
+            ContextCompat.getColor(themedContext(), fallbackColorRes),
+        )
+    }
+
+    private fun surfaceColor(): Int =
+        themeColor(com.google.android.material.R.attr.colorSurface, R.color.md_surface)
+
+    private fun onSurfaceColor(): Int =
+        themeColor(com.google.android.material.R.attr.colorOnSurface, R.color.md_on_surface)
+
+    private fun onSurfaceVariantColor(): Int =
+        themeColor(
+            com.google.android.material.R.attr.colorOnSurfaceVariant,
+            R.color.md_on_surface_variant,
+        )
+
+    private fun outlineVariantColor(): Int =
+        themeColor(com.google.android.material.R.attr.colorOutlineVariant, R.color.md_outline_variant)
+
     private fun updateCheckStatus(message: String?) {
         textCheckStatus.text = message.orEmpty()
         textCheckStatus.visibility = if (message.isNullOrBlank()) View.GONE else View.VISIBLE
@@ -557,6 +799,22 @@ class MainActivity : AppCompatActivity() {
         val canShow = retainedDiagnosticsSnapshot != null &&
             debugEnabled
         btnCopyDiagnostics.visibility = if (canShow) View.VISIBLE else View.GONE
+    }
+
+    private fun updateExportVisibility() {
+        btnExport.visibility = if (completedExportSnapshot != null) View.VISIBLE else View.GONE
+    }
+
+    private fun updateResultActionButtonsVisibility() {
+        updateCopyDiagnosticsVisibility()
+        updateExportVisibility()
+        resultActionsContainer.visibility = if (
+            btnCopyDiagnostics.visibility == View.VISIBLE || btnExport.visibility == View.VISIBLE
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
     }
 
     private fun copyTunProbeDiagnostics() {
@@ -575,7 +833,7 @@ class MainActivity : AppCompatActivity() {
         )
         viewModel.markCompletedDiagnosticsConsumed()
         retainedDiagnosticsSnapshot = null
-        updateCopyDiagnosticsVisibility()
+        updateResultActionButtonsVisibility()
         Toast.makeText(this, R.string.main_diagnostics_copied, Toast.LENGTH_SHORT).show()
     }
 
@@ -667,6 +925,7 @@ class MainActivity : AppCompatActivity() {
         activeCheckPrivacyMode = privacyMode
         activeCheckSettings = settings
         retainedDiagnosticsSnapshot = null
+        completedExportSnapshot = null
         hasUserScrolledManually = false
         userTouchScrollInProgress = false
         isAutoScrollInProgress = false
@@ -676,8 +935,10 @@ class MainActivity : AppCompatActivity() {
         hideCards()
         resetBypassProgress()
         clearStageContent()
+        resetAllTiles()
+        bindVerdictHeroRunning()
         showAllLoadingCardsNow(settings)
-        updateCopyDiagnosticsVisibility()
+        updateResultActionButtonsVisibility()
     }
 
     private fun showAllLoadingCardsNow(settings: CheckSettings) {
@@ -699,12 +960,17 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     null
                 }
+                completedExportSnapshot = createCompletedExportSnapshot(
+                    result = event.result,
+                    privacyMode = event.privacyMode,
+                )
                 activeCheckSettings = null
-                ensureCardVisible(cardVerdict, shouldAutoScroll = animate)
+                lastCompletedResult = event.result
                 displayVerdict(event.result, event.privacyMode)
-                if (animate) animateContentReveal(iconVerdict, textVerdict, textVerdictExplanation, btnVerdictDetails)
+                bindVerdictHero(event.result)
+                if (animate) animateContentReveal(verdictHero)
                 stopLoadingStatusAnimation()
-                updateCopyDiagnosticsVisibility()
+                updateResultActionButtonsVisibility()
             }
             is ScanEvent.Cancelled -> {
                 activeCheckSettings = null
@@ -714,7 +980,16 @@ class MainActivity : AppCompatActivity() {
                 stopLoadingStatusAnimation()
                 updateCheckStatus(getString(R.string.main_check_stopped))
                 markLoadingStagesCancelled()
-                updateCopyDiagnosticsVisibility()
+                loadingStages.toList().forEach { stage ->
+                    setTileStatus(
+                        tileIdForStage(stage),
+                        TILE_STATUS_REVIEW,
+                        getString(R.string.tile_hint_stopped),
+                    )
+                }
+                bindVerdictHeroIdle()
+                verdictSubtitle.text = getString(R.string.main_check_stopped)
+                updateResultActionButtonsVisibility()
             }
         }
     }
@@ -781,18 +1056,21 @@ class MainActivity : AppCompatActivity() {
                     findingsGeoIp,
                     activeCheckPrivacyMode,
                 )
+                updateTileFromCategory(CATEGORY_GEO, update.result)
                 if (animate) animateContentReveal(findingsGeoIp, geoIpInfoSection, geoIpDivider)
             }
             is CheckUpdate.IpComparisonReady -> {
                 markStageCompleted(RunningStage.IP_COMPARISON)
                 ensureCardVisible(cardIpComparison, animate = false)
                 displayIpComparison(update.result, activeCheckPrivacyMode)
+                updateTileFromIpComparison(update.result)
                 if (animate) animateContentReveal(textIpComparisonSummary, ipComparisonGroups)
             }
             is CheckUpdate.CdnPullingReady -> {
                 markStageCompleted(RunningStage.CDN_PULLING)
                 ensureCardVisible(cardCdnPulling, animate = false)
                 displayCdnPulling(update.result, activeCheckPrivacyMode)
+                updateTileFromCdn(update.result)
                 if (animate) animateContentReveal(textCdnPullingSummary, cdnPullingResponses)
             }
             is CheckUpdate.DirectSignsReady -> {
@@ -806,6 +1084,7 @@ class MainActivity : AppCompatActivity() {
                     findingsDirect,
                     activeCheckPrivacyMode,
                 )
+                updateTileFromCategory(CATEGORY_DIR, update.result)
                 if (animate) animateContentReveal(findingsDirect, directInfoSection, directDivider)
             }
             is CheckUpdate.IndirectSignsReady -> {
@@ -819,14 +1098,16 @@ class MainActivity : AppCompatActivity() {
                     findingsIndirect,
                     activeCheckPrivacyMode,
                 )
+                updateTileFromCategory(CATEGORY_IND, update.result)
                 if (animate) animateContentReveal(findingsIndirect)
 
                 val callTransportEnabled = prefs.getBoolean(
                     SettingsActivity.PREF_CALL_TRANSPORT_PROBE_ENABLED, false,
                 )
                 if (callTransportEnabled) {
-                    displayCallTransport(update.result.callTransportLeaks, activeCheckPrivacyMode)
-                    if (animate) animateContentReveal(findingsCallTransport)
+                    displayCallTransport(update.result.callTransportLeaks, update.result.stunProbeGroups, activeCheckPrivacyMode)
+                    updateTileFromCallTransport(update.result.callTransportLeaks, update.result.stunProbeGroups)
+                    if (animate) animateContentReveal(findingsCallTransport, stunGroupsContainer)
                 }
             }
             is CheckUpdate.LocationSignalsReady -> {
@@ -840,6 +1121,7 @@ class MainActivity : AppCompatActivity() {
                     findingsLocation,
                     activeCheckPrivacyMode,
                 )
+                updateTileFromCategory(CATEGORY_LOC, update.result)
                 if (animate) animateContentReveal(findingsLocation, locationInfoSection, locationDivider)
             }
             is CheckUpdate.BypassProgress -> {
@@ -850,6 +1132,7 @@ class MainActivity : AppCompatActivity() {
                 markStageCompleted(RunningStage.BYPASS)
                 ensureCardVisible(cardBypass, animate = false)
                 displayBypass(update.result, activeCheckPrivacyMode)
+                updateTileFromBypass(update.result)
                 if (animate) animateContentReveal(findingsBypass)
             }
             is CheckUpdate.VerdictReady -> {
@@ -858,10 +1141,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun tileIdForStage(stage: RunningStage): String = when (stage) {
+        RunningStage.GEO_IP -> CATEGORY_GEO
+        RunningStage.IP_COMPARISON -> CATEGORY_IPC
+        RunningStage.CDN_PULLING -> CATEGORY_CDN
+        RunningStage.DIRECT -> CATEGORY_DIR
+        RunningStage.INDIRECT -> CATEGORY_IND
+        RunningStage.LOCATION -> CATEGORY_LOC
+        RunningStage.BYPASS -> CATEGORY_BYP
+    }
+
     private fun showLoadingCardForStage(stage: RunningStage) {
         if (stage in completedStages) return
         if (stage in loadingStages && cardForStage(stage).isVisible) return
 
+        setTileStatus(tileIdForStage(stage), TILE_STATUS_NEUTRAL, getString(R.string.tile_hint_loading))
         loadingStages += stage
         when (stage) {
             RunningStage.GEO_IP -> showCategoryLoading(
@@ -1070,7 +1364,7 @@ class MainActivity : AppCompatActivity() {
     private fun bindCardLoadingState(stage: RunningStage, icon: ImageView, status: TextView) {
         icon.setImageResource(R.drawable.ic_help)
         status.text = stageLoadingStatusBase(stage)
-        status.setTextColor(ContextCompat.getColor(this, R.color.md_on_surface_variant))
+        status.setTextColor(onSurfaceVariantColor())
     }
 
     private fun syncLoadingStatusAnimation() {
@@ -1168,34 +1462,18 @@ class MainActivity : AppCompatActivity() {
         animate: Boolean = true,
         shouldAutoScroll: Boolean = false,
     ) {
+        // В редизайне все старые карточки лежат в hiddenLegacyCardsHost и никогда
+        // не показываются напрямую — их контент переносится в expandedDetail
+        // по тапу плитки. Auto-scroll на них тоже не имеет смысла.
+        val inHiddenHost = card.parent === hiddenLegacyCardsHost
         val wasVisible = card.isVisible
         if (!wasVisible) {
             card.animate().cancel()
             card.visibility = View.VISIBLE
-            if (animate) {
-                card.alpha = 0f
-                card.translationY = 12.dp.toFloat()
-                card.animate()
-                    .alpha(1f)
-                    .translationY(0f)
-                    .setDuration(220L)
-                    .withEndAction {
-                        if (shouldAutoScroll && !hasUserScrolledManually) {
-                            scrollToCard(card)
-                        }
-                    }
-                    .start()
-            } else {
-                card.alpha = 1f
-                card.translationY = 0f
-                if (shouldAutoScroll && !hasUserScrolledManually) {
-                    scrollToCard(card)
-                }
-            }
-            return
+            card.alpha = 1f
+            card.translationY = 0f
         }
-
-        if (shouldAutoScroll && !hasUserScrolledManually) {
+        if (!inHiddenHost && shouldAutoScroll && !hasUserScrolledManually) {
             scrollToCard(card)
         }
     }
@@ -1227,12 +1505,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun createLoadingHintView(message: String): View {
-        return TextView(this).apply {
+        return TextView(themedContext()).apply {
             text = message
             textSize = 13f
             setLineSpacing(2.dp.toFloat(), 1f)
             setPadding(0, 8.dp, 0, 2.dp)
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.md_on_surface_variant))
+            setTextColor(onSurfaceVariantColor())
         }
     }
 
@@ -1283,7 +1561,7 @@ class MainActivity : AppCompatActivity() {
 
         if (infoSection != null && infoDivider != null) {
             val infoFindings = category.findings.filter { it.isInformational }
-            val checkFindings = category.findings.filterNot { it.isInformational }
+            val checkFindings = category.findings.filterNot { it.isInformational || it.isError }
 
             bindInfoSection(infoFindings, infoSection, infoDivider, checkFindings.isNotEmpty(), privacyMode)
             findingsContainer.removeAllViews()
@@ -1296,6 +1574,7 @@ class MainActivity : AppCompatActivity() {
 
         findingsContainer.removeAllViews()
         for (finding in category.findings) {
+            if (finding.isError) continue
             if (finding.description.startsWith("network_mcc_ru:")) continue
             findingsContainer.addView(createFindingView(finding, privacyMode))
         }
@@ -1358,13 +1637,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun createFindingView(finding: Finding, privacyMode: Boolean = false): View {
-        val row = LinearLayout(this).apply {
+        val row = LinearLayout(themedContext()).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, 4.dp, 0, 4.dp)
         }
 
-        val indicator = TextView(this).apply {
+        val indicator = TextView(themedContext()).apply {
             text = when {
                 finding.detected -> "\u26A0"
                 finding.needsReview -> "?"
@@ -1372,7 +1651,7 @@ class MainActivity : AppCompatActivity() {
             }
             setTextColor(
                 ContextCompat.getColor(
-                    this@MainActivity,
+                    themedContext(),
                     when {
                         finding.detected -> R.color.finding_detected
                         finding.needsReview -> R.color.verdict_yellow
@@ -1386,12 +1665,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         val descriptionText = if (privacyMode) maskIpsInText(finding.description) else finding.description
-        val description = TextView(this).apply {
+        val description = TextView(themedContext()).apply {
             text = wrapForDisplay(descriptionText)
             textSize = 13f
-            val tv = TypedValue()
-            this@MainActivity.theme.resolveAttribute(android.R.attr.textColorPrimary, tv, true)
-            setTextColor(ContextCompat.getColor(this@MainActivity, tv.resourceId))
+            setTextColor(onSurfaceColor())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             textDirection = View.TEXT_DIRECTION_LOCALE
             textAlignment = View.TEXT_ALIGNMENT_VIEW_START
@@ -1404,19 +1681,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun createInfoView(label: String, value: String): View {
         val rtl = isRtlLayout()
-        val row = LinearLayout(this).apply {
+        val row = LinearLayout(themedContext()).apply {
             orientation = if (rtl) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
             gravity = if (rtl) Gravity.END else Gravity.CENTER_VERTICAL
             setPadding(0, 4.dp, 0, if (rtl) 6.dp else 4.dp)
         }
 
-        val labelView = TextView(this).apply {
+        val labelView = TextView(themedContext()).apply {
             text = wrapForDisplay(label)
             textSize = 11f
             typeface = Typeface.DEFAULT_BOLD
             isAllCaps = !rtl
             letterSpacing = 0.05f
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.md_on_surface_variant))
+            setTextColor(onSurfaceVariantColor())
             layoutParams = if (rtl) {
                 LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -1429,16 +1706,10 @@ class MainActivity : AppCompatActivity() {
             textAlignment = if (rtl) View.TEXT_ALIGNMENT_VIEW_END else View.TEXT_ALIGNMENT_VIEW_START
         }
 
-        val valueView = TextView(this).apply {
+        val valueView = TextView(themedContext()).apply {
             text = wrapForDisplay(value)
             textSize = 13f
-            val tv = TypedValue()
-            this@MainActivity.theme.resolveAttribute(android.R.attr.textColorPrimary, tv, true)
-            if (tv.resourceId != 0) {
-                setTextColor(ContextCompat.getColor(this@MainActivity, tv.resourceId))
-            } else if (tv.type >= TypedValue.TYPE_FIRST_COLOR_INT && tv.type <= TypedValue.TYPE_LAST_COLOR_INT) {
-                setTextColor(tv.data)
-            }
+            setTextColor(onSurfaceColor())
             layoutParams = if (rtl) {
                 LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -1489,7 +1760,7 @@ class MainActivity : AppCompatActivity() {
         expanded: Boolean,
         privacyMode: Boolean = false,
     ): View {
-        val card = MaterialCardView(this).apply {
+        val card = MaterialCardView(themedContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -1498,50 +1769,50 @@ class MainActivity : AppCompatActivity() {
             }
             radius = 14.dp.toFloat()
             strokeWidth = 1.dp
-            strokeColor = ContextCompat.getColor(this@MainActivity, R.color.md_outline_variant)
-            setCardBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.md_surface))
+            strokeColor = outlineVariantColor()
+            setCardBackgroundColor(surfaceColor())
         }
 
-        val container = LinearLayout(this).apply {
+        val container = LinearLayout(themedContext()).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(12.dp, 12.dp, 12.dp, 12.dp)
         }
 
-        val header = LinearLayout(this).apply {
+        val header = LinearLayout(themedContext()).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        val title = TextView(this).apply {
+        val title = TextView(themedContext()).apply {
             text = group.title
             textSize = 15f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.md_on_surface))
+            setTextColor(onSurfaceColor())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
 
-        val status = TextView(this).apply {
+        val status = TextView(themedContext()).apply {
             text = group.statusLabel
             textSize = 12f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(ContextCompat.getColor(this@MainActivity, statusColorRes(group.detected, group.needsReview)))
+            setTextColor(ContextCompat.getColor(themedContext(), statusColorRes(group.detected, group.needsReview)))
         }
 
-        val toggle = TextView(this).apply {
+        val toggle = TextView(themedContext()).apply {
             text = if (expanded) "▼" else "▶"
             textSize = 12f
             setPadding(8.dp, 0, 0, 0)
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.md_on_surface_variant))
+            setTextColor(onSurfaceVariantColor())
         }
 
-        val summary = TextView(this).apply {
+        val summary = TextView(themedContext()).apply {
             text = if (privacyMode) maskIpsInText(group.summary) else group.summary
             textSize = 13f
             setPadding(0, 6.dp, 0, 0)
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.md_on_surface_variant))
+            setTextColor(onSurfaceVariantColor())
         }
 
-        val details = LinearLayout(this).apply {
+        val details = LinearLayout(themedContext()).apply {
             orientation = LinearLayout.VERTICAL
             visibility = if (expanded) View.VISIBLE else View.GONE
             setPadding(0, 8.dp, 0, 0)
@@ -1570,42 +1841,42 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun createIpCheckerResponseView(response: IpCheckerResponse, privacyMode: Boolean = false): View {
-        val container = LinearLayout(this).apply {
+        val container = LinearLayout(themedContext()).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 8.dp, 0, 8.dp)
         }
 
-        val topRow = LinearLayout(this).apply {
+        val topRow = LinearLayout(themedContext()).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        val label = TextView(this).apply {
+        val label = TextView(themedContext()).apply {
             text = response.label
             textSize = 13f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.md_on_surface))
+            setTextColor(onSurfaceColor())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
 
         val displayIp = if (privacyMode && response.ip != null) maskIp(response.ip) else response.ip
-        val value = TextView(this).apply {
+        val value = TextView(themedContext()).apply {
             text = displayIp ?: getString(R.string.main_card_status_error)
             textSize = 13f
             typeface = Typeface.MONOSPACE
             setTextColor(
                 ContextCompat.getColor(
-                    this@MainActivity,
+                    themedContext(),
                     if (response.ip != null) R.color.status_green else R.color.status_amber,
                 ),
             )
         }
 
-        val url = TextView(this).apply {
+        val url = TextView(themedContext()).apply {
             text = response.url
             textSize = 12f
             setPadding(0, 4.dp, 0, 0)
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.md_on_surface_variant))
+            setTextColor(onSurfaceVariantColor())
         }
 
         topRow.addView(label)
@@ -1613,64 +1884,49 @@ class MainActivity : AppCompatActivity() {
         container.addView(topRow)
         container.addView(url)
 
-        if (!response.error.isNullOrBlank()) {
-            container.addView(
-                TextView(this).apply {
-                    text = buildString {
-                        if (response.ignoredIpv6Error) {
-                            append(getString(R.string.main_ipv6_error_ignored))
-                        }
-                        append(response.error)
-                    }.let { if (privacyMode) maskIpsInText(it) else it }
-                    textSize = 12f
-                    setPadding(0, 2.dp, 0, 0)
-                    setTextColor(
-                        ContextCompat.getColor(
-                            this@MainActivity,
-                            if (response.ignoredIpv6Error) R.color.md_on_surface_variant else R.color.status_amber,
-                        ),
-                    )
-                },
-            )
-        }
-
         return container
     }
 
     private fun createCdnPullingResponseView(response: CdnPullingResponse, privacyMode: Boolean = false): View {
-        val container = LinearLayout(this).apply {
+        val container = LinearLayout(themedContext()).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 8.dp, 0, 8.dp)
         }
 
-        val topRow = LinearLayout(this).apply {
+        val topRow = LinearLayout(themedContext()).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        val label = TextView(this).apply {
+        val label = TextView(themedContext()).apply {
             text = response.targetLabel
             textSize = 13f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.md_on_surface))
+            setTextColor(onSurfaceColor())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
 
+        val hasDualStack = response.ipv4 != null && response.ipv6 != null
+        val hasIpv6Only = response.ipv6 != null && response.ipv4 == null
+        val primaryDisplayIp = response.ip
+
         val valueText = when {
-            response.ip != null -> if (privacyMode) maskIp(response.ip) else response.ip
+            hasDualStack -> if (privacyMode) maskIp(response.ipv4!!) else response.ipv4!!
+            hasIpv6Only && response.ipv4Unavailable -> if (privacyMode) maskIp(response.ipv6!!) else response.ipv6!!
+            primaryDisplayIp != null -> if (privacyMode) maskIp(primaryDisplayIp) else primaryDisplayIp
             response.importantFields.isNotEmpty() -> getString(R.string.main_card_status_detected)
             response.error != null -> getString(R.string.main_card_status_error)
             else -> getString(R.string.main_card_status_clean)
         }
-        val value = TextView(this).apply {
+        val value = TextView(themedContext()).apply {
             text = valueText
             textSize = 13f
             typeface = Typeface.MONOSPACE
             setTextColor(
                 ContextCompat.getColor(
-                    this@MainActivity,
+                    themedContext(),
                     when {
-                        response.ip != null -> R.color.status_red
+                        primaryDisplayIp != null -> R.color.status_red
                         response.error != null -> R.color.status_amber
                         else -> R.color.status_green
                     },
@@ -1678,16 +1934,50 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        val url = TextView(this).apply {
+        val url = TextView(themedContext()).apply {
             text = response.url
             textSize = 12f
             setPadding(0, 4.dp, 0, 0)
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.md_on_surface_variant))
+            setTextColor(onSurfaceVariantColor())
         }
 
         topRow.addView(label)
         topRow.addView(value)
         container.addView(topRow)
+
+        if (hasDualStack) {
+            container.addView(
+                TextView(themedContext()).apply {
+                    text = if (privacyMode) maskIp(response.ipv6!!) else response.ipv6!!
+                    textSize = 13f
+                    typeface = Typeface.MONOSPACE
+                    setPadding(0, 2.dp, 0, 0)
+                    setTextColor(ContextCompat.getColor(themedContext(), R.color.status_red))
+                },
+            )
+        } else if (response.ipv4Unavailable && response.ipv6 != null) {
+            container.addView(
+                TextView(themedContext()).apply {
+                    text = getString(R.string.main_ip_comparison_ipv4_unavailable)
+                    textSize = 12f
+                    typeface = Typeface.MONOSPACE
+                    setPadding(0, 2.dp, 0, 0)
+                    setTextColor(onSurfaceVariantColor())
+                },
+            )
+            response.ipv4Error?.takeIf { it.isNotBlank() }?.let { reason ->
+                container.addView(
+                    TextView(themedContext()).apply {
+                        text = reason
+                        textSize = 11f
+                        typeface = Typeface.MONOSPACE
+                        setPadding(0, 0, 0, 0)
+                        setTextColor(onSurfaceVariantColor())
+                    },
+                )
+            }
+        }
+
         container.addView(url)
 
         response.importantFields.forEach { (fieldLabel, fieldValue) ->
@@ -1697,17 +1987,6 @@ class MainActivity : AppCompatActivity() {
                     fieldLabel,
                     maskInfoValue(fieldValue, privacyMode),
                 ),
-            )
-        }
-
-        if (!response.error.isNullOrBlank()) {
-            container.addView(
-                TextView(this).apply {
-                    text = maskInfoValue(response.error, privacyMode)
-                    textSize = 12f
-                    setPadding(0, 2.dp, 0, 0)
-                    setTextColor(ContextCompat.getColor(this@MainActivity, R.color.status_amber))
-                },
             )
         }
 
@@ -1727,8 +2006,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun displayCallTransport(leaks: List<CallTransportLeakResult>, privacyMode: Boolean) {
-        if (leaks.isEmpty()) {
+    private fun displayCallTransport(
+        leaks: List<CallTransportLeakResult>,
+        stunGroups: List<StunProbeGroupResult>,
+        privacyMode: Boolean,
+    ) {
+        val hasContent = leaks.isNotEmpty() || stunGroups.any { it.results.isNotEmpty() }
+        if (!hasContent) {
             cardCallTransport.visibility = View.GONE
             return
         }
@@ -1744,15 +2028,205 @@ class MainActivity : AppCompatActivity() {
             hasError = hasError && !hasNeedsReview,
         )
 
+        val respondedCount = stunGroups.sumOf { it.respondedCount }
+        val totalCount = stunGroups.sumOf { it.totalCount }
+        if (totalCount > 0) {
+            textCallTransportSummary.text = getString(
+                R.string.main_card_call_transport_stun_responded,
+                respondedCount,
+                totalCount,
+            )
+            textCallTransportSummary.visibility = View.VISIBLE
+        } else {
+            textCallTransportSummary.visibility = View.GONE
+        }
+
+        stunGroupsContainer.removeAllViews()
+        if (stunGroups.isNotEmpty()) {
+            stunGroupsContainer.visibility = View.VISIBLE
+            for (group in stunGroups) {
+                stunGroupsContainer.addView(createStunGroupView(group, privacyMode))
+            }
+        } else {
+            stunGroupsContainer.visibility = View.GONE
+        }
+
         findingsCallTransport.removeAllViews()
-        findingsCallTransport.visibility = View.VISIBLE
-        for (leak in leaks) {
-            findingsCallTransport.addView(createCallTransportLeakView(leak, privacyMode))
+        if (leaks.isNotEmpty()) {
+            findingsCallTransport.visibility = View.VISIBLE
+            for (leak in leaks) {
+                findingsCallTransport.addView(createCallTransportLeakView(leak, privacyMode))
+            }
+        } else {
+            findingsCallTransport.visibility = View.GONE
         }
     }
 
+    private fun createStunGroupView(group: StunProbeGroupResult, privacyMode: Boolean): View {
+        val groupTitle = when (group.scope) {
+            StunScope.GLOBAL -> getString(R.string.main_card_call_transport_stun_group_global)
+            StunScope.RU -> getString(R.string.main_card_call_transport_stun_group_ru)
+        }
+        val respondedCount = group.respondedCount
+        val totalCount = group.totalCount
+        val statusLabel = if (respondedCount > 0) {
+            getString(R.string.main_card_call_transport_stun_responded, respondedCount, totalCount)
+        } else {
+            getString(R.string.main_card_call_transport_stun_none_responded)
+        }
+        val groupResult = com.notcvnt.rknhardering.model.IpCheckerGroupResult(
+            title = groupTitle,
+            detected = false,
+            needsReview = false,
+            statusLabel = statusLabel,
+            summary = statusLabel,
+            responses = emptyList(),
+        )
+
+        val card = com.google.android.material.card.MaterialCardView(themedContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = 8.dp }
+            radius = 14.dp.toFloat()
+            strokeWidth = 1.dp
+            strokeColor = outlineVariantColor()
+            setCardBackgroundColor(surfaceColor())
+        }
+
+        val container = LinearLayout(themedContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(12.dp, 12.dp, 12.dp, 12.dp)
+        }
+
+        val header = LinearLayout(themedContext()).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val title = TextView(themedContext()).apply {
+            text = groupTitle
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(onSurfaceColor())
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        val statusView = TextView(themedContext()).apply {
+            text = statusLabel
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(
+                ContextCompat.getColor(
+                    themedContext(),
+                    if (respondedCount > 0) R.color.status_green else R.color.status_amber,
+                ),
+            )
+        }
+
+        val expanded = respondedCount > 0
+        val toggle = TextView(themedContext()).apply {
+            text = if (expanded) "▼" else "▶"
+            textSize = 12f
+            setPadding(8.dp, 0, 0, 0)
+            setTextColor(onSurfaceVariantColor())
+        }
+
+        val details = LinearLayout(themedContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = if (expanded) View.VISIBLE else View.GONE
+            setPadding(0, 8.dp, 0, 0)
+        }
+
+        for (result in group.results) {
+            details.addView(createStunProbeResultView(result, privacyMode))
+        }
+
+        val toggleDetails = {
+            val nextExpanded = details.visibility != View.VISIBLE
+            details.visibility = if (nextExpanded) View.VISIBLE else View.GONE
+            toggle.text = if (nextExpanded) "▼" else "▶"
+        }
+        header.setOnClickListener { toggleDetails() }
+
+        header.addView(title)
+        header.addView(statusView)
+        header.addView(toggle)
+        container.addView(header)
+        container.addView(details)
+        card.addView(container)
+        return card
+    }
+
+    private fun createStunProbeResultView(result: com.notcvnt.rknhardering.model.StunProbeResult, privacyMode: Boolean): View {
+        val container = LinearLayout(themedContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 6.dp, 0, 6.dp)
+        }
+
+        val hostRow = LinearLayout(themedContext()).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val hostLabel = TextView(themedContext()).apply {
+            text = "${result.host}:${result.port}"
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(onSurfaceColor())
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        val hasAnyResponse = result.hasResponse
+        val hasDualStack = result.mappedIpv4 != null && result.mappedIpv6 != null
+        val responseLabel = TextView(themedContext()).apply {
+            text = when {
+                hasAnyResponse && hasDualStack -> "IPv4 + IPv6"
+                hasAnyResponse -> result.mappedIpDisplay?.let { ip ->
+                    if (privacyMode) maskIp(ip) else ip
+                } ?: getString(R.string.main_card_call_transport_stun_no_response)
+                result.error != null -> getString(R.string.main_card_call_transport_stun_error)
+                else -> getString(R.string.main_card_call_transport_stun_no_response)
+            }
+            textSize = 12f
+            typeface = Typeface.MONOSPACE
+            setTextColor(
+                ContextCompat.getColor(
+                    themedContext(),
+                    if (hasAnyResponse) R.color.status_green else R.color.status_amber,
+                ),
+            )
+        }
+
+        hostRow.addView(hostLabel)
+        hostRow.addView(responseLabel)
+        container.addView(hostRow)
+
+        if (result.mappedIpv4 != null && result.mappedIpv6 != null) {
+            container.addView(createInfoView(
+                getString(R.string.main_card_call_transport_stun_ipv4),
+                if (privacyMode) maskIp(result.mappedIpv4) else result.mappedIpv4,
+            ))
+            container.addView(createInfoView(
+                getString(R.string.main_card_call_transport_stun_ipv6),
+                if (privacyMode) maskIp(result.mappedIpv6) else result.mappedIpv6,
+            ))
+        }
+
+        result.error?.takeIf { it.isNotBlank() && !hasAnyResponse }?.let { err ->
+            container.addView(TextView(themedContext()).apply {
+                text = err
+                textSize = 11f
+                setTextColor(onSurfaceVariantColor())
+                setPadding(0, 2.dp, 0, 0)
+            })
+        }
+
+        return container
+    }
+
     private fun createCallTransportLeakView(leak: CallTransportLeakResult, privacyMode: Boolean): View {
-        val container = LinearLayout(this).apply {
+        val container = LinearLayout(themedContext()).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 4.dp, 0, 4.dp)
         }
@@ -1774,18 +2248,18 @@ class MainActivity : AppCompatActivity() {
             CallTransportService.WHATSAPP -> "WhatsApp"
         }
         val statusColor = when (leak.status) {
-            CallTransportStatus.BASELINE -> R.color.status_green
-            CallTransportStatus.NEEDS_REVIEW -> R.color.status_amber
-            CallTransportStatus.ERROR -> R.color.status_amber
-            CallTransportStatus.NO_SIGNAL -> R.color.md_on_surface_variant
-            CallTransportStatus.UNSUPPORTED -> R.color.md_on_surface_variant
+            CallTransportStatus.BASELINE -> ContextCompat.getColor(themedContext(), R.color.status_green)
+            CallTransportStatus.NEEDS_REVIEW -> ContextCompat.getColor(themedContext(), R.color.status_amber)
+            CallTransportStatus.ERROR -> ContextCompat.getColor(themedContext(), R.color.status_amber)
+            CallTransportStatus.NO_SIGNAL -> onSurfaceVariantColor()
+            CallTransportStatus.UNSUPPORTED -> onSurfaceVariantColor()
         }
 
-        val headerRow = LinearLayout(this).apply {
+        val headerRow = LinearLayout(themedContext()).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        val indicator = TextView(this).apply {
+        val indicator = TextView(themedContext()).apply {
             text = when (leak.status) {
                 CallTransportStatus.BASELINE -> "\u2713"
                 CallTransportStatus.NEEDS_REVIEW -> "?"
@@ -1793,17 +2267,20 @@ class MainActivity : AppCompatActivity() {
                 CallTransportStatus.NO_SIGNAL -> "\u2014"
                 CallTransportStatus.UNSUPPORTED -> "\u2014"
             }
-            setTextColor(ContextCompat.getColor(this@MainActivity, statusColor))
+            setTextColor(statusColor)
             textSize = 14f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             setPadding(0, 0, 8.dp, 0)
         }
-        val headerText = TextView(this).apply {
-            text = "$serviceLabel \u00B7 $pathLabel \u00B7 $statusLabel"
+        val headerText = TextView(themedContext()).apply {
+            text = getString(
+                R.string.main_card_call_transport_header,
+                serviceLabel,
+                pathLabel,
+                statusLabel,
+            )
             textSize = 13f
-            val tv = android.util.TypedValue()
-            this@MainActivity.theme.resolveAttribute(android.R.attr.textColorPrimary, tv, true)
-            setTextColor(ContextCompat.getColor(this@MainActivity, tv.resourceId))
+            setTextColor(onSurfaceColor())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         headerRow.addView(indicator)
@@ -1811,15 +2288,16 @@ class MainActivity : AppCompatActivity() {
         container.addView(headerRow)
 
         formatCallTransportReason(this, leak, privacyMode)?.let { reason ->
-            val reasonColor = when (leak.status) {
-                CallTransportStatus.ERROR -> R.color.status_amber
-                else -> R.color.md_on_surface_variant
+            val reasonColor = if (leak.status == CallTransportStatus.ERROR) {
+                ContextCompat.getColor(themedContext(), R.color.status_amber)
+            } else {
+                onSurfaceVariantColor()
             }
-            container.addView(TextView(this).apply {
+            container.addView(TextView(themedContext()).apply {
                 text = reason
                 textSize = 12f
                 setPadding(22.dp, 2.dp, 0, 0)
-                setTextColor(ContextCompat.getColor(this@MainActivity, reasonColor))
+                setTextColor(reasonColor)
             })
         }
 
@@ -1972,7 +2450,7 @@ class MainActivity : AppCompatActivity() {
 
         if (verdictDetailsContent.isNotEmpty()) {
             verdictDetailsContent.addView(
-                View(this).apply {
+                View(themedContext()).apply {
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
                         1.dp,
@@ -1980,7 +2458,7 @@ class MainActivity : AppCompatActivity() {
                         topMargin = 12.dp
                         bottomMargin = 12.dp
                     }
-                    setBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.md_outline_variant))
+                    setBackgroundColor(outlineVariantColor())
                     alpha = 0.7f
                 },
             )
@@ -1991,42 +2469,36 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun createVerdictSectionTitleView(title: String): View {
-        return TextView(this).apply {
+        return TextView(themedContext()).apply {
             text = title
             textSize = 11f
             typeface = Typeface.DEFAULT_BOLD
             isAllCaps = true
             letterSpacing = 0.05f
             setPadding(0, 0, 0, 6.dp)
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.md_on_surface_variant))
+            setTextColor(onSurfaceVariantColor())
         }
     }
 
     private fun createVerdictBulletView(text: String): View {
-        val row = LinearLayout(this).apply {
+        val row = LinearLayout(themedContext()).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, 4.dp, 0, 4.dp)
         }
 
-        val bullet = TextView(this).apply {
+        val bullet = TextView(themedContext()).apply {
             this.text = "•"
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
             setPadding(0, 0, 8.dp, 0)
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.md_on_surface_variant))
+            setTextColor(onSurfaceVariantColor())
         }
 
-        val body = TextView(this).apply {
+        val body = TextView(themedContext()).apply {
             this.text = text
             textSize = 13f
             setLineSpacing(2.dp.toFloat(), 1f)
-            val tv = TypedValue()
-            this@MainActivity.theme.resolveAttribute(android.R.attr.textColorPrimary, tv, true)
-            if (tv.resourceId != 0) {
-                setTextColor(ContextCompat.getColor(this@MainActivity, tv.resourceId))
-            } else if (tv.type >= TypedValue.TYPE_FIRST_COLOR_INT && tv.type <= TypedValue.TYPE_LAST_COLOR_INT) {
-                setTextColor(tv.data)
-            }
+            setTextColor(onSurfaceColor())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
 
@@ -2068,16 +2540,329 @@ class MainActivity : AppCompatActivity() {
     private val Int.dp: Int
         get() = (this * resources.displayMetrics.density).toInt()
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        outState.putBoolean(STATE_RUN_CHECK_NOTICE_HIDDEN, hasDismissedRunCheckNotice)
-    }
-
     companion object {
         private const val PREF_RATIONALE_SHOWN = "permissions_rationale_shown"
         private const val PREF_REQUESTED_PERMISSIONS = "requested_permissions"
-        private const val STATE_RUN_CHECK_NOTICE_HIDDEN = "state_run_check_notice_hidden"
         private const val LOADING_STATUS_FRAME_MS = 420L
         private const val AUTO_SCROLL_LOCK_MS = 450L
+
+        private const val CATEGORY_GEO = "geo"
+        private const val CATEGORY_IPC = "ipc"
+        private const val CATEGORY_CDN = "cdn"
+        private const val CATEGORY_DIR = "dir"
+        private const val CATEGORY_IND = "ind"
+        private const val CATEGORY_STN = "stn"
+        private const val CATEGORY_LOC = "loc"
+        private const val CATEGORY_BYP = "byp"
+
+        private const val TILE_STATUS_NEUTRAL = 0
+        private const val TILE_STATUS_CLEAN = 1
+        private const val TILE_STATUS_REVIEW = 2
+        private const val TILE_STATUS_DETECTED = 3
+    }
+
+    private fun onTileClicked(id: String) {
+        if (expandedCategoryId == id) {
+            collapseExpanded()
+        } else {
+            expandCategory(id)
+        }
+    }
+
+    private fun collapseExpanded() {
+        val currentId = expandedCategoryId ?: return
+        androidx.transition.TransitionManager.beginDelayedTransition(mainContentRoot)
+        returnDetailContentToHost(currentId)
+        expandedDetail.visibility = View.GONE
+        expandedCategoryId = null
+        tiles.values.forEach { holder ->
+            holder.card.strokeColor = android.graphics.Color.TRANSPARENT
+        }
+    }
+
+    private fun expandCategory(id: String) {
+        val holder = tiles[id] ?: return
+        val content = legacyContentFor(id) ?: return
+
+        androidx.transition.TransitionManager.beginDelayedTransition(mainContentRoot)
+        if (expandedCategoryId != null && expandedCategoryId != id) {
+            returnDetailContentToHost(expandedCategoryId!!)
+        }
+
+        val parent = content.parent as? android.view.ViewGroup
+        parent?.removeView(content)
+        detailContentSlot.removeAllViews()
+        detailContentSlot.addView(
+            content,
+            android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+            ),
+        )
+
+        val iconRes = categoryIcon(id)
+        detailIcon.setImageResource(iconRes)
+        detailTitle.text = holder.title.text
+        detailStatusChip.text = holder.hint.text
+        detailStatusChip.setTextColor(
+            (holder.statusDot.background as? android.graphics.drawable.GradientDrawable)?.let {
+                tileStatusChipColor(holder)
+            } ?: onSurfaceVariantColor(),
+        )
+        expandedDetail.visibility = View.VISIBLE
+        expandedCategoryId = id
+
+        tiles.values.forEach { h ->
+            h.card.strokeColor = if (h.id == id) {
+                MaterialColors.getColor(h.card, com.google.android.material.R.attr.colorOutline, 0)
+            } else {
+                android.graphics.Color.TRANSPARENT
+            }
+        }
+    }
+
+    private fun tileStatusChipColor(holder: TileHolder): Int {
+        val tag = holder.statusDot.tag as? Int ?: TILE_STATUS_NEUTRAL
+        return when (tag) {
+            TILE_STATUS_CLEAN -> ContextCompat.getColor(this, R.color.status_green)
+            TILE_STATUS_REVIEW -> ContextCompat.getColor(this, R.color.status_amber)
+            TILE_STATUS_DETECTED -> ContextCompat.getColor(this, R.color.status_red)
+            else -> onSurfaceVariantColor()
+        }
+    }
+
+    private fun returnDetailContentToHost(id: String) {
+        val host = legacyCardFor(id) ?: return
+        val content = detailContentSlot.getChildAt(0) ?: return
+        detailContentSlot.removeView(content)
+        host.addView(
+            content,
+            android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+            ),
+        )
+    }
+
+    private fun legacyCardFor(id: String): MaterialCardView? = when (id) {
+        CATEGORY_GEO -> cardGeoIp
+        CATEGORY_IPC -> cardIpComparison
+        CATEGORY_CDN -> cardCdnPulling
+        CATEGORY_DIR -> cardDirect
+        CATEGORY_IND -> cardIndirect
+        CATEGORY_STN -> cardCallTransport
+        CATEGORY_LOC -> cardLocation
+        CATEGORY_BYP -> cardBypass
+        else -> null
+    }
+
+    private fun legacyContentFor(id: String): View? {
+        val contentId = when (id) {
+            CATEGORY_GEO -> R.id.cardGeoIpContent
+            CATEGORY_IPC -> R.id.cardIpComparisonContent
+            CATEGORY_CDN -> R.id.cardCdnPullingContent
+            CATEGORY_DIR -> R.id.cardDirectContent
+            CATEGORY_IND -> R.id.cardIndirectContent
+            CATEGORY_STN -> R.id.cardCallTransportContent
+            CATEGORY_LOC -> R.id.cardLocationContent
+            CATEGORY_BYP -> R.id.cardBypassContent
+            else -> return null
+        }
+        // Content может быть либо ещё в своей карточке, либо уже в detailContentSlot
+        return findViewById(contentId)
+    }
+
+    private fun categoryIcon(id: String): Int = when (id) {
+        CATEGORY_GEO -> R.drawable.ic_globe
+        CATEGORY_IPC -> R.drawable.ic_compare
+        CATEGORY_CDN -> R.drawable.ic_cloud
+        CATEGORY_DIR -> R.drawable.ic_shield
+        CATEGORY_IND -> R.drawable.ic_network
+        CATEGORY_STN -> R.drawable.ic_phone
+        CATEGORY_LOC -> R.drawable.ic_pin
+        CATEGORY_BYP -> R.drawable.ic_split
+        else -> R.drawable.ic_help
+    }
+
+    private fun setTileStatus(id: String, status: Int, hint: String?) {
+        val holder = tiles[id] ?: return
+        val dotRes = when (status) {
+            TILE_STATUS_CLEAN -> R.drawable.dot_status_green
+            TILE_STATUS_REVIEW -> R.drawable.dot_status_amber
+            TILE_STATUS_DETECTED -> R.drawable.dot_status_red
+            else -> R.drawable.dot_status_neutral
+        }
+        holder.statusDot.setBackgroundResource(dotRes)
+        holder.statusDot.tag = status
+        if (hint != null) {
+            holder.hint.text = hint
+        }
+        if (expandedCategoryId == id) {
+            detailStatusChip.text = holder.hint.text
+            detailStatusChip.setTextColor(tileStatusChipColor(holder))
+        }
+    }
+
+    private fun resetAllTiles() {
+        tiles.keys.forEach { id ->
+            setTileStatus(id, TILE_STATUS_NEUTRAL, getString(R.string.tile_hint_placeholder))
+        }
+        if (expandedCategoryId != null) {
+            collapseExpanded()
+        }
+    }
+
+    private fun statusFromCategory(detected: Boolean, needsReview: Boolean, hasError: Boolean): Int {
+        return when {
+            detected -> TILE_STATUS_DETECTED
+            needsReview || hasError -> TILE_STATUS_REVIEW
+            else -> TILE_STATUS_CLEAN
+        }
+    }
+
+    private fun updateTileFromCategory(id: String, category: CategoryResult) {
+        val status = statusFromCategory(category.detected, category.needsReview, category.hasError)
+        val hint = buildTileHintForCategory(category)
+        setTileStatus(id, status, hint)
+    }
+
+    private fun updateTileFromIpComparison(result: IpComparisonResult) {
+        val status = statusFromCategory(result.detected, result.needsReview, hasError = false)
+        val ru = result.ruGroup.responses.size
+        val nonRu = result.nonRuGroup.responses.size
+        val total = ru + nonRu
+        val hint = when {
+            result.detected -> getString(R.string.tile_hint_review)
+            result.needsReview -> getString(R.string.tile_hint_review)
+            total > 0 -> getString(R.string.tile_hint_clean_count, total)
+            else -> null
+        }
+        setTileStatus(CATEGORY_IPC, status, hint)
+    }
+
+    private fun updateTileFromCdn(result: CdnPullingResult) {
+        val status = when {
+            result.needsReview -> TILE_STATUS_REVIEW
+            result.hasError -> TILE_STATUS_REVIEW
+            result.detected -> TILE_STATUS_CLEAN
+            else -> TILE_STATUS_NEUTRAL
+        }
+        val total = result.responses.size
+        val hint = when {
+            result.needsReview -> getString(R.string.tile_hint_review)
+            result.hasError -> getString(R.string.tile_hint_error)
+            total > 0 -> getString(R.string.tile_hint_clean_count, total)
+            else -> null
+        }
+        setTileStatus(CATEGORY_CDN, status, hint)
+    }
+
+    private fun updateTileFromBypass(result: BypassResult) {
+        val status = statusFromCategory(result.detected, result.needsReview, hasError = false)
+        val hint = when {
+            result.detected -> getString(R.string.tile_hint_review)
+            result.needsReview -> getString(R.string.tile_hint_review)
+            else -> getString(R.string.tile_hint_clean)
+        }
+        setTileStatus(CATEGORY_BYP, status, hint)
+    }
+
+    private fun updateTileFromCallTransport(leaks: List<CallTransportLeakResult>, stunGroups: List<StunProbeGroupResult>) {
+        val respondedCount = stunGroups.sumOf { it.respondedCount }
+        val totalCount = stunGroups.sumOf { it.totalCount }
+        val hasNeedsReview = leaks.any { it.status == CallTransportStatus.NEEDS_REVIEW }
+        val hasError = leaks.any { it.status == CallTransportStatus.ERROR }
+        if (leaks.isEmpty() && totalCount == 0) {
+            setTileStatus(CATEGORY_STN, TILE_STATUS_NEUTRAL, getString(R.string.tile_hint_placeholder))
+            return
+        }
+        val status = when {
+            hasNeedsReview -> TILE_STATUS_REVIEW
+            hasError -> TILE_STATUS_REVIEW
+            else -> TILE_STATUS_CLEAN
+        }
+        val hint = if (totalCount > 0)
+            getString(R.string.main_card_call_transport_stun_responded, respondedCount, totalCount)
+        else
+            getString(R.string.tile_hint_clean_count, leaks.size)
+        setTileStatus(CATEGORY_STN, status, hint)
+    }
+
+    private fun buildTileHintForCategory(category: CategoryResult): String {
+        val nonInfo = category.findings.filterNot { it.isInformational || it.isError }
+        val detected = nonInfo.count { it.detected }
+        val total = nonInfo.size
+        return when {
+            category.detected && total > 0 -> getString(R.string.tile_hint_detected_count, detected, total)
+            category.detected -> getString(R.string.tile_hint_review)
+            category.needsReview -> getString(R.string.tile_hint_review)
+            category.hasError -> getString(R.string.tile_hint_error)
+            total > 0 -> getString(R.string.tile_hint_clean_count, total)
+            else -> getString(R.string.tile_hint_clean)
+        }
+    }
+
+    private fun bindVerdictHeroIdle() {
+        applyVerdictHeroColors(R.color.status_neutral_container, R.color.status_neutral)
+        verdictAvatarIcon.setImageResource(R.drawable.ic_minus)
+        verdictLabel.text = getString(R.string.verdict_label)
+        verdictTitle.text = getString(R.string.verdict_title_idle)
+        verdictSubtitle.text = getString(R.string.verdict_subtitle_idle)
+    }
+
+    private fun bindVerdictHeroRunning() {
+        applyVerdictHeroColors(R.color.status_neutral_container, R.color.status_neutral)
+        verdictAvatarIcon.setImageResource(R.drawable.ic_minus)
+        verdictLabel.text = getString(R.string.verdict_label)
+        verdictTitle.text = getString(R.string.verdict_title_idle)
+        verdictSubtitle.text = getString(R.string.verdict_subtitle_running)
+    }
+
+    private fun bindVerdictHero(result: CheckResult) {
+        val (containerRes, accentRes, iconRes, titleRes) = when (result.verdict) {
+            Verdict.NOT_DETECTED -> VerdictStyle(
+                R.color.status_green_container,
+                R.color.status_green,
+                R.drawable.ic_check_circle,
+                R.string.verdict_title_clean,
+            )
+            Verdict.NEEDS_REVIEW -> VerdictStyle(
+                R.color.status_amber_container,
+                R.color.status_amber,
+                R.drawable.ic_help,
+                R.string.verdict_title_review,
+            )
+            Verdict.DETECTED -> VerdictStyle(
+                R.color.status_red_container,
+                R.color.status_red,
+                R.drawable.ic_error,
+                R.string.verdict_title_detected,
+            )
+        }
+        applyVerdictHeroColors(containerRes, accentRes)
+        verdictAvatarIcon.setImageResource(iconRes)
+        verdictLabel.text = getString(R.string.verdict_label)
+        verdictTitle.text = getString(titleRes)
+        verdictSubtitle.text = getString(R.string.verdict_subtitle_done, tiles.size)
+    }
+
+    private data class VerdictStyle(
+        @ColorRes val containerRes: Int,
+        @ColorRes val accentRes: Int,
+        val iconRes: Int,
+        val titleRes: Int,
+    )
+
+    private fun applyVerdictHeroColors(@ColorRes containerRes: Int, @ColorRes accentRes: Int) {
+        val container = ContextCompat.getColor(this, containerRes)
+        val accent = ContextCompat.getColor(this, accentRes)
+        verdictHero.setCardBackgroundColor(container)
+        verdictTitle.setTextColor(accent)
+        verdictLabel.setTextColor(accent)
+        val avatarBg = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(accent)
+        }
+        verdictAvatar.background = avatarBg
     }
 }

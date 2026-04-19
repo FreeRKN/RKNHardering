@@ -10,11 +10,10 @@ import com.notcvnt.rknhardering.model.CallTransportService
 import com.notcvnt.rknhardering.model.CallTransportStatus
 import com.notcvnt.rknhardering.model.EvidenceConfidence
 import com.notcvnt.rknhardering.model.LocalProxyOwner
+import com.notcvnt.rknhardering.model.StunScope
 import com.notcvnt.rknhardering.network.DnsResolverConfig
-import com.notcvnt.rknhardering.network.ResolverBinding
 import com.notcvnt.rknhardering.probe.LocalSocketListener
 import com.notcvnt.rknhardering.probe.NativeCurlBridge
-import com.notcvnt.rknhardering.probe.NativeCurlResponse
 import com.notcvnt.rknhardering.probe.ProxyEndpoint
 import com.notcvnt.rknhardering.probe.ProxyType
 import com.notcvnt.rknhardering.probe.PublicIpClient
@@ -28,8 +27,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import java.io.IOException
-
 @RunWith(RobolectricTestRunner::class)
 class CallTransportCheckerTest {
 
@@ -43,122 +40,9 @@ class CallTransportCheckerTest {
     }
 
     @Test
-    fun `probeDirect marks active path baseline when stun responds without leak`() {
-        CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ -> catalogWithTelegramTarget() },
-            loadPaths = {
-                listOf(
-                    CallTransportChecker.PathDescriptor(
-                        path = CallTransportNetworkPath.ACTIVE,
-                    ),
-                )
-            },
-            stunProbe = { _, _, _ -> successBindingResult() },
-            publicIpFetcher = { _, _ -> Result.success("203.0.113.10") },
-        )
-
-        val results = runBlockingProbeDirect(experimental = false)
-
-        val telegram = results.first { it.service == CallTransportService.TELEGRAM }
-        assertEquals(CallTransportStatus.BASELINE, telegram.status)
-        assertEquals(CallTransportProbeKind.DIRECT_UDP_STUN, telegram.probeKind)
-        assertEquals(CallTransportNetworkPath.ACTIVE, telegram.networkPath)
-        assertEquals("149.154.167.51", telegram.targetHost)
-        assertEquals("198.51.100.20", telegram.mappedIp)
-        assertEquals("203.0.113.10", telegram.observedPublicIp)
-    }
-
-    @Test
-    fun `probeDirect flags active vpn path when stun ip diverges from public ip`() {
-        CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ -> catalogWithTelegramTarget() },
-            loadPaths = {
-                listOf(
-                    CallTransportChecker.PathDescriptor(
-                        path = CallTransportNetworkPath.ACTIVE,
-                        vpnProtected = true,
-                    ),
-                )
-            },
-            stunProbe = { _, _, _ -> successBindingResult() },
-            publicIpFetcher = { _, _ -> Result.success("203.0.113.10") },
-        )
-
-        val results = runBlockingProbeDirect(experimental = false)
-
-        val telegram = results.first { it.service == CallTransportService.TELEGRAM }
-        assertEquals(CallTransportStatus.NEEDS_REVIEW, telegram.status)
-    }
-
-    @Test
-    fun `probeDirect flags explicit underlying path for review`() {
-        CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ -> catalogWithTelegramTarget() },
-            loadPaths = {
-                listOf(
-                    CallTransportChecker.PathDescriptor(
-                        path = CallTransportNetworkPath.UNDERLYING,
-                    ),
-                )
-            },
-            stunProbe = { _, _, _ -> successBindingResult() },
-            publicIpFetcher = { _, _ -> Result.success("198.51.100.20") },
-        )
-
-        val results = runBlockingProbeDirect(experimental = false)
-
-        val telegram = results.first { it.service == CallTransportService.TELEGRAM }
-        assertEquals(CallTransportStatus.NEEDS_REVIEW, telegram.status)
-        assertEquals(CallTransportNetworkPath.UNDERLYING, telegram.networkPath)
-    }
-
-    @Test
-    fun `probeDirect converts no response into no signal`() {
-        CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ -> catalogWithTelegramTarget() },
-            loadPaths = {
-                listOf(
-                    CallTransportChecker.PathDescriptor(
-                        path = CallTransportNetworkPath.ACTIVE,
-                    ),
-                )
-            },
-            stunProbe = { _, _, _ -> Result.failure(IllegalStateException("timeout")) },
-            publicIpFetcher = { _, _ -> Result.success("203.0.113.10") },
-        )
-
-        val results = runBlockingProbeDirect(experimental = false)
-
-        assertTrue(results.any { it.service == CallTransportService.TELEGRAM && it.status == CallTransportStatus.NO_SIGNAL })
-        assertTrue(results.any { it.service == CallTransportService.WHATSAPP && it.status == CallTransportStatus.UNSUPPORTED })
-        assertFalse(results.any { it.service == CallTransportService.TELEGRAM && it.status == CallTransportStatus.ERROR })
-    }
-
-    @Test
-    fun `probeDirect reports unsupported when telegram catalog is empty`() {
-        CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ ->
-                CallTransportTargetCatalog.Catalog(
-                    telegramTargets = emptyList(),
-                    whatsappTargets = emptyList(),
-                )
-            },
-        )
-
-        val results = runBlockingProbeDirect(experimental = false)
-
-        assertTrue(results.any { it.service == CallTransportService.TELEGRAM && it.status == CallTransportStatus.UNSUPPORTED })
-    }
-
-    @Test
     fun `proxy assisted telegram stores remote dc as target not local proxy`() {
         CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ ->
-                CallTransportTargetCatalog.Catalog(
-                    telegramTargets = emptyList(),
-                    whatsappTargets = emptyList(),
-                )
-            },
+            loadCatalog = { catalogWithStunTarget() },
             proxyProbe = {
                 CallTransportChecker.ProxyProbeOutcome(
                     reachable = true,
@@ -188,7 +72,7 @@ class CallTransportCheckerTest {
     fun `proxy assisted telegram adds udp stun signal when udp associate succeeds`() {
         PublicIpClient.fetchIpOverride = { _, _, _, _, _ -> Result.success("203.0.113.10") }
         CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ -> catalogWithTelegramTarget() },
+            loadCatalog = { catalogWithStunTarget() },
             proxyProbe = {
                 CallTransportChecker.ProxyProbeOutcome(reachable = false)
             },
@@ -205,7 +89,7 @@ class CallTransportCheckerTest {
         val udpResult = results.first { it.probeKind == CallTransportProbeKind.PROXY_ASSISTED_UDP_STUN }
         assertEquals(CallTransportNetworkPath.LOCAL_PROXY, udpResult.networkPath)
         assertEquals(CallTransportStatus.NEEDS_REVIEW, udpResult.status)
-        assertEquals("149.154.167.51", udpResult.targetHost)
+        assertEquals("stun.example.com", udpResult.targetHost)
         assertEquals("198.51.100.20", udpResult.mappedIp)
         assertEquals("203.0.113.10", udpResult.observedPublicIp)
     }
@@ -213,7 +97,7 @@ class CallTransportCheckerTest {
     @Test
     fun `proxy assisted telegram auth failures stay as no signal`() {
         CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ -> catalogWithTelegramTarget() },
+            loadCatalog = { catalogWithStunTarget() },
             proxyProbe = {
                 CallTransportChecker.ProxyProbeOutcome(reachable = false)
             },
@@ -237,7 +121,7 @@ class CallTransportCheckerTest {
     fun `check can discover proxy assisted path without bypass ownership`() {
         PublicIpClient.fetchIpOverride = { _, _, _, _, _ -> Result.success("203.0.113.10") }
         CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ -> catalogWithTelegramTarget() },
+            loadCatalog = { catalogWithStunTarget() },
             loadPaths = { emptyList() },
             findLocalProxyEndpoint = {
                 ProxyEndpoint(host = "127.0.0.1", port = 1080, type = ProxyType.SOCKS5)
@@ -253,7 +137,6 @@ class CallTransportCheckerTest {
                 context = context,
                 resolverConfig = DnsResolverConfig.system(),
                 callTransportEnabled = true,
-                experimentalCallTransportEnabled = false,
             )
         }
 
@@ -295,166 +178,89 @@ class CallTransportCheckerTest {
     }
 
     @Test
-    fun `underlying path uses interface name for public ip fallback`() {
-        val observedBindings = mutableListOf<ResolverBinding?>()
-        PublicIpClient.fetchIpOverride = { _, _, _, _, binding ->
-            observedBindings += binding
-            when (binding) {
-                is ResolverBinding.AndroidNetworkBinding -> Result.failure(IOException("primary path failed"))
-                null -> Result.failure(IOException("unexpected unbound path"))
-                else -> Result.failure(IOException("unexpected binding"))
-            }
-        }
-        val observedInterfaces = mutableListOf<String>()
-        NativeCurlBridge.executeOverride = { request ->
-            observedInterfaces += request.interfaceName
-            NativeCurlResponse(
-                curlCode = 0,
-                httpCode = 200,
-                body = "203.0.113.10",
+    fun `probeStunTargets returns groups per scope`() {
+        CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
+            loadCatalog = { catalogWithStunTarget() },
+            loadPaths = {
+                listOf(CallTransportChecker.PathDescriptor(path = CallTransportNetworkPath.ACTIVE))
+            },
+            stunDualStackProbe = { _, _, _ -> successDualStackResult() },
+        )
+
+        val groups = kotlinx.coroutines.runBlocking {
+            CallTransportChecker.probeStunTargets(
+                context = context,
+                resolverConfig = DnsResolverConfig.system(),
             )
         }
-        CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ -> catalogWithTelegramTarget() },
-            loadPaths = {
-                listOf(
-                    CallTransportChecker.PathDescriptor(
-                        path = CallTransportNetworkPath.UNDERLYING,
-                        network = newNetwork(101),
-                        interfaceName = "tun0",
-                    ),
-                )
-            },
-            stunProbe = { _, _, _ -> successBindingResult() },
-        )
 
-        val results = runBlockingProbeDirect(experimental = false)
-
-        val telegram = results.first { it.service == CallTransportService.TELEGRAM }
-        assertEquals(CallTransportStatus.NEEDS_REVIEW, telegram.status)
-        assertTrue(observedBindings.any { it is ResolverBinding.AndroidNetworkBinding })
-        assertEquals(listOf("tun0"), observedInterfaces)
+        assertTrue(groups.isNotEmpty())
+        val globalGroup = groups.find { it.scope == StunScope.GLOBAL }
+        assertTrue(globalGroup != null)
+        assertTrue(globalGroup!!.results.isNotEmpty())
+        assertTrue(globalGroup.results.first().hasResponse)
     }
 
     @Test
-    fun `underlying path normalizes stacked clat interface for public ip fallback`() {
-        val observedBindings = mutableListOf<ResolverBinding?>()
-        PublicIpClient.fetchIpOverride = { _, _, _, _, binding ->
-            observedBindings += binding
-            when (binding) {
-                is ResolverBinding.AndroidNetworkBinding -> Result.failure(IOException("primary path failed"))
-                null -> Result.failure(IOException("unexpected unbound path"))
-                else -> Result.failure(IOException("unexpected binding"))
-            }
-        }
-        val observedInterfaces = mutableListOf<String>()
-        NativeCurlBridge.executeOverride = { request ->
-            observedInterfaces += request.interfaceName
-            NativeCurlResponse(
-                curlCode = 0,
-                httpCode = 200,
-                body = "203.0.113.10",
+    fun `probeStunTargets returns empty when no active path`() {
+        CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
+            loadCatalog = { catalogWithStunTarget() },
+            loadPaths = { emptyList() },
+            stunDualStackProbe = { _, _, _ -> successDualStackResult() },
+        )
+
+        val groups = kotlinx.coroutines.runBlocking {
+            CallTransportChecker.probeStunTargets(
+                context = context,
+                resolverConfig = DnsResolverConfig.system(),
             )
         }
-        CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ -> catalogWithTelegramTarget() },
-            loadPaths = {
-                listOf(
-                    CallTransportChecker.PathDescriptor(
-                        path = CallTransportNetworkPath.UNDERLYING,
-                        network = newNetwork(101),
-                        interfaceName = "v4-wlan0",
-                    ),
-                )
-            },
-            stunProbe = { _, _, _ -> successBindingResult() },
-        )
 
-        val results = runBlockingProbeDirect(experimental = false)
-
-        val telegram = results.first { it.service == CallTransportService.TELEGRAM }
-        assertEquals(CallTransportStatus.NEEDS_REVIEW, telegram.status)
-        assertTrue(observedBindings.any { it is ResolverBinding.AndroidNetworkBinding })
-        assertEquals(listOf("wlan0"), observedInterfaces)
+        assertTrue(groups.isEmpty())
     }
 
     @Test
-    fun `underlying path retries stun probe with device binding fallback`() {
-        val observedBindings = mutableListOf<ResolverBinding?>()
+    fun `probeStunTargets no response results have error`() {
         CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ -> catalogWithTelegramTarget() },
+            loadCatalog = { catalogWithStunTarget() },
             loadPaths = {
-                listOf(
-                    CallTransportChecker.PathDescriptor(
-                        path = CallTransportNetworkPath.UNDERLYING,
-                        network = newNetwork(101),
-                        interfaceName = "wlan0",
-                    ),
+                listOf(CallTransportChecker.PathDescriptor(path = CallTransportNetworkPath.ACTIVE))
+            },
+            stunDualStackProbe = { _, _, _ ->
+                StunBindingClient.DualStackBindingResult(
+                    ipv4Result = Result.failure(IllegalStateException("timeout")),
+                    ipv6Result = null,
                 )
             },
-            stunProbe = { _, _, binding ->
-                observedBindings += binding
-                when (binding) {
-                    is ResolverBinding.AndroidNetworkBinding -> Result.failure(IOException("primary path failed"))
-                    is ResolverBinding.OsDeviceBinding -> successBindingResult()
-                    null -> Result.failure(IOException("unexpected unbound path"))
-                }
-            },
-            publicIpFetcher = { _, _ -> Result.success("203.0.113.10") },
         )
 
-        val results = runBlockingProbeDirect(experimental = false)
+        val groups = kotlinx.coroutines.runBlocking {
+            CallTransportChecker.probeStunTargets(
+                context = context,
+                resolverConfig = DnsResolverConfig.system(),
+            )
+        }
 
-        val telegram = results.first { it.service == CallTransportService.TELEGRAM }
-        assertEquals(CallTransportStatus.NEEDS_REVIEW, telegram.status)
-        assertTrue(observedBindings.any { it is ResolverBinding.AndroidNetworkBinding })
-        val fallbackBinding = observedBindings.last { it is ResolverBinding.OsDeviceBinding } as ResolverBinding.OsDeviceBinding
-        assertEquals("wlan0", fallbackBinding.interfaceName)
-        assertEquals(ResolverBinding.DnsMode.SYSTEM, fallbackBinding.dnsMode)
+        val globalGroup = groups.find { it.scope == StunScope.GLOBAL }
+        assertTrue(globalGroup != null)
+        val first = globalGroup!!.results.first()
+        assertFalse(first.hasResponse)
+        assertTrue(first.error != null)
     }
 
-    @Test
-    fun `probeDirect probes all provided underlying paths`() {
-        CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ -> catalogWithTelegramTarget() },
-            loadPaths = {
-                listOf(
-                    CallTransportChecker.PathDescriptor(path = CallTransportNetworkPath.ACTIVE),
-                    CallTransportChecker.PathDescriptor(path = CallTransportNetworkPath.UNDERLYING, interfaceName = "wlan0"),
-                    CallTransportChecker.PathDescriptor(path = CallTransportNetworkPath.UNDERLYING, interfaceName = "rmnet0"),
-                )
-            },
-            stunProbe = { _, _, _ -> successBindingResult() },
-            publicIpFetcher = { path, _ ->
-                val ip = when (path.interfaceName) {
-                    "wlan0" -> "203.0.113.10"
-                    "rmnet0" -> "203.0.113.11"
-                    else -> "203.0.113.12"
-                }
-                Result.success(ip)
-            },
-        )
-
-        val results = runBlockingProbeDirect(experimental = false)
-
-        assertEquals(2, results.count { it.service == CallTransportService.TELEGRAM && it.networkPath == CallTransportNetworkPath.UNDERLYING })
-    }
-
-    private fun runBlockingProbeDirect(
-        experimental: Boolean,
-    ): List<CallTransportLeakResult> = kotlinx.coroutines.runBlocking {
-        CallTransportChecker.probeDirect(
-            context = context,
-            resolverConfig = DnsResolverConfig.system(),
-            experimentalCallTransportEnabled = experimental,
-        )
-    }
+    private fun runBlockingProbeDirect(): List<CallTransportLeakResult> =
+        kotlinx.coroutines.runBlocking {
+            CallTransportChecker.probeDirect(
+                context = context,
+                resolverConfig = DnsResolverConfig.system(),
+            )
+        }
 
     private fun successBindingResult(): Result<StunBindingClient.BindingResult> {
         return Result.success(
             StunBindingClient.BindingResult(
-                resolvedIps = listOf("149.154.167.51"),
-                remoteIp = "149.154.167.51",
+                resolvedIps = listOf("93.184.216.34"),
+                remoteIp = "93.184.216.34",
                 remotePort = 3478,
                 mappedIp = "198.51.100.20",
                 mappedPort = 40000,
@@ -462,18 +268,31 @@ class CallTransportCheckerTest {
         )
     }
 
-    private fun catalogWithTelegramTarget(): CallTransportTargetCatalog.Catalog {
+    private fun successDualStackResult(): StunBindingClient.DualStackBindingResult {
+        return StunBindingClient.DualStackBindingResult(
+            ipv4Result = Result.success(
+                StunBindingClient.BindingResult(
+                    resolvedIps = listOf("93.184.216.34"),
+                    remoteIp = "93.184.216.34",
+                    remotePort = 3478,
+                    mappedIp = "198.51.100.20",
+                    mappedPort = 40000,
+                ),
+            ),
+            ipv6Result = null,
+        )
+    }
+
+    private fun catalogWithStunTarget(): CallTransportTargetCatalog.Catalog {
         return CallTransportTargetCatalog.Catalog(
-            telegramTargets = listOf(
-                CallTransportTargetCatalog.CallTransportTarget(
-                    service = CallTransportService.TELEGRAM,
-                    host = "149.154.167.51",
+            stunTargets = listOf(
+                CallTransportTargetCatalog.StunTarget(
+                    host = "stun.example.com",
                     port = 3478,
-                    experimental = false,
+                    scope = StunScope.GLOBAL,
                     enabled = true,
                 ),
             ),
-            whatsappTargets = emptyList(),
         )
     }
 

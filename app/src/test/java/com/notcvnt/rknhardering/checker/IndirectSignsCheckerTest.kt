@@ -7,10 +7,7 @@ import com.notcvnt.rknhardering.checker.IndirectSignsChecker.InterfaceAddressSna
 import com.notcvnt.rknhardering.checker.IndirectSignsChecker.NetworkSnapshot
 import com.notcvnt.rknhardering.checker.IndirectSignsChecker.RouteSnapshot
 import com.notcvnt.rknhardering.checker.IndirectSignsChecker.TunnelClass
-import com.notcvnt.rknhardering.model.CallTransportLeakResult
 import com.notcvnt.rknhardering.model.CallTransportNetworkPath
-import com.notcvnt.rknhardering.model.CallTransportProbeKind
-import com.notcvnt.rknhardering.model.CallTransportService
 import com.notcvnt.rknhardering.model.CallTransportStatus
 import com.notcvnt.rknhardering.model.EvidenceConfidence
 import com.notcvnt.rknhardering.model.EvidenceSource
@@ -454,7 +451,7 @@ class IndirectSignsCheckerTest {
     @Test
     fun `call transport disabled leaves indirect result untouched`() = runBlocking {
         CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ -> error("should not be called") },
+            loadCatalog = { error("should not be called") },
         )
 
         val result = IndirectSignsChecker.check(
@@ -470,18 +467,16 @@ class IndirectSignsCheckerTest {
     @Test
     fun `call transport enabled adds needs review signal into indirect result`() = runBlocking {
         CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ ->
+            loadCatalog = {
                 CallTransportTargetCatalog.Catalog(
-                    telegramTargets = listOf(
-                        CallTransportTargetCatalog.CallTransportTarget(
-                            service = CallTransportService.TELEGRAM,
-                            host = "149.154.167.51",
+                    stunTargets = listOf(
+                        CallTransportTargetCatalog.StunTarget(
+                            host = "stun.example.com",
                             port = 3478,
-                            experimental = false,
+                            scope = com.notcvnt.rknhardering.model.StunScope.GLOBAL,
                             enabled = true,
                         ),
                     ),
-                    whatsappTargets = emptyList(),
                 )
             },
             loadPaths = {
@@ -492,15 +487,18 @@ class IndirectSignsCheckerTest {
                     ),
                 )
             },
-            stunProbe = { _, _, _ ->
-                Result.success(
-                    com.notcvnt.rknhardering.probe.StunBindingClient.BindingResult(
-                        resolvedIps = listOf("149.154.167.51"),
-                        remoteIp = "149.154.167.51",
-                        remotePort = 3478,
-                        mappedIp = "198.51.100.20",
-                        mappedPort = 40000,
+            stunDualStackProbe = { _, _, _ ->
+                com.notcvnt.rknhardering.probe.StunBindingClient.DualStackBindingResult(
+                    ipv4Result = Result.success(
+                        com.notcvnt.rknhardering.probe.StunBindingClient.BindingResult(
+                            resolvedIps = listOf("93.184.216.34"),
+                            remoteIp = "93.184.216.34",
+                            remotePort = 3478,
+                            mappedIp = "198.51.100.20",
+                            mappedPort = 40000,
+                        ),
                     ),
+                    ipv6Result = null,
                 )
             },
             publicIpFetcher = { _, _ -> Result.success("203.0.113.10") },
@@ -521,7 +519,7 @@ class IndirectSignsCheckerTest {
     @Test
     fun `call transport error surfaces through category error state`() = runBlocking {
         CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
-            loadCatalog = { _, _ -> error("catalog failed") },
+            loadCatalog = { error("catalog failed") },
         )
 
         val result = IndirectSignsChecker.check(

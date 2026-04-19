@@ -23,6 +23,8 @@
     <color name="status_red_container">#FFFFDAD6</color>
     <color name="status_amber">#FF7A5C00</color>
     <color name="status_amber_container">#FFFFEFC8</color>
+    <color name="status_neutral">#FF5F6368</color>
+    <color name="status_neutral_container">#FFE5E5EA</color>
 
     <!-- Legacy aliases — keep for existing code that references these -->
     <color name="verdict_green">@color/status_green</color>

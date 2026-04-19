@@ -13,6 +13,9 @@ object NativeCurlBridge {
     internal var executeOverride: ((NativeCurlRequest) -> NativeCurlResponse)? = null
 
     @Volatile
+    internal var cancelOverride: ((String) -> Boolean)? = null
+
+    @Volatile
     internal var isLibraryLoadedOverride: (() -> Boolean)? = null
 
     @Volatile
@@ -58,12 +61,19 @@ object NativeCurlBridge {
         return isLibraryLoadedOverride?.invoke() ?: libraryLoaded
     }
 
+    fun canExecute(): Boolean {
+        return executeOverride != null || (isLibraryLoaded() && caBundleInfo?.absolutePath?.isNotBlank() == true)
+    }
+
     fun execute(requestJson: String): String {
         val request = NativeCurlRequest.fromJson(requestJson)
         return execute(request).toJson()
     }
 
-    internal fun execute(request: NativeCurlRequest): NativeCurlResponse {
+    internal fun execute(
+        request: NativeCurlRequest,
+        requestId: String = "",
+    ): NativeCurlResponse {
         executeOverride?.let { return it(request) }
         if (!isLibraryLoaded()) {
             return NativeCurlResponse(localError = lastLoadErrorMessage() ?: "Native curl bridge is not loaded")
@@ -75,14 +85,28 @@ object NativeCurlBridge {
         val raw = nativeExecuteRaw(
             url = request.url,
             interfaceName = request.interfaceName,
+            method = request.method,
+            headers = request.headers.toTypedArray(),
+            body = request.body.orEmpty(),
+            followRedirects = request.followRedirects,
+            proxyUrl = request.proxyUrl.orEmpty(),
+            proxyType = request.proxyType.nativeValue,
             resolveRules = request.resolveRules.map(NativeCurlResolveRule::toCurlRule).toTypedArray(),
             ipResolveMode = request.ipResolveMode.nativeValue,
             timeoutMs = request.timeoutMs,
             connectTimeoutMs = request.connectTimeoutMs,
             caBundlePath = activeCaBundle,
             debugVerbose = request.debugVerbose,
+            requestId = requestId,
         )
         return NativeCurlResponse.fromRaw(raw)
+    }
+
+    internal fun cancelRequest(requestId: String): Boolean {
+        if (requestId.isBlank()) return false
+        cancelOverride?.let { return it(requestId) }
+        if (!isLibraryLoaded()) return false
+        return nativeCancelRequest(requestId)
     }
 
     internal fun lastLoadErrorMessage(): String? {
@@ -104,6 +128,7 @@ object NativeCurlBridge {
     internal fun resetForTests() {
         initOverride = null
         executeOverride = null
+        cancelOverride = null
         isLibraryLoadedOverride = null
         initialized = false
         libraryLoaded = false
@@ -114,11 +139,20 @@ object NativeCurlBridge {
     private external fun nativeExecuteRaw(
         url: String,
         interfaceName: String,
+        method: String,
+        headers: Array<String>,
+        body: String,
+        followRedirects: Boolean,
+        proxyUrl: String,
+        proxyType: Int,
         resolveRules: Array<String>,
         ipResolveMode: Int,
         timeoutMs: Int,
         connectTimeoutMs: Int,
         caBundlePath: String,
         debugVerbose: Boolean,
+        requestId: String,
     ): Array<String?>
+
+    private external fun nativeCancelRequest(requestId: String): Boolean
 }

@@ -1,7 +1,11 @@
 package com.notcvnt.rknhardering.probe
 
+import com.notcvnt.rknhardering.ScanExecutionContext
+import com.notcvnt.rknhardering.rethrowIfCancellation
 import com.notcvnt.rknhardering.network.DnsResolverConfig
+import com.notcvnt.rknhardering.network.NativeCurlHttpClient
 import com.notcvnt.rknhardering.network.ResolverBinding
+import com.notcvnt.rknhardering.network.ResolverHttpRequest
 import com.notcvnt.rknhardering.network.ResolverNetworkStack
 import java.io.IOException
 import java.net.Inet4Address
@@ -11,6 +15,11 @@ import java.net.Proxy
 import java.net.URL
 
 object PublicIpClient {
+    private enum class TransportPolicy {
+        DEFAULT,
+        NATIVE_CURL_ONLY,
+    }
+
     @Volatile
     internal var fetchIpOverride: ((String, Int, Proxy?, DnsResolverConfig, ResolverBinding?) -> Result<String>)? = null
 
@@ -33,21 +42,30 @@ object PublicIpClient {
         proxy: Proxy? = null,
         resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
         binding: ResolverBinding? = null,
+        addressFamily: Class<out InetAddress>? = null,
+        executionContext: ScanExecutionContext = ScanExecutionContext.currentOrDefault(),
     ): Result<String> {
         fetchIpOverride?.let { return it(endpoint, timeoutMs, proxy, resolverConfig, binding) }
         return try {
-            val response = ResolverNetworkStack.execute(
+            executionContext.throwIfCancelled()
+            val request = ResolverHttpRequest(
                 url = endpoint,
                 method = "GET",
                 headers = mapOf(
                     "User-Agent" to USER_AGENT,
                     "Accept" to "text/plain",
                 ),
+                body = null,
+                bodyContentType = null,
                 timeoutMs = timeoutMs,
                 config = resolverConfig,
                 proxy = proxy,
                 binding = binding,
+                addressFamily = addressFamily,
+                cancellationSignal = executionContext.cancellationSignal,
             )
+            val response = executeRequest(request)
+            executionContext.throwIfCancelled()
             val code = response.code
             if (code !in 200..299) {
                 return Result.failure(
@@ -66,6 +84,7 @@ object PublicIpClient {
             }
             Result.success(ip)
         } catch (e: Exception) {
+            rethrowIfCancellation(e, executionContext)
             Result.failure(e)
         }
     }
@@ -109,10 +128,17 @@ object PublicIpClient {
         endpoint: String,
         resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
         binding: ResolverBinding? = null,
+        executionContext: ScanExecutionContext = ScanExecutionContext.currentOrDefault(),
     ): DnsRecords {
         return try {
             val host = java.net.URL(endpoint).host
-            val allAddresses = ResolverNetworkStack.lookup(host, resolverConfig, binding)
+            executionContext.throwIfCancelled()
+            val allAddresses = ResolverNetworkStack.lookup(
+                hostname = host,
+                config = resolverConfig,
+                binding = binding,
+                cancellationSignal = executionContext.cancellationSignal,
+            )
             DnsRecords(
                 ipv4Records = allAddresses
                     .filterIsInstance<Inet4Address>()
@@ -123,7 +149,8 @@ object PublicIpClient {
                     .mapNotNull { it.hostAddress }
                     .distinct(),
             )
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            rethrowIfCancellation(error, executionContext)
             DnsRecords()
         }
     }
@@ -156,5 +183,36 @@ object PublicIpClient {
 
     internal fun resetForTests() {
         fetchIpOverride = null
+    }
+
+    private fun executeRequest(request: ResolverHttpRequest) = when (transportPolicyFor(request.url)) {
+        TransportPolicy.DEFAULT -> ResolverNetworkStack.execute(
+            url = request.url,
+            method = request.method,
+            headers = request.headers,
+            body = request.body,
+            bodyContentType = request.bodyContentType,
+            timeoutMs = request.timeoutMs,
+            config = request.config,
+            proxy = request.proxy,
+            binding = request.binding,
+            addressFamily = request.addressFamily,
+            cancellationSignal = request.cancellationSignal,
+        )
+        TransportPolicy.NATIVE_CURL_ONLY -> {
+            if (!NativeCurlHttpClient.canExecute(request)) {
+                throw IOException("Native curl transport is unavailable")
+            }
+            NativeCurlHttpClient.execute(request)
+        }
+    }
+
+    private fun transportPolicyFor(endpoint: String): TransportPolicy {
+        val host = runCatching { URL(endpoint).host.lowercase() }.getOrDefault("")
+        return when (host) {
+            "ipv4-internet.yandex.net",
+            "ipv6-internet.yandex.net" -> TransportPolicy.NATIVE_CURL_ONLY
+            else -> TransportPolicy.DEFAULT
+        }
     }
 }

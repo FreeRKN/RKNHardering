@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">RKNHardering</string>
     <string name="github_repo_url">https://github.com/xtclovver/RKNHardering</string>
-    <string name="run_check_notice">در زمان اجرای بررسی، برنامه به این دامنه‌ها درخواست شبکه ارسال می‌کند:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nاگر در تنظیمات یک DNS resolver سفارشی انتخاب شده باشد، برنامه همچنین به آدرس‌های IP آن یا دامنه DoH متصل می‌شود.\n\nاگر CDN pulling فعال باشد، برنامه علاوه بر این به redirector.googlevideo.com و نیز rutracker.org و meduza.io درخواست HTTPS می‌فرستد تا ببیند این endpointها چه IP عمومی و داده‌های trace برمی‌گردانند.\n\nاگر Debug diagnostics فعال باشد، برنامه می‌تواند از آخرین بررسی تکمیل‌شده یک گزارش تشخیصی قابل کپی بسازد، حتی اگر بررسی با موفقیت تمام شده باشد. این گزارش فقط تا زمان کپی شدن در حافظه نگه داشته می‌شود و پاسخ‌های CDN pulling را هم شامل می‌شود.\n\nبا لمس دکمه «اجرای بررسی»، موافقت می‌کنید که این درخواست‌های شبکه از دستگاه شما ارسال شوند.\n\nبرنامه لاگ این درخواست‌ها را نگه نمی‌دارد. دسترسی به شبکه را می‌توان از تنظیمات برنامه غیرفعال کرد.</string>
+    <string name="run_check_notice">در زمان اجرای بررسی، برنامه به این دامنه‌ها درخواست شبکه ارسال می‌کند:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ipv4-internet.yandex.net\n• ipv6-internet.yandex.net\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nاگر در تنظیمات یک DNS resolver سفارشی انتخاب شده باشد، برنامه همچنین به آدرس‌های IP آن یا دامنه DoH متصل می‌شود.\n\nاگر CDN pulling فعال باشد، برنامه علاوه بر این به redirector.googlevideo.com و نیز rutracker.org و meduza.io درخواست HTTPS می‌فرستد تا ببیند این endpointها چه IP عمومی و داده‌های trace برمی‌گردانند.\n\nاگر Debug diagnostics فعال باشد، برنامه می‌تواند از آخرین بررسی تکمیل‌شده یک گزارش تشخیصی قابل کپی بسازد، حتی اگر بررسی با موفقیت تمام شده باشد. این گزارش فقط تا زمان کپی شدن در حافظه نگه داشته می‌شود و پاسخ‌های CDN pulling را هم شامل می‌شود.\n\nبا لمس دکمه «اجرای بررسی»، موافقت می‌کنید که این درخواست‌های شبکه از دستگاه شما ارسال شوند.\n\nبرنامه لاگ این درخواست‌ها را نگه نمی‌دارد. دسترسی به شبکه را می‌توان از تنظیمات برنامه غیرفعال کرد.</string>
 
     <string name="settings_title">تنظیمات</string>
     <string name="settings_section_checks">بررسی‌ها</string>
@@ -12,17 +12,23 @@
     <string name="settings_subsection_network">شبکه</string>
     <string name="settings_subsection_dns">DNS</string>
     <string name="settings_cat_split_tunnel">Split tunnel bypass</string>
-    <string name="settings_cat_split_tunnel_desc">اسکن پورت، TUN probe، proxy و Xray API</string>
+    <string name="settings_cat_split_tunnel_desc">پورت و probe</string>
     <string name="settings_cat_network">شبکه</string>
-    <string name="settings_cat_network_desc">درخواست‌های شبکه، CDN pulling، call transport</string>
+    <string name="settings_cat_network_desc">درخواست‌ها و CDN</string>
     <string name="settings_cat_dns">DNS</string>
-    <string name="settings_cat_dns_desc">حالت و سرورهای DNS resolver</string>
+    <string name="settings_cat_dns_desc">Resolver</string>
     <string name="settings_cat_privacy">حریم خصوصی</string>
-    <string name="settings_cat_privacy_desc">پنهان‌سازی IP در تشخیص</string>
+    <string name="settings_cat_privacy_desc">پنهان‌سازی IP</string>
     <string name="settings_cat_appearance">ظاهر</string>
     <string name="settings_cat_appearance_desc">پوسته و زبان</string>
     <string name="settings_cat_about">درباره</string>
-    <string name="settings_cat_about_desc">مجوزها و GitHub</string>
+    <string name="settings_cat_about_desc">GitHub</string>
+    <string name="settings_cat_debug">Debug</string>
+    <string name="settings_cat_debug_desc">گزارش تشخیصی</string>
+    <string name="settings_group_checks">بررسی‌ها</string>
+    <string name="settings_group_app">برنامه</string>
+    <string name="settings_group_diagnostics">تشخیص</string>
+    <string name="settings_group_info">اطلاعات</string>
     <string name="settings_split_tunnel">Split tunnel bypass</string>
     <string name="settings_split_tunnel_desc">اسکن پورت زمان زیادی می‌گیرد</string>
     <string name="settings_tun_probe_debug">Debug diagnostics</string>
@@ -54,8 +60,8 @@
     <string name="settings_cdn_pulling_warning_confirm">فعال کردن</string>
     <string name="settings_cdn_pulling_meduza">meduza.io را شامل کن</string>
     <string name="settings_cdn_pulling_meduza_desc">یک درخواست به meduza.io/cdn-cgi/trace به عنوان بخشی از CDN pulling ارسال کنید.</string>
-    <string name="settings_call_transport_probe">نشت‌های call transport</string>
-    <string name="settings_call_transport_probe_desc">درخواست‌های اضافی UDP/STUN به هدف‌های داخلی Telegram می‌فرستد. ردیابی WhatsApp فقط در buildهای debug یا experimental اجرا می‌شود.</string>
+    <string name="settings_call_transport_probe">Call transport و بررسی STUN</string>
+    <string name="settings_call_transport_probe_desc">درخواست‌های UDP/STUN به سرورهای STUN عمومی (جهانی و روسی) می‌فرستد و پروکسی SOCKS5 محلی را برای ترافیک Telegram MTProto بررسی می‌کند.</string>
     <string name="settings_dns_resolver">DNS resolver</string>
     <string name="settings_dns_resolver_desc">برای GeoIP، IP Comparison و BeaconDB استفاده می‌شود. DNS سیستمی Android را تغییر نمی‌دهد و روی بررسی‌های محلی DNS اثری ندارد.</string>
     <string name="settings_dns_mode_system">سیستمی</string>
@@ -88,6 +94,15 @@
     <string name="settings_github">GitHub</string>
     <string name="main_copy_diagnostics">کپی تشخیص</string>
     <string name="main_diagnostics_copied">تشخیص کپی شد</string>
+    <string name="main_export">خروجی</string>
+    <string name="main_export_title">خروجی نتیجه</string>
+    <string name="main_export_markdown">Markdown (.md)</string>
+    <string name="main_export_json">JSON (.json)</string>
+    <string name="main_export_save_file">ذخیره فایل</string>
+    <string name="main_export_copy_to_clipboard">کپی در کلیپ‌بورد</string>
+    <string name="main_export_copied">خروجی کپی شد</string>
+    <string name="main_export_saved">خروجی ذخیره شد</string>
+    <string name="main_export_failed">ذخیره خروجی انجام نشد</string>
     <string name="settings_github_desc">xtclovver/RKNHardering</string>
     <string name="settings_port_range_from">از</string>
     <string name="settings_port_range_to">تا</string>
@@ -99,7 +114,7 @@
     <string name="main_card_cdn_pulling">CDN pulling</string>
     <string name="main_card_direct_signs">نشانه‌های مستقیم</string>
     <string name="main_card_indirect_signs">نشانه‌های غیرمستقیم</string>
-    <string name="main_card_call_transport">سرورهای STUN</string>
+    <string name="main_card_call_transport">STUN mapped IP</string>
     <string name="main_card_call_transport_status_no_signal">بدون سیگنال</string>
     <string name="main_card_call_transport_status_needs_review">نیاز به بررسی</string>
     <string name="main_card_call_transport_status_unsupported">پشتیبانی نمی‌شود</string>
@@ -108,10 +123,18 @@
     <string name="main_card_call_transport_path_active">شبکه فعال</string>
     <string name="main_card_call_transport_path_underlying">شبکه زیرین</string>
     <string name="main_card_call_transport_path_proxy">پروکسی محلی</string>
+    <string name="main_card_call_transport_header">%1$s · %2$s · %3$s</string>
     <string name="main_card_call_transport_reason_no_response">هیچ پاسخی از STUN دریافت نشد</string>
     <string name="main_card_call_transport_reason_telegram_dc_unreachable">Telegram DC از طریق پروکسی SOCKS5 محلی قابل دسترس نیست</string>
-    <string name="main_card_call_transport_reason_release_only">ردیابی WhatsApp فقط در بیلدهای debug یا experimental در دسترس است</string>
     <string name="main_card_call_transport_reason_targets_unavailable">اهداف این بررسی در دسترس نیستند</string>
+    <string name="main_card_call_transport_stun_group_global">STUN جهانی</string>
+    <string name="main_card_call_transport_stun_group_ru">STUN روسی</string>
+    <string name="main_card_call_transport_stun_responded">%1$d از %2$d پاسخ داد</string>
+    <string name="main_card_call_transport_stun_none_responded">بدون پاسخ</string>
+    <string name="main_card_call_transport_stun_ipv4">IPv4</string>
+    <string name="main_card_call_transport_stun_ipv6">IPv6</string>
+    <string name="main_card_call_transport_stun_no_response">بدون پاسخ</string>
+    <string name="main_card_call_transport_stun_error">خطا</string>
     <string name="main_card_location_signals">نشانه‌های مکان</string>
     <string name="main_verdict_details">جزئیات</string>
 
@@ -160,6 +183,7 @@
     <string name="main_verdict_hide_details">پنهان کردن جزئیات</string>
 
     <string name="main_ipv6_error_ignored">خطای IPv6 نادیده گرفته شد: </string>
+    <string name="main_ip_comparison_ipv4_unavailable">IPv4: موجود نیست</string>
 
     <string name="settings_port_range_preview_proxy_xray">پورت‌های لوکال‌هاست برای اسکن proxy و API Xray: %1$s (%2$s)</string>
     <string name="settings_port_range_preview_proxy_only">پورت‌های لوکال‌هاست برای اسکن proxy: %1$s (%2$s)</string>
@@ -310,6 +334,8 @@
     <string name="checker_direct_proxyinfo_invalid">%1$s: پروفایل proxy نامعتبر</string>
     <string name="checker_direct_proxyinfo_unavailable">%1$s: بررسی ProxyInfo در دسترس نیست (%2$s)</string>
     <string name="checker_direct_proxyinfo_network_none">ProxyInfo روی شبکه‌های بررسی‌شده: پیدا نشد</string>
+    <string name="checker_cdn_pulling_error_tls_certificate">تأیید زنجیره گواهی TLS ممکن نشد. علت‌های احتمالی: رهگیری HTTPS، پاسخ نادرست DNS یا قدیمی بودن مخزن CA اندروید.</string>
+    <string name="checker_cdn_pulling_error_details">جزئیات: %1$s</string>
 
     <string name="checker_indirect_category_name">نشانه‌های غیرمستقیم</string>
     <string name="checker_indirect_capability_not_vpn">Capability NOT_VPN: %1$s</string>
@@ -415,4 +441,25 @@
     <string name="checker_vpn_known_apps_none">برنامه‌های شناخته‌شده VPN/Proxy و ارائه‌دهندگان VpnService: موردی پیدا نشد</string>
     <string name="checker_vpn_installed_app">برنامه نصب‌شده: %1$s (%2$s)</string>
     <string name="checker_vpn_declares_service">برنامه VpnService را اعلان می‌کند: %1$s (%2$s)</string>
+
+    <!-- Redesign: main screen -->
+    <string name="verdict_label">حکم</string>
+    <string name="verdict_title_clean">دور زدن شناسایی نشد</string>
+    <string name="verdict_title_review">نیاز به بررسی</string>
+    <string name="verdict_title_detected">دور زدن شناسایی شد</string>
+    <string name="verdict_title_idle">بررسی آغاز نشده</string>
+    <string name="verdict_subtitle_idle">برای دیدن حکم، بررسی را اجرا کنید</string>
+    <string name="verdict_subtitle_running">بررسی در حال اجراست\u2026</string>
+    <string name="verdict_subtitle_done">بررسی تکمیل شد \u00b7 %1$d دسته</string>
+    <string name="section_check_details">جزئیات بررسی</string>
+    <string name="privacy_footer_text">بررسی به‌صورت محلی اجرا می‌شود \u00b7 ۱۶ دامنه</string>
+    <string name="privacy_footer_action">این چیست؟</string>
+    <string name="tile_hint_placeholder">\u2014</string>
+    <string name="tile_hint_loading">در حال بررسی\u2026</string>
+    <string name="tile_hint_stopped">متوقف شد</string>
+    <string name="tile_hint_clean">پاک</string>
+    <string name="tile_hint_clean_count">%1$d بررسی \u00b7 پاک</string>
+    <string name="tile_hint_detected_count">%1$d از %2$d شناسایی شد</string>
+    <string name="tile_hint_review">نیاز به بررسی</string>
+    <string name="tile_hint_error">خطا</string>
 </resources>

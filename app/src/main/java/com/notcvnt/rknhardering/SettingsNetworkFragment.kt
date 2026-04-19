@@ -22,7 +22,9 @@ internal class SettingsNetworkFragment : Fragment(R.layout.fragment_settings_net
     private lateinit var switchCallTransportProbe: MaterialSwitch
 
     private var suppressCdnPullingToggleCallback = false
+    private var suppressNetworkRequestsToggleCallback = false
     private var cdnWarningDialog: AlertDialog? = null
+    private var networkDisableDialog: AlertDialog? = null
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -36,6 +38,8 @@ internal class SettingsNetworkFragment : Fragment(R.layout.fragment_settings_net
         super.onDestroyView()
         cdnWarningDialog?.dismiss()
         cdnWarningDialog = null
+        networkDisableDialog?.dismiss()
+        networkDisableDialog = null
     }
 
     private fun bindViews(view: View) {
@@ -61,24 +65,13 @@ internal class SettingsNetworkFragment : Fragment(R.layout.fragment_settings_net
 
     private fun setupListeners() {
         switchNetworkRequests.setOnCheckedChangeListener { _, isChecked ->
-            updateCdnPullingEnabled(isChecked)
-            updateCallTransportEnabled(isChecked)
+            if (suppressNetworkRequestsToggleCallback) return@setOnCheckedChangeListener
             if (!isChecked) {
-                AlertDialog.Builder(requireContext())
-                    .setTitle(R.string.settings_network_disable_title)
-                    .setMessage(R.string.settings_network_disable_message)
-                    .setPositiveButton(R.string.settings_network_disable_confirm) { _, _ ->
-                        prefs.edit { putBoolean(SettingsPrefs.PREF_NETWORK_REQUESTS_ENABLED, false) }
-                    }
-                    .setNegativeButton(android.R.string.cancel) { _, _ ->
-                        switchNetworkRequests.isChecked = true
-                    }
-                    .setOnCancelListener {
-                        switchNetworkRequests.isChecked = true
-                    }
-                    .show()
+                showNetworkDisableConfirmation()
             } else {
                 prefs.edit { putBoolean(SettingsPrefs.PREF_NETWORK_REQUESTS_ENABLED, true) }
+                updateCdnPullingEnabled(true)
+                updateCallTransportEnabled(true)
             }
         }
 
@@ -104,7 +97,7 @@ internal class SettingsNetworkFragment : Fragment(R.layout.fragment_settings_net
     private fun updateCdnPullingEnabled(enabled: Boolean) {
         cardCdnPulling.alpha = if (enabled) 1.0f else 0.5f
         setViewAndChildrenEnabled(cardCdnPulling, enabled)
-        if (!enabled) updateCdnPullingMeduzaVisible(false)
+        updateCdnPullingMeduzaVisible(enabled && switchCdnPulling.isChecked)
     }
 
     private fun updateCdnPullingMeduzaVisible(visible: Boolean) {
@@ -137,5 +130,29 @@ internal class SettingsNetworkFragment : Fragment(R.layout.fragment_settings_net
         suppressCdnPullingToggleCallback = true
         switchCdnPulling.isChecked = checked
         suppressCdnPullingToggleCallback = false
+    }
+
+    private fun showNetworkDisableConfirmation() {
+        networkDisableDialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.settings_network_disable_title)
+            .setMessage(R.string.settings_network_disable_message)
+            .setPositiveButton(R.string.settings_network_disable_confirm) { _, _ ->
+                prefs.edit { putBoolean(SettingsPrefs.PREF_NETWORK_REQUESTS_ENABLED, false) }
+                updateCdnPullingEnabled(false)
+                updateCallTransportEnabled(false)
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                setNetworkRequestsSwitch(true)
+            }
+            .setOnCancelListener {
+                setNetworkRequestsSwitch(true)
+            }
+            .show()
+    }
+
+    private fun setNetworkRequestsSwitch(checked: Boolean) {
+        suppressNetworkRequestsToggleCallback = true
+        switchNetworkRequests.isChecked = checked
+        suppressNetworkRequestsToggleCallback = false
     }
 }

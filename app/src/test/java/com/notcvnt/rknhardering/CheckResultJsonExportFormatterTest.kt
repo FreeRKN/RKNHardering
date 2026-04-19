@@ -1,0 +1,80 @@
+package com.notcvnt.rknhardering
+
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+
+@RunWith(RobolectricTestRunner::class)
+class CheckResultJsonExportFormatterTest {
+
+    private val context: Context = ApplicationProvider.getApplicationContext()
+
+    @Test
+    fun `json export contains meta verdict and results structure`() {
+        val json = JSONObject(
+            CheckResultJsonExportFormatter.format(
+                context = context,
+                snapshot = createCompletedExportSnapshot(
+                    result = exportRichCheckResult(),
+                    privacyMode = false,
+                    finishedAtMillis = 0L,
+                ),
+                appVersionName = "1.0",
+                buildType = "debug",
+            ),
+        )
+
+        assertEquals(1, json.getJSONObject("meta").getInt("formatVersion"))
+        assertEquals("DETECTED", json.getJSONObject("verdict").getString("value"))
+        val results = json.getJSONObject("results")
+        assertTrue(results.has("geoIp"))
+        assertTrue(results.has("ipComparison"))
+        assertTrue(results.has("cdnPulling"))
+        assertTrue(results.has("bypass"))
+        assertTrue(results.getJSONObject("ipComparison").getJSONObject("ruGroup").has("responses"))
+        val outbound = results
+            .getJSONObject("bypass")
+            .getJSONObject("xrayApiScanResult")
+            .getJSONArray("outbounds")
+            .getJSONObject(0)
+        assertTrue(outbound.getBoolean("uuidPresent"))
+        assertTrue(outbound.getBoolean("publicKeyPresent"))
+        assertFalse(outbound.has("uuid"))
+        assertFalse(outbound.has("publicKey"))
+    }
+
+    @Test
+    fun `json export masks ips in strings and structured fields`() {
+        val json = JSONObject(
+            CheckResultJsonExportFormatter.format(
+                context = context,
+                snapshot = createCompletedExportSnapshot(
+                    result = exportRichCheckResult(),
+                    privacyMode = true,
+                    finishedAtMillis = 0L,
+                ),
+                appVersionName = "1.0",
+                buildType = "debug",
+            ),
+        )
+
+        val results = json.getJSONObject("results")
+        val directIp = results.getJSONObject("bypass").getString("directIp")
+        val rawBody = results
+            .getJSONObject("cdnPulling")
+            .getJSONArray("responses")
+            .getJSONObject(0)
+            .getString("rawBody")
+
+        assertEquals("198.51.*.*", directIp)
+        assertTrue(rawBody.contains("203.0.*.*"))
+        assertFalse(rawBody.contains("203.0.113.64"))
+        assertFalse(results.toString().contains("198.51.100.7"))
+    }
+}

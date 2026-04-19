@@ -19,8 +19,8 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            app:title="RKN Hardering"
-            app:menu="@menu/menu_main" />
+            app:menu="@menu/menu_main"
+            app:title="RKN Hardering" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <com.notcvnt.rknhardering.TouchAwareScrollView
@@ -30,74 +30,15 @@
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
         <LinearLayout
+            android:id="@+id/mainContentRoot"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="16dp">
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                android:gravity="center"
-                android:text="@string/main_subtitle"
-                android:textColor="?android:attr/textColorSecondary"
-                android:textSize="14sp" />
+            <include layout="@layout/view_verdict_hero" />
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
-                android:orientation="horizontal">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnRunCheck"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1.35"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:text="@string/main_run_check"
-                    android:textAllCaps="false"
-                    app:icon="@drawable/ic_check_circle"
-                    app:iconGravity="textStart"
-                    app:iconTint="?attr/colorOnPrimary" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnStopCheck"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="0.85"
-                    android:layout_marginStart="8dp"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:text="@string/main_stop_check"
-                    android:textAllCaps="false"
-                    app:icon="@drawable/ic_stop_circle"
-                    app:iconGravity="textStart"
-                    app:iconTint="?attr/colorPrimary"
-                    android:visibility="gone" />
-            </LinearLayout>
-
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardRunCheckNotice"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                app:cardBackgroundColor="?attr/colorSurfaceContainer"
-                app:strokeColor="?attr/colorOutlineVariant"
-                app:strokeWidth="1dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:lineSpacingExtra="2dp"
-                    android:padding="12dp"
-                    android:text="@string/run_check_notice"
-                    android:textColor="?android:attr/textColorSecondary"
-                    android:textSize="12sp" />
-            </com.google.android.material.card.MaterialCardView>
+            <include layout="@layout/view_actions_row" />
 
             <TextView
                 android:id="@+id/textCheckStatus"
@@ -109,618 +50,576 @@
                 android:textSize="12sp"
                 android:visibility="gone" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnCopyDiagnostics"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="wrap_content"
+            <TextView
+                android:id="@+id/sectionLabelDetails"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:minWidth="0dp"
-                android:paddingStart="0dp"
-                android:paddingEnd="0dp"
-                android:text="@string/main_copy_diagnostics"
-                android:textAllCaps="false"
+                android:layout_marginTop="4dp"
+                android:letterSpacing="0.05"
+                android:paddingStart="4dp"
+                android:paddingTop="0dp"
+                android:paddingEnd="4dp"
+                android:paddingBottom="8dp"
+                android:text="@string/section_check_details"
+                android:textAllCaps="true"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <GridLayout
+                android:id="@+id/categoryGrid"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:columnCount="2" />
+
+            <include layout="@layout/view_expanded_detail" />
+
+            <LinearLayout
+                android:id="@+id/resultActionsContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="start|center_vertical"
+                android:orientation="horizontal"
                 android:visibility="gone" />
 
-            <!-- GeoIP Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardGeoIp"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:visibility="gone"
-                app:cardBackgroundColor="?attr/colorSurfaceContainer">
+                android:layout_marginTop="20dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="4dp"
+                android:paddingTop="12dp"
+                android:paddingEnd="4dp"
+                android:paddingBottom="12dp">
 
-                <LinearLayout
+                <ImageView
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:contentDescription="@null"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_lock"
+                    app:tint="?android:attr/textColorSecondary" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:text="@string/privacy_footer_text"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="12sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnPrivacyInfo"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:text="@string/privacy_footer_action"
+                    android:textAllCaps="false"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!--
+                Скрытый хост для легаси-карточек. Внутренний LinearLayout каждой
+                карточки (с summary/findings/progress) во время runtime переносится
+                в expandedDetail.detailContentSlot при тапе плитки, а возвращается
+                обратно при сворачивании. Это позволяет сохранить весь рендер в
+                MainActivity.kt без переписывания под категорий.
+            -->
+            <LinearLayout
+                android:id="@+id/hiddenLegacyCardsHost"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <!-- GeoIP Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/cardGeoIp"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
+                    app:cardBackgroundColor="?attr/colorSurfaceContainer">
 
                     <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <ImageView
-                            android:id="@+id/iconGeoIp"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:layout_marginEnd="8dp"
-                            android:contentDescription="@null"
-                            android:importantForAccessibility="no" />
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="@string/main_card_geo_ip"
-                            android:textColor="?android:attr/textColorPrimary"
-                            android:textSize="18sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/statusGeoIp"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textSize="14sp" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/geoIpInfoSection"
+                        android:id="@+id/cardGeoIpContent"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:paddingTop="4dp"
-                        android:paddingBottom="4dp" />
-
-                    <View
-                        android:id="@+id/geoIpDivider"
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginBottom="4dp"
-                        android:background="?attr/colorOutlineVariant"
-                        android:visibility="gone" />
-
-                    <LinearLayout
-                        android:id="@+id/findingsGeoIp"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:orientation="vertical" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- IP Comparison Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardIpComparison"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:visibility="gone"
-                app:cardBackgroundColor="?attr/colorSurfaceContainer">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <ImageView
-                            android:id="@+id/iconIpComparison"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:layout_marginEnd="8dp"
-                            android:contentDescription="@null"
-                            android:importantForAccessibility="no" />
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="@string/main_card_ip_comparison"
-                            android:textColor="?android:attr/textColorPrimary"
-                            android:textSize="18sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/statusIpComparison"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textSize="14sp" />
-                    </LinearLayout>
-
-                    <TextView
-                        android:id="@+id/textIpComparisonSummary"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:textColor="?android:attr/textColorSecondary"
-                        android:textSize="13sp" />
-
-                    <LinearLayout
-                        android:id="@+id/ipComparisonGroups"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:orientation="vertical" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- CDN Pulling Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardCdnPulling"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:visibility="gone"
-                app:cardBackgroundColor="?attr/colorSurfaceContainer">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <ImageView
-                            android:id="@+id/iconCdnPulling"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:layout_marginEnd="8dp"
-                            android:contentDescription="@null"
-                            android:importantForAccessibility="no" />
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="@string/main_card_cdn_pulling"
-                            android:textColor="?android:attr/textColorPrimary"
-                            android:textSize="18sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/statusCdnPulling"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textSize="14sp" />
-                    </LinearLayout>
-
-                    <TextView
-                        android:id="@+id/textCdnPullingSummary"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:textColor="?android:attr/textColorSecondary"
-                        android:textSize="13sp" />
-
-                    <LinearLayout
-                        android:id="@+id/cdnPullingResponses"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:orientation="vertical" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Direct Signs Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardDirect"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:visibility="gone"
-                app:cardBackgroundColor="?attr/colorSurfaceContainer">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <ImageView
-                            android:id="@+id/iconDirect"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:layout_marginEnd="8dp"
-                            android:contentDescription="@null"
-                            android:importantForAccessibility="no" />
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="@string/main_card_direct_signs"
-                            android:textColor="?android:attr/textColorPrimary"
-                            android:textSize="18sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/statusDirect"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textSize="14sp" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/directInfoSection"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:paddingTop="4dp"
-                        android:paddingBottom="4dp" />
-
-                    <View
-                        android:id="@+id/directDivider"
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginBottom="4dp"
-                        android:background="?attr/colorOutlineVariant"
-                        android:visibility="gone" />
-
-                    <LinearLayout
-                        android:id="@+id/findingsDirect"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:orientation="vertical" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Indirect Signs Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardIndirect"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:visibility="gone"
-                app:cardBackgroundColor="?attr/colorSurfaceContainer">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <ImageView
-                            android:id="@+id/iconIndirect"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:layout_marginEnd="8dp"
-                            android:contentDescription="@null"
-                            android:importantForAccessibility="no" />
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="@string/main_card_indirect_signs"
-                            android:textColor="?android:attr/textColorPrimary"
-                            android:textSize="18sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/statusIndirect"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textSize="14sp" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/findingsIndirect"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:orientation="vertical" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Call Transport (STUN) Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardCallTransport"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:visibility="gone"
-                app:cardBackgroundColor="?attr/colorSurfaceContainer">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <ImageView
-                            android:id="@+id/iconCallTransport"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:layout_marginEnd="8dp"
-                            android:contentDescription="@null"
-                            android:importantForAccessibility="no" />
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="@string/main_card_call_transport"
-                            android:textColor="?android:attr/textColorPrimary"
-                            android:textSize="18sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/statusCallTransport"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textSize="14sp" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/findingsCallTransport"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:orientation="vertical" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Location Signals Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardLocation"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:visibility="gone"
-                app:cardBackgroundColor="?attr/colorSurfaceContainer">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <ImageView
-                            android:id="@+id/iconLocation"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:layout_marginEnd="8dp"
-                            android:contentDescription="@null"
-                            android:importantForAccessibility="no" />
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="@string/main_card_location_signals"
-                            android:textColor="?android:attr/textColorPrimary"
-                            android:textSize="18sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/statusLocation"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textSize="14sp" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/locationInfoSection"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:paddingTop="4dp"
-                        android:paddingBottom="4dp" />
-
-                    <View
-                        android:id="@+id/locationDivider"
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginBottom="4dp"
-                        android:background="?attr/colorOutlineVariant"
-                        android:visibility="gone" />
-
-                    <LinearLayout
-                        android:id="@+id/findingsLocation"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:orientation="vertical" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Bypass Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardBypass"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:visibility="gone"
-                app:cardBackgroundColor="?attr/colorSurfaceContainer">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="top"
-                        android:orientation="horizontal">
-
-                        <ImageView
-                            android:id="@+id/iconBypass"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:layout_marginEnd="8dp"
-                            android:contentDescription="@null"
-                            android:importantForAccessibility="no" />
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="@string/settings_split_tunnel"
-                            android:textColor="?android:attr/textColorPrimary"
-                            android:textSize="18sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/statusBypass"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="12dp"
-                            android:gravity="end"
-                            android:minWidth="120dp"
-                            android:textAlignment="viewEnd"
-                            android:textSize="14sp" />
-                    </LinearLayout>
-
-                    <TextView
-                        android:id="@+id/textBypassProgress"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:lineSpacingExtra="2dp"
-                        android:minLines="4"
-                        android:textColor="?android:attr/textColorSecondary"
-                        android:textSize="12sp"
-                        android:visibility="gone" />
-
-                    <LinearLayout
-                        android:id="@+id/findingsBypass"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:orientation="vertical" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Verdict Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardVerdict"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                android:visibility="gone"
-                app:cardBackgroundColor="?attr/colorSurfaceContainer">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="24dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="top"
-                        android:orientation="horizontal">
-
-                        <ImageView
-                            android:id="@+id/iconVerdict"
-                            android:layout_width="48dp"
-                            android:layout_height="48dp"
-                            android:layout_marginEnd="16dp"
-                            android:contentDescription="@null"
-                            android:importantForAccessibility="no" />
+                        android:padding="0dp">
 
                         <LinearLayout
-                            android:layout_width="0dp"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <ImageView
+                                android:id="@+id/iconGeoIp"
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
+                                android:contentDescription="@null"
+                                android:importantForAccessibility="no" />
 
                             <TextView
-                                android:id="@+id/textVerdict"
-                                android:layout_width="match_parent"
+                                android:id="@+id/statusGeoIp"
+                                android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
+                                android:textSize="14sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/geoIpInfoSection"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical" />
+
+                        <View
+                            android:id="@+id/geoIpDivider"
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:layout_marginBottom="4dp"
+                            android:background="?attr/colorOutlineVariant"
+                            android:visibility="gone" />
+
+                        <LinearLayout
+                            android:id="@+id/findingsGeoIp"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="vertical" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- IP Comparison Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/cardIpComparison"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardBackgroundColor="?attr/colorSurfaceContainer">
+
+                    <LinearLayout
+                        android:id="@+id/cardIpComparisonContent"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <ImageView
+                                android:id="@+id/iconIpComparison"
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
+                                android:contentDescription="@null"
+                                android:importantForAccessibility="no" />
+
+                            <TextView
+                                android:id="@+id/statusIpComparison"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textSize="14sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/textIpComparisonSummary"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="13sp" />
+
+                        <LinearLayout
+                            android:id="@+id/ipComparisonGroups"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="vertical" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- CDN Pulling Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/cardCdnPulling"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardBackgroundColor="?attr/colorSurfaceContainer">
+
+                    <LinearLayout
+                        android:id="@+id/cardCdnPullingContent"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <ImageView
+                                android:id="@+id/iconCdnPulling"
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
+                                android:contentDescription="@null"
+                                android:importantForAccessibility="no" />
+
+                            <TextView
+                                android:id="@+id/statusCdnPulling"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textSize="14sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/textCdnPullingSummary"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="13sp" />
+
+                        <LinearLayout
+                            android:id="@+id/cdnPullingResponses"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="vertical" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Direct Signs Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/cardDirect"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardBackgroundColor="?attr/colorSurfaceContainer">
+
+                    <LinearLayout
+                        android:id="@+id/cardDirectContent"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <ImageView
+                                android:id="@+id/iconDirect"
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
+                                android:contentDescription="@null"
+                                android:importantForAccessibility="no" />
+
+                            <TextView
+                                android:id="@+id/statusDirect"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textSize="14sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/directInfoSection"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical" />
+
+                        <View
+                            android:id="@+id/directDivider"
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:layout_marginBottom="4dp"
+                            android:background="?attr/colorOutlineVariant"
+                            android:visibility="gone" />
+
+                        <LinearLayout
+                            android:id="@+id/findingsDirect"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="vertical" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Indirect Signs Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/cardIndirect"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardBackgroundColor="?attr/colorSurfaceContainer">
+
+                    <LinearLayout
+                        android:id="@+id/cardIndirectContent"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <ImageView
+                                android:id="@+id/iconIndirect"
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
+                                android:contentDescription="@null"
+                                android:importantForAccessibility="no" />
+
+                            <TextView
+                                android:id="@+id/statusIndirect"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textSize="14sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/findingsIndirect"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Call Transport (STUN mapped IP) Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/cardCallTransport"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardBackgroundColor="?attr/colorSurfaceContainer">
+
+                    <LinearLayout
+                        android:id="@+id/cardCallTransportContent"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <ImageView
+                                android:id="@+id/iconCallTransport"
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
+                                android:layout_marginEnd="8dp"
+                                android:contentDescription="@null"
+                                android:importantForAccessibility="no" />
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/main_card_call_transport"
+                                android:textColor="?android:attr/textColorPrimary"
                                 android:textSize="18sp"
                                 android:textStyle="bold" />
 
                             <TextView
-                                android:id="@+id/textVerdictExplanation"
-                                android:layout_width="match_parent"
+                                android:id="@+id/statusCallTransport"
+                                android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="10dp"
-                                android:lineSpacingExtra="2dp"
-                                android:textColor="?android:attr/textColorSecondary"
-                                android:textSize="14sp"
-                                android:visibility="gone" />
+                                android:textSize="14sp" />
                         </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/textCallTransportSummary"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="13sp"
+                            android:visibility="gone" />
+
+                        <LinearLayout
+                            android:id="@+id/stunGroupsContainer"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="vertical"
+                            android:visibility="gone" />
+
+                        <LinearLayout
+                            android:id="@+id/findingsCallTransport"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical" />
                     </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
 
-                    <View
-                        android:id="@+id/verdictDetailsDivider"
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginTop="16dp"
-                        android:background="?attr/colorOutlineVariant"
-                        android:visibility="gone" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnVerdictDetails"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="center_horizontal"
-                        android:layout_marginTop="4dp"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:minWidth="0dp"
-                        android:paddingStart="0dp"
-                        android:paddingEnd="0dp"
-                        android:text="@string/main_verdict_details"
-                        android:textAllCaps="false"
-                        android:visibility="gone" />
+                <!-- Location Signals Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/cardLocation"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardBackgroundColor="?attr/colorSurfaceContainer">
 
                     <LinearLayout
-                        android:id="@+id/verdictDetailsContent"
+                        android:id="@+id/cardLocationContent"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:orientation="vertical"
-                        android:visibility="gone" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
+                        android:orientation="vertical">
 
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <ImageView
+                                android:id="@+id/iconLocation"
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
+                                android:contentDescription="@null"
+                                android:importantForAccessibility="no" />
+
+                            <TextView
+                                android:id="@+id/statusLocation"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textSize="14sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/locationInfoSection"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical" />
+
+                        <View
+                            android:id="@+id/locationDivider"
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:layout_marginBottom="4dp"
+                            android:background="?attr/colorOutlineVariant"
+                            android:visibility="gone" />
+
+                        <LinearLayout
+                            android:id="@+id/findingsLocation"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="vertical" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Bypass Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/cardBypass"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardBackgroundColor="?attr/colorSurfaceContainer">
+
+                    <LinearLayout
+                        android:id="@+id/cardBypassContent"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <ImageView
+                                android:id="@+id/iconBypass"
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
+                                android:contentDescription="@null"
+                                android:importantForAccessibility="no" />
+
+                            <TextView
+                                android:id="@+id/statusBypass"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textSize="14sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/textBypassProgress"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:lineSpacingExtra="2dp"
+                            android:minLines="4"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="12sp"
+                            android:visibility="gone" />
+
+                        <LinearLayout
+                            android:id="@+id/findingsBypass"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="vertical" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Verdict legacy (now unused; kept invisible so code references to
+                     cardVerdict/iconVerdict/textVerdict/textVerdictExplanation/
+                     btnVerdictDetails/verdictDetailsDivider/verdictDetailsContent
+                     don't crash. Verdict is actually rendered in VerdictHero. -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/cardVerdict"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <ImageView
+                            android:id="@+id/iconVerdict"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:contentDescription="@null"
+                            android:importantForAccessibility="no" />
+
+                        <TextView
+                            android:id="@+id/textVerdict"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content" />
+
+                        <TextView
+                            android:id="@+id/textVerdictExplanation"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content" />
+
+                        <View
+                            android:id="@+id/verdictDetailsDivider"
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnVerdictDetails"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+
+                        <LinearLayout
+                            android:id="@+id/verdictDetailsContent"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
         </LinearLayout>
     </com.notcvnt.rknhardering.TouchAwareScrollView>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

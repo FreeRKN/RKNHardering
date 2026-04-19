@@ -1,0 +1,4 @@
+[
+  { "host": "stun.fitauto.ru", "port": 3478, "enabled": true },
+  { "host": "stun.sberbank.ru", "port": 3478, "enabled": true }
+]

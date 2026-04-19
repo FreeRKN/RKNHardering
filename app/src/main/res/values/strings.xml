@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">RKNHardering</string>
     <string name="github_repo_url">https://github.com/xtclovver/RKNHardering</string>
-    <string name="run_check_notice">During a check, the app will make network requests to these domains:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nIf a custom DNS resolver is selected in settings, the app will also connect to its IP addresses or DoH domain.\n\nIf CDN pulling is enabled, the app may additionally send HTTPS requests to redirector.googlevideo.com, rutracker.org, and meduza.io to see what public IP and trace data these endpoints return.\n\nIf Call transport leak probe is enabled, the app may additionally send UDP/STUN requests to bundled Telegram targets. WhatsApp targets are used only in debug or experimental builds.\n\nIf Debug diagnostics is enabled, the app can also prepare a copyable diagnostics report from the last completed scan, even when the scan finished successfully. That report is kept only in memory until you copy it. CDN pulling responses are included in that report.\n\nBy tapping "Run check", you agree that these network requests will be made from your device.\n\nThe app does not keep logs of these requests. Network access can be disabled in the app settings.</string>
+    <string name="run_check_notice">During a check, the app will make network requests to these domains:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ipv4-internet.yandex.net\n• ipv6-internet.yandex.net\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nIf a custom DNS resolver is selected in settings, the app will also connect to its IP addresses or DoH domain.\n\nIf CDN pulling is enabled, the app may additionally send HTTPS requests to redirector.googlevideo.com, rutracker.org, and meduza.io to see what public IP and trace data these endpoints return.\n\nIf Call transport leak probe is enabled, the app may additionally send UDP/STUN requests to bundled Telegram targets. WhatsApp targets are used only in debug or experimental builds.\n\nIf Debug diagnostics is enabled, the app can also prepare a copyable diagnostics report from the last completed scan, even when the scan finished successfully. That report is kept only in memory until you copy it. CDN pulling responses are included in that report.\n\nBy tapping "Run check", you agree that these network requests will be made from your device.\n\nThe app does not keep logs of these requests. Network access can be disabled in the app settings.</string>
 
     <string name="settings_title">Settings</string>
     <string name="settings_section_checks">Checks</string>
@@ -12,17 +12,23 @@
     <string name="settings_subsection_network">Network</string>
     <string name="settings_subsection_dns">DNS</string>
     <string name="settings_cat_split_tunnel">Split tunnel bypass</string>
-    <string name="settings_cat_split_tunnel_desc">Port scan, TUN probe, proxy and Xray API scan</string>
+    <string name="settings_cat_split_tunnel_desc">Ports &amp; probe</string>
     <string name="settings_cat_network">Network</string>
-    <string name="settings_cat_network_desc">Network requests, CDN pulling, call transport</string>
+    <string name="settings_cat_network_desc">Requests &amp; CDN</string>
     <string name="settings_cat_dns">DNS</string>
-    <string name="settings_cat_dns_desc">DNS resolver mode and servers</string>
+    <string name="settings_cat_dns_desc">Resolver</string>
     <string name="settings_cat_privacy">Privacy</string>
-    <string name="settings_cat_privacy_desc">IP masking in diagnostics</string>
+    <string name="settings_cat_privacy_desc">IP masking</string>
     <string name="settings_cat_appearance">Appearance</string>
-    <string name="settings_cat_appearance_desc">Theme and language</string>
+    <string name="settings_cat_appearance_desc">Theme &amp; language</string>
     <string name="settings_cat_about">About</string>
-    <string name="settings_cat_about_desc">Permissions and GitHub</string>
+    <string name="settings_cat_about_desc">GitHub</string>
+    <string name="settings_cat_debug">Debug</string>
+    <string name="settings_cat_debug_desc">Diagnostics snapshot</string>
+    <string name="settings_group_checks">Checks</string>
+    <string name="settings_group_app">Application</string>
+    <string name="settings_group_diagnostics">Diagnostics</string>
+    <string name="settings_group_info">Information</string>
     <string name="settings_split_tunnel">Split tunnel bypass</string>
     <string name="settings_split_tunnel_desc">Port scanning takes a long time</string>
     <string name="settings_tun_probe_debug">Debug diagnostics</string>
@@ -53,8 +59,8 @@
     <string name="settings_cdn_pulling_warning_confirm">Enable</string>
     <string name="settings_cdn_pulling_meduza">Include meduza.io</string>
     <string name="settings_cdn_pulling_meduza_desc">Send a request to meduza.io/cdn-cgi/trace as part of CDN pulling.</string>
-    <string name="settings_call_transport_probe">Call transport leak probe</string>
-    <string name="settings_call_transport_probe_desc">Sends additional UDP/STUN requests to bundled Telegram targets. WhatsApp tracing runs only in debug or experimental builds.</string>
+    <string name="settings_call_transport_probe">Call transport &amp; STUN probe</string>
+    <string name="settings_call_transport_probe_desc">Sends UDP/STUN requests to public STUN servers (global and Russian) and probes local SOCKS5 proxy for Telegram MTProto traffic.</string>
     <string name="settings_network_disable_confirm">Disable</string>
     <string name="settings_dns_resolver">DNS resolver</string>
     <string name="settings_dns_resolver_desc">Used for GeoIP, IP Comparison, and BeaconDB. It does not change the Android system DNS and does not affect local DNS checks.</string>
@@ -88,6 +94,15 @@
     <string name="settings_github">GitHub</string>
     <string name="main_copy_diagnostics">Copy diagnostics</string>
     <string name="main_diagnostics_copied">Diagnostics copied</string>
+    <string name="main_export">Export</string>
+    <string name="main_export_title">Export result</string>
+    <string name="main_export_markdown">Markdown (.md)</string>
+    <string name="main_export_json">JSON (.json)</string>
+    <string name="main_export_save_file">Save file</string>
+    <string name="main_export_copy_to_clipboard">Copy to clipboard</string>
+    <string name="main_export_copied">Export copied</string>
+    <string name="main_export_saved">Export saved</string>
+    <string name="main_export_failed">Failed to save export</string>
     <string name="settings_github_desc">xtclovver/RKNHardering</string>
     <string name="settings_port_range_from">From</string>
     <string name="settings_port_range_to">To</string>
@@ -100,7 +115,7 @@
     <string name="main_card_cdn_pulling">CDN pulling</string>
     <string name="main_card_direct_signs">Direct signs</string>
     <string name="main_card_indirect_signs">Indirect signs</string>
-    <string name="main_card_call_transport">STUN servers</string>
+    <string name="main_card_call_transport">STUN mapped IP</string>
     <string name="main_card_call_transport_status_baseline">Responded</string>
     <string name="main_card_call_transport_status_no_signal">No response</string>
     <string name="main_card_call_transport_status_needs_review">Needs review</string>
@@ -109,10 +124,18 @@
     <string name="main_card_call_transport_path_active">Active network</string>
     <string name="main_card_call_transport_path_underlying">Underlying network</string>
     <string name="main_card_call_transport_path_proxy">Local proxy</string>
+    <string name="main_card_call_transport_header">%1$s · %2$s · %3$s</string>
     <string name="main_card_call_transport_reason_no_response">No STUN response</string>
     <string name="main_card_call_transport_reason_telegram_dc_unreachable">Telegram DC is unreachable through the local SOCKS5 proxy</string>
-    <string name="main_card_call_transport_reason_release_only">WhatsApp tracing is available only in debug or experimental builds</string>
     <string name="main_card_call_transport_reason_targets_unavailable">Targets for this check are unavailable</string>
+    <string name="main_card_call_transport_stun_group_global">Global STUN</string>
+    <string name="main_card_call_transport_stun_group_ru">RU STUN</string>
+    <string name="main_card_call_transport_stun_responded">%1$d of %2$d responded</string>
+    <string name="main_card_call_transport_stun_none_responded">No response</string>
+    <string name="main_card_call_transport_stun_ipv4">IPv4</string>
+    <string name="main_card_call_transport_stun_ipv6">IPv6</string>
+    <string name="main_card_call_transport_stun_no_response">No response</string>
+    <string name="main_card_call_transport_stun_error">Error</string>
     <string name="main_card_location_signals">Location signals</string>
     <string name="main_verdict_details">Details</string>
 
@@ -162,6 +185,7 @@
     <string name="main_verdict_hide_details">Hide details</string>
 
     <string name="main_ipv6_error_ignored">IPv6 error ignored: </string>
+    <string name="main_ip_comparison_ipv4_unavailable">IPv4: n/a</string>
 
     <string name="settings_port_range_preview_proxy_xray">Localhost ports to scan for proxy and Xray API: %1$s (%2$s)</string>
     <string name="settings_port_range_preview_proxy_only">Localhost ports to scan for proxy: %1$s (%2$s)</string>
@@ -301,6 +325,8 @@
     <string name="checker_cdn_pulling_summary_detected_partial">%2$d of %3$d CDN targets responded and exposed IP %1$s</string>
     <string name="checker_cdn_pulling_summary_detected_no_ip">%1$d of %2$d CDN targets returned trace data, but not all responses included an IP</string>
     <string name="checker_cdn_pulling_error_unrecognized">Response format is not recognized</string>
+    <string name="checker_cdn_pulling_error_tls_certificate">Could not verify the TLS certificate chain. Possible causes: HTTPS interception, a wrong DNS answer, or an outdated Android CA store.</string>
+    <string name="checker_cdn_pulling_error_details">Details: %1$s</string>
 
     <!-- DirectSignsChecker -->
     <string name="checker_direct_category_name">Direct signs</string>
@@ -433,4 +459,25 @@
     <string name="checker_vpn_known_apps_none">Known VPN/Proxy apps and VpnService providers: none detected</string>
     <string name="checker_vpn_installed_app">Installed app: %1$s (%2$s)</string>
     <string name="checker_vpn_declares_service">App declares VpnService: %1$s (%2$s)</string>
+
+    <!-- Redesign: main screen -->
+    <string name="verdict_label">Verdict</string>
+    <string name="verdict_title_clean">No bypass detected</string>
+    <string name="verdict_title_review">Needs review</string>
+    <string name="verdict_title_detected">Bypass detected</string>
+    <string name="verdict_title_idle">Check not started</string>
+    <string name="verdict_subtitle_idle">Run the check to see the verdict</string>
+    <string name="verdict_subtitle_running">Check in progress\u2026</string>
+    <string name="verdict_subtitle_done">Check completed \u00b7 %1$d categories</string>
+    <string name="section_check_details">Check details</string>
+    <string name="privacy_footer_text">Check runs locally \u00b7 16 domains</string>
+    <string name="privacy_footer_action">What\u2019s this?</string>
+    <string name="tile_hint_placeholder">\u2014</string>
+    <string name="tile_hint_loading">Checking\u2026</string>
+    <string name="tile_hint_stopped">Stopped</string>
+    <string name="tile_hint_clean">Clean</string>
+    <string name="tile_hint_clean_count">%1$d checks \u00b7 clean</string>
+    <string name="tile_hint_detected_count">%1$d of %2$d detected</string>
+    <string name="tile_hint_review">Needs review</string>
+    <string name="tile_hint_error">Error</string>
 </resources>

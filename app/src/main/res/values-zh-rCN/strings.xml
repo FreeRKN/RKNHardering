@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">RKNHardering</string>
     <string name="github_repo_url">https://github.com/xtclovver/RKNHardering</string>
-    <string name="run_check_notice">执行检查时，应用会向以下域名发起网络请求：\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\n如果在设置中选择了自定义 DNS resolver，应用还会连接到其 IP 地址或 DoH 域名。\n\n如果启用了 CDN pulling，应用还会向 redirector.googlevideo.com、rutracker.org 和 meduza.io 发送 HTTPS 请求，以查看这些端点会返回什么公网 IP 和 trace 数据。\n\n如果启用了 Debug diagnostics，应用还可以基于最近一次已完成的检查生成可复制的诊断报告，即使这次检查成功完成也一样。该报告只保存在内存中，直到你复制它，并且也会包含 CDN pulling 的响应。\n\n点击“运行检查”即表示你同意这些网络请求将从你的设备发出。\n\n应用不会记录这些请求的日志。可以在应用设置中关闭网络访问。</string>
+    <string name="run_check_notice">执行检查时，应用会向以下域名发起网络请求：\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ipv4-internet.yandex.net\n• ipv6-internet.yandex.net\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\n如果在设置中选择了自定义 DNS resolver，应用还会连接到其 IP 地址或 DoH 域名。\n\n如果启用了 CDN pulling，应用还会向 redirector.googlevideo.com、rutracker.org 和 meduza.io 发送 HTTPS 请求，以查看这些端点会返回什么公网 IP 和 trace 数据。\n\n如果启用了 Debug diagnostics，应用还可以基于最近一次已完成的检查生成可复制的诊断报告，即使这次检查成功完成也一样。该报告只保存在内存中，直到你复制它，并且也会包含 CDN pulling 的响应。\n\n点击“运行检查”即表示你同意这些网络请求将从你的设备发出。\n\n应用不会记录这些请求的日志。可以在应用设置中关闭网络访问。</string>
 
     <string name="settings_title">设置</string>
     <string name="settings_section_checks">检查</string>
@@ -12,17 +12,23 @@
     <string name="settings_subsection_network">网络</string>
     <string name="settings_subsection_dns">DNS</string>
     <string name="settings_cat_split_tunnel">Split tunnel bypass</string>
-    <string name="settings_cat_split_tunnel_desc">端口扫描、TUN probe、proxy 和 Xray API 扫描</string>
+    <string name="settings_cat_split_tunnel_desc">端口与 probe</string>
     <string name="settings_cat_network">网络</string>
-    <string name="settings_cat_network_desc">网络请求、CDN pulling、call transport</string>
+    <string name="settings_cat_network_desc">请求与 CDN</string>
     <string name="settings_cat_dns">DNS</string>
-    <string name="settings_cat_dns_desc">DNS resolver 模式和服务器</string>
+    <string name="settings_cat_dns_desc">Resolver</string>
     <string name="settings_cat_privacy">隐私</string>
-    <string name="settings_cat_privacy_desc">诊断中的 IP 遮蔽</string>
+    <string name="settings_cat_privacy_desc">IP 遮蔽</string>
     <string name="settings_cat_appearance">外观</string>
-    <string name="settings_cat_appearance_desc">主题和语言</string>
+    <string name="settings_cat_appearance_desc">主题与语言</string>
     <string name="settings_cat_about">关于</string>
-    <string name="settings_cat_about_desc">权限和 GitHub</string>
+    <string name="settings_cat_about_desc">GitHub</string>
+    <string name="settings_cat_debug">调试</string>
+    <string name="settings_cat_debug_desc">诊断快照</string>
+    <string name="settings_group_checks">检查</string>
+    <string name="settings_group_app">应用</string>
+    <string name="settings_group_diagnostics">诊断</string>
+    <string name="settings_group_info">信息</string>
     <string name="settings_split_tunnel">Split tunnel bypass</string>
     <string name="settings_split_tunnel_desc">端口扫描需要较长时间</string>
     <string name="settings_tun_probe_debug">Debug diagnostics</string>
@@ -54,8 +60,8 @@
     <string name="settings_cdn_pulling_warning_confirm">启用</string>
     <string name="settings_cdn_pulling_meduza">包含 meduza.io</string>
     <string name="settings_cdn_pulling_meduza_desc">在 CDN pulling 过程中向 meduza.io/cdn-cgi/trace 发送请求。</string>
-    <string name="settings_call_transport_probe">Call transport 泄露探测</string>
-    <string name="settings_call_transport_probe_desc">会向内置的 Telegram 目标发送额外的 UDP/STUN 请求。WhatsApp 跟踪仅在 debug 或 experimental 构建中运行。</string>
+    <string name="settings_call_transport_probe">Call transport 与 STUN 探测</string>
+    <string name="settings_call_transport_probe_desc">向公共 STUN 服务器（全球和俄罗斯）发送 UDP/STUN 请求，并检查本地 SOCKS5 代理的 Telegram MTProto 流量。</string>
     <string name="settings_dns_resolver">DNS resolver</string>
     <string name="settings_dns_resolver_desc">用于 GeoIP、IP Comparison 和 BeaconDB。它不会修改 Android 系统 DNS，也不会影响本地 DNS 检查。</string>
     <string name="settings_dns_mode_system">系统</string>
@@ -88,6 +94,15 @@
     <string name="settings_github">GitHub</string>
     <string name="main_copy_diagnostics">复制诊断</string>
     <string name="main_diagnostics_copied">诊断已复制</string>
+    <string name="main_export">导出</string>
+    <string name="main_export_title">导出结果</string>
+    <string name="main_export_markdown">Markdown (.md)</string>
+    <string name="main_export_json">JSON (.json)</string>
+    <string name="main_export_save_file">保存文件</string>
+    <string name="main_export_copy_to_clipboard">复制到剪贴板</string>
+    <string name="main_export_copied">导出已复制</string>
+    <string name="main_export_saved">导出已保存</string>
+    <string name="main_export_failed">保存导出失败</string>
     <string name="settings_github_desc">xtclovver/RKNHardering</string>
     <string name="settings_port_range_from">从</string>
     <string name="settings_port_range_to">到</string>
@@ -99,7 +114,7 @@
     <string name="main_card_cdn_pulling">CDN pulling</string>
     <string name="main_card_direct_signs">直接迹象</string>
     <string name="main_card_indirect_signs">间接迹象</string>
-    <string name="main_card_call_transport">STUN 服务器</string>
+    <string name="main_card_call_transport">STUN mapped IP</string>
     <string name="main_card_call_transport_status_no_signal">无信号</string>
     <string name="main_card_call_transport_status_needs_review">需要检查</string>
     <string name="main_card_call_transport_status_unsupported">不支持</string>
@@ -108,10 +123,18 @@
     <string name="main_card_call_transport_path_active">活跃网络</string>
     <string name="main_card_call_transport_path_underlying">底层网络</string>
     <string name="main_card_call_transport_path_proxy">本地代理</string>
+    <string name="main_card_call_transport_header">%1$s · %2$s · %3$s</string>
     <string name="main_card_call_transport_reason_no_response">未收到 STUN 响应</string>
     <string name="main_card_call_transport_reason_telegram_dc_unreachable">无法通过本地 SOCKS5 代理访问 Telegram DC</string>
-    <string name="main_card_call_transport_reason_release_only">WhatsApp 跟踪仅在 debug 或 experimental 构建中可用</string>
     <string name="main_card_call_transport_reason_targets_unavailable">此检查的目标不可用</string>
+    <string name="main_card_call_transport_stun_group_global">全球 STUN</string>
+    <string name="main_card_call_transport_stun_group_ru">俄罗斯 STUN</string>
+    <string name="main_card_call_transport_stun_responded">%1$d / %2$d 已响应</string>
+    <string name="main_card_call_transport_stun_none_responded">无响应</string>
+    <string name="main_card_call_transport_stun_ipv4">IPv4</string>
+    <string name="main_card_call_transport_stun_ipv6">IPv6</string>
+    <string name="main_card_call_transport_stun_no_response">无响应</string>
+    <string name="main_card_call_transport_stun_error">错误</string>
     <string name="main_card_location_signals">位置迹象</string>
     <string name="main_verdict_details">详情</string>
 
@@ -160,6 +183,7 @@
     <string name="main_verdict_hide_details">隐藏详情</string>
 
     <string name="main_ipv6_error_ignored">已忽略 IPv6 错误： </string>
+    <string name="main_ip_comparison_ipv4_unavailable">IPv4：不可用</string>
 
     <string name="settings_port_range_preview_proxy_xray">将扫描用于代理和 Xray API 的 localhost 端口：%1$s（%2$s）</string>
     <string name="settings_port_range_preview_proxy_only">将扫描用于代理的 localhost 端口：%1$s（%2$s）</string>
@@ -309,6 +333,8 @@
     <string name="checker_direct_proxyinfo_invalid">%1$s：代理配置无效</string>
     <string name="checker_direct_proxyinfo_unavailable">%1$s：ProxyInfo 检查不可用（%2$s）</string>
     <string name="checker_direct_proxyinfo_network_none">已跟踪网络上的 ProxyInfo：未发现</string>
+    <string name="checker_cdn_pulling_error_tls_certificate">无法验证 TLS 证书链。可能原因：HTTPS 被拦截、DNS 返回错误结果，或 Android CA 存储过旧。</string>
+    <string name="checker_cdn_pulling_error_details">详情：%1$s</string>
 
     <string name="checker_indirect_category_name">间接迹象</string>
     <string name="checker_indirect_capability_not_vpn">Capability NOT_VPN：%1$s</string>
@@ -413,4 +439,25 @@
     <string name="checker_vpn_known_apps_none">已知 VPN/代理应用和 VpnService 提供方：未发现</string>
     <string name="checker_vpn_installed_app">已安装应用：%1$s（%2$s）</string>
     <string name="checker_vpn_declares_service">应用声明了 VpnService：%1$s（%2$s）</string>
+
+    <!-- Redesign: main screen -->
+    <string name="verdict_label">结论</string>
+    <string name="verdict_title_clean">未检测到绕过</string>
+    <string name="verdict_title_review">需要核查</string>
+    <string name="verdict_title_detected">检测到绕过</string>
+    <string name="verdict_title_idle">尚未开始检查</string>
+    <string name="verdict_subtitle_idle">运行检查以查看结论</string>
+    <string name="verdict_subtitle_running">正在检查\u2026</string>
+    <string name="verdict_subtitle_done">检查完成 \u00b7 %1$d 个类别</string>
+    <string name="section_check_details">检查详情</string>
+    <string name="privacy_footer_text">检查在本地运行 \u00b7 16 个域名</string>
+    <string name="privacy_footer_action">这是什么？</string>
+    <string name="tile_hint_placeholder">\u2014</string>
+    <string name="tile_hint_loading">检查中\u2026</string>
+    <string name="tile_hint_stopped">已停止</string>
+    <string name="tile_hint_clean">正常</string>
+    <string name="tile_hint_clean_count">%1$d 项检查 \u00b7 正常</string>
+    <string name="tile_hint_detected_count">%1$d / %2$d 已检测</string>
+    <string name="tile_hint_review">需要核查</string>
+    <string name="tile_hint_error">错误</string>
 </resources>

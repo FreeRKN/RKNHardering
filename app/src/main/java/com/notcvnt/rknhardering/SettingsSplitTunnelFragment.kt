@@ -22,7 +22,6 @@ internal class SettingsSplitTunnelFragment : Fragment(R.layout.fragment_settings
     private lateinit var prefs: SharedPreferences
 
     private lateinit var switchSplitTunnel: MaterialSwitch
-    private lateinit var switchTunProbeDebug: MaterialSwitch
     private lateinit var cardTunProbeMode: MaterialCardView
     private lateinit var cardProxyScan: MaterialCardView
     private lateinit var switchProxyScan: MaterialSwitch
@@ -46,7 +45,6 @@ internal class SettingsSplitTunnelFragment : Fragment(R.layout.fragment_settings
 
     private fun bindViews(view: View) {
         switchSplitTunnel = view.findViewById(R.id.switchSplitTunnel)
-        switchTunProbeDebug = view.findViewById(R.id.switchTunProbeDebug)
         cardTunProbeMode = view.findViewById(R.id.cardTunProbeMode)
         cardProxyScan = view.findViewById(R.id.cardProxyScan)
         switchProxyScan = view.findViewById(R.id.switchProxyScan)
@@ -63,7 +61,6 @@ internal class SettingsSplitTunnelFragment : Fragment(R.layout.fragment_settings
 
     private fun loadSettings() {
         switchSplitTunnel.isChecked = prefs.getBoolean(SettingsPrefs.PREF_SPLIT_TUNNEL_ENABLED, true)
-        switchTunProbeDebug.isChecked = prefs.getBoolean(SettingsPrefs.PREF_TUN_PROBE_DEBUG_ENABLED, false)
         switchProxyScan.isChecked = prefs.getBoolean(SettingsPrefs.PREF_PROXY_SCAN_ENABLED, true)
         switchXrayApiScan.isChecked = prefs.getBoolean(SettingsPrefs.PREF_XRAY_API_SCAN_ENABLED, true)
 
@@ -94,10 +91,6 @@ internal class SettingsSplitTunnelFragment : Fragment(R.layout.fragment_settings
             updateLocalScanTogglesEnabled(isChecked)
             updateTunProbeModeEnabled(isChecked)
             updatePortRangeEnabled(isChecked && isAnyLocalScanEnabled())
-        }
-
-        switchTunProbeDebug.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit { putBoolean(SettingsPrefs.PREF_TUN_PROBE_DEBUG_ENABLED, isChecked) }
         }
 
         switchProxyScan.setOnCheckedChangeListener { _, isChecked ->

@@ -34,19 +34,6 @@ class MainActivityCallTransportReasonTest {
     }
 
     @Test
-    fun `formatCallTransportReason localizes release only whatsapp`() {
-        val leak = leak(
-            service = CallTransportService.WHATSAPP,
-            status = CallTransportStatus.UNSUPPORTED,
-            summary = "WhatsApp experimental trace is disabled in release builds",
-        )
-
-        val reason = formatCallTransportReason(context, leak, privacyMode = false)
-
-        assertEquals(context.getString(R.string.main_card_call_transport_reason_release_only), reason)
-    }
-
-    @Test
     fun `formatCallTransportReason masks ip details in privacy mode`() {
         val leak = leak(
             status = CallTransportStatus.NO_SIGNAL,

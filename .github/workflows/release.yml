@@ -1,124 +1,26 @@
 name: Release
 
-env:
-  ANDROID_BUILD_TOOLS_VERSION: "36.0.0"
-  ANDROID_CMAKE_VERSION: "3.22.1"
-  ANDROID_NDK_VERSION: "28.2.13676358"
-
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version tag (e.g. v1.2.0)'
-        required: true
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Resolve version
-        id: version
+      - name: Create archive
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
+          zip -r rkn-hardening-${GITHUB_REF_NAME}.zip .
 
-      - name: Resolve Android version
-        id: android_version
-        run: |
-          VERSION_NAME=${{ steps.version.outputs.tag }}
-          VERSION_NAME=${VERSION_NAME#v}
-          if ! [[ "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Unsupported version format: $VERSION_NAME" >&2
-            exit 1
-          fi
-          echo "name=$VERSION_NAME" >> $GITHUB_OUTPUT
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: gradle
-
-      - name: Install Android SDK packages
-        run: |
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager \
-            "platforms;android-36" \
-            "platform-tools" \
-            "build-tools;${ANDROID_BUILD_TOOLS_VERSION}" \
-            "ndk;${ANDROID_NDK_VERSION}" \
-            "cmake;${ANDROID_CMAKE_VERSION}"
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Decode keystore
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > keystore.jks
-
-      - name: Build signed release APK
-        env:
-          KEYSTORE_PATH: ${{ github.workspace }}/keystore.jks
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          ./gradlew assembleRelease \
-            -PappVersionName=${{ steps.android_version.outputs.name }} \
-            -Pandroid.injected.signing.store.file=$KEYSTORE_PATH \
-            -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
-            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
-            -Pandroid.injected.signing.key.password=$KEY_PASSWORD
-
-      - name: Rename APK
-        run: |
-          VERSION=${{ steps.version.outputs.tag }}
-          mv app/build/outputs/apk/release/app-release.apk \
-             app/build/outputs/apk/release/RKNHardering-${VERSION}.apk
-
-      - name: Generate changelog
-        id: changelog
-        run: |
-          git fetch --force --tags origin
-          CURRENT_TAG=${{ steps.version.outputs.tag }}
-          CURRENT_REF="$GITHUB_SHA"
-          if git rev-parse -q --verify "refs/tags/${CURRENT_TAG}" >/dev/null; then
-            CURRENT_REF="${CURRENT_TAG}"
-          fi
-          PREV_TAG=$(git describe --tags --abbrev=0 "${CURRENT_REF}^" 2>/dev/null || echo "")
-          if [ -n "$PREV_TAG" ]; then
-            NOTES=$(git log "${PREV_TAG}..${CURRENT_REF}" --pretty=format:"- %s (%h)" --no-merges)
-          else
-            NOTES=$(git log "${CURRENT_REF}" --pretty=format:"- %s (%h)" --no-merges)
-          fi
-          echo "notes<<EOF" >> $GITHUB_OUTPUT
-          echo "$NOTES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Create GitHub Release
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: ${{ steps.version.outputs.tag }}
-          body: ${{ steps.changelog.outputs.notes }}
-          files: app/build/outputs/apk/release/RKNHardering-${{ steps.version.outputs.tag }}.apk
+          files: rkn-hardening-${GITHUB_REF_NAME}.zip
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

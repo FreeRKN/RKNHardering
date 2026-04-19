@@ -7,6 +7,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import com.google.android.material.card.MaterialCardView
+import com.notcvnt.rknhardering.checker.CheckSettings
 import com.notcvnt.rknhardering.model.CategoryResult
 import com.notcvnt.rknhardering.model.CdnPullingResponse
 import com.notcvnt.rknhardering.model.Finding
@@ -108,6 +109,24 @@ class MainActivityUiRenderingTest {
         assertFalse(collectText(findings).contains("Socket timeout to 203.0.113.64"))
     }
 
+    @Test
+    fun `prepare check session shows loading hint for call transport tile when probe enabled`() {
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+
+        invokePrivate<Unit>(
+            activity,
+            "prepareCheckSessionUi",
+            CheckSettings(callTransportProbeEnabled = true),
+            false,
+        )
+
+        val tiles = getPrivateField<Map<String, Any>>(activity, "tiles")
+        val callTransportTile = tiles.getValue("stn")
+        val hint = getPrivateField<TextView>(callTransportTile, "hint")
+
+        assertEquals(activity.getString(R.string.tile_hint_loading), hint.text.toString())
+    }
+
     private fun collectText(view: View): String {
         if (view is TextView) return view.text.toString()
         if (view !is ViewGroup) return ""
@@ -123,6 +142,13 @@ class MainActivityUiRenderingTest {
 
     private fun assertTrueContains(text: String, expected: String) {
         assertFalse("Expected text to contain <$expected>, got <$text>", !text.contains(expected))
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> getPrivateField(target: Any, name: String): T {
+        val field = target::class.java.getDeclaredField(name)
+        field.isAccessible = true
+        return field.get(target) as T
     }
 
     @Suppress("UNCHECKED_CAST")

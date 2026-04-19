@@ -2661,6 +2661,7 @@ class MainActivity : AppCompatActivity() {
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
             ),
         )
+        setEmbeddedCategoryHeaderVisible(id, visible = false)
 
         val iconRes = categoryIcon(id)
         detailIcon.setImageResource(iconRes)
@@ -2697,6 +2698,7 @@ class MainActivity : AppCompatActivity() {
         val host = legacyCardFor(id) ?: return
         val content = detailContentSlot.getChildAt(0) ?: return
         detailContentSlot.removeView(content)
+        setEmbeddedCategoryHeaderVisible(id, visible = true)
         host.addView(
             content,
             android.view.ViewGroup.LayoutParams(
@@ -2704,6 +2706,13 @@ class MainActivity : AppCompatActivity() {
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
             ),
         )
+    }
+
+    private fun setEmbeddedCategoryHeaderVisible(id: String, visible: Boolean) {
+        if (id != CATEGORY_STN && id != CATEGORY_NAT) return
+        val content = legacyContentFor(id) as? android.view.ViewGroup ?: return
+        val header = content.getChildAt(0) ?: return
+        header.visibility = if (visible) View.VISIBLE else View.GONE
     }
 
     private fun legacyCardFor(id: String): MaterialCardView? = when (id) {

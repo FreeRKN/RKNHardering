@@ -72,4 +72,37 @@ class CheckResultMarkdownExportFormatterTest {
         assertTrue(markdown.contains("- <none>"))
         assertFalse(markdown.contains("null"))
     }
+
+    @Test
+    fun `markdown export includes IP channels section when observed IPs present`() {
+        val markdown = CheckResultMarkdownExportFormatter.format(
+            context = context,
+            snapshot = createCompletedExportSnapshot(
+                result = exportRichCheckResult(),
+                privacyMode = false,
+                finishedAtMillis = 0L,
+            ),
+            appVersionName = "1.0",
+            buildType = "debug",
+        )
+
+        assertTrue(markdown.contains("## IP каналы"))
+        assertTrue(markdown.contains("| Канал | Target | IP | Family | Страна | ASN | Источники |"))
+    }
+
+    @Test
+    fun `markdown export skips IP channels section when empty`() {
+        val markdown = CheckResultMarkdownExportFormatter.format(
+            context = context,
+            snapshot = createCompletedExportSnapshot(
+                result = exportEmptyCheckResult(),
+                privacyMode = false,
+                finishedAtMillis = 0L,
+            ),
+            appVersionName = "1.0",
+            buildType = "debug",
+        )
+
+        assertFalse(markdown.contains("## IP каналы"))
+    }
 }

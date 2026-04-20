@@ -130,6 +130,7 @@
     <string name="main_card_call_transport_reason_targets_unavailable">Targets for this check are unavailable</string>
     <string name="main_card_call_transport_stun_group_global">Global STUN</string>
     <string name="main_card_call_transport_stun_group_ru">RU STUN</string>
+    <string name="ip_channels_title" translatable="false">IP каналы</string>
     <string name="main_card_call_transport_stun_responded">%1$d of %2$d responded</string>
     <string name="main_card_call_transport_stun_none_responded">No response</string>
     <string name="main_card_call_transport_stun_ipv4">IPv4</string>

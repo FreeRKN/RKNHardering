@@ -12,6 +12,7 @@ import com.notcvnt.rknhardering.model.Finding
 import com.notcvnt.rknhardering.model.IpCheckerGroupResult
 import com.notcvnt.rknhardering.model.IpCheckerResponse
 import com.notcvnt.rknhardering.model.IpComparisonResult
+import com.notcvnt.rknhardering.model.IpConsensusResult
 import com.notcvnt.rknhardering.model.LocalProxyCheckResult
 import com.notcvnt.rknhardering.model.LocalProxyOwner
 import com.notcvnt.rknhardering.model.MatchedVpnApp
@@ -74,6 +75,7 @@ internal object CheckResultJsonExportFormatter {
                 put("directSigns", categoryToJson(snapshot.result.directSigns, snapshot.privacyMode))
                 put("indirectSigns", categoryToJson(snapshot.result.indirectSigns, snapshot.privacyMode))
                 put("locationSignals", categoryToJson(snapshot.result.locationSignals, snapshot.privacyMode))
+                put("ipConsensus", buildIpConsensusJson(snapshot.result.ipConsensus, snapshot.privacyMode))
                 put("bypass", bypassToJson(context, snapshot.result.bypassResult, snapshot.privacyMode))
             },
         )
@@ -333,6 +335,37 @@ internal object CheckResultJsonExportFormatter {
             put("proxySettingsType", outbound.proxySettingsType)
             put("uuidPresent", !outbound.uuid.isNullOrBlank())
             put("publicKeyPresent", !outbound.publicKey.isNullOrBlank())
+        }
+    }
+
+    private fun buildIpConsensusJson(consensus: IpConsensusResult, privacyMode: Boolean): JSONObject {
+        return JSONObject().apply {
+            put(
+                "observedIps",
+                JSONArray().apply {
+                    consensus.observedIps.forEach { ip ->
+                        put(
+                            JSONObject().apply {
+                                put("value", maskExportIp(ip.value, privacyMode))
+                                put("family", ip.family.name)
+                                put("channel", ip.channel.name)
+                                put("sources", jsonArray(ip.sources.toList()))
+                                put("countryCode", ip.countryCode)
+                                put("asn", ip.asn)
+                                put("targetGroup", ip.targetGroup?.name)
+                            },
+                        )
+                    }
+                },
+            )
+            put("crossChannelMismatch", consensus.crossChannelMismatch)
+            put("warpLikeIndicator", consensus.warpLikeIndicator)
+            put("probeTargetDivergence", consensus.probeTargetDivergence)
+            put("probeTargetDirectDivergence", consensus.probeTargetDirectDivergence)
+            put("geoCountryMismatch", consensus.geoCountryMismatch)
+            put("channelConflict", jsonArray(consensus.channelConflict.map { it.name }))
+            put("foreignIps", jsonArray(consensus.foreignIps.toList().map { maskExportIp(it, privacyMode) ?: it }))
+            put("needsReview", consensus.needsReview)
         }
     }
 

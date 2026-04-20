@@ -55,6 +55,7 @@ import com.notcvnt.rknhardering.model.Finding
 import com.notcvnt.rknhardering.model.IpCheckerGroupResult
 import com.notcvnt.rknhardering.model.IpCheckerResponse
 import com.notcvnt.rknhardering.model.IpComparisonResult
+import com.notcvnt.rknhardering.model.IpConsensusResult
 import com.notcvnt.rknhardering.model.StunProbeGroupResult
 import com.notcvnt.rknhardering.model.StunScope
 import com.notcvnt.rknhardering.model.Verdict
@@ -193,6 +194,7 @@ class MainActivity : AppCompatActivity() {
         DIRECT,
         INDIRECT,
         LOCATION,
+        IP_CONSENSUS,
         BYPASS,
     }
 
@@ -223,6 +225,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusNativeSigns: TextView
     private lateinit var textNativeSignsSummary: TextView
     private lateinit var findingsNativeSigns: LinearLayout
+    private lateinit var cardIpChannels: MaterialCardView
+    private lateinit var ipChannelsContainer: LinearLayout
     private lateinit var cardVerdict: MaterialCardView
     private lateinit var iconGeoIp: ImageView
     private lateinit var iconIpComparison: ImageView
@@ -413,6 +417,8 @@ class MainActivity : AppCompatActivity() {
         statusNativeSigns = findViewById(R.id.statusNativeSigns)
         textNativeSignsSummary = findViewById(R.id.textNativeSignsSummary)
         findingsNativeSigns = findViewById(R.id.findingsNativeSigns)
+        cardIpChannels = findViewById(R.id.cardIpChannels)
+        ipChannelsContainer = findViewById(R.id.ipChannelsContainer)
         cardVerdict = findViewById(R.id.cardVerdict)
         iconGeoIp = findViewById(R.id.iconGeoIp)
         iconIpComparison = findViewById(R.id.iconIpComparison)
@@ -1177,7 +1183,10 @@ class MainActivity : AppCompatActivity() {
                 if (animate) animateContentReveal(findingsBypass)
             }
             is CheckUpdate.IpConsensusReady -> {
-                Unit
+                markStageCompleted(RunningStage.IP_CONSENSUS)
+                ensureCardVisible(cardIpChannels, animate = false)
+                displayIpChannels(update.result, activeCheckPrivacyMode)
+                if (animate) animateContentReveal(ipChannelsContainer)
             }
             is CheckUpdate.VerdictReady -> {
                 Unit
@@ -1192,6 +1201,7 @@ class MainActivity : AppCompatActivity() {
         RunningStage.DIRECT -> CATEGORY_DIR
         RunningStage.INDIRECT -> CATEGORY_IND
         RunningStage.LOCATION -> CATEGORY_LOC
+        RunningStage.IP_CONSENSUS -> "ip_channels"
         RunningStage.BYPASS -> CATEGORY_BYP
     }
 
@@ -1242,6 +1252,10 @@ class MainActivity : AppCompatActivity() {
                 infoSection = locationInfoSection,
                 infoDivider = locationDivider,
             )
+            RunningStage.IP_CONSENSUS -> {
+                ensureCardVisible(cardIpChannels, animate = false)
+                setTileStatus(tileIdForStage(stage), TILE_STATUS_NEUTRAL, getString(R.string.tile_hint_loading))
+            }
             RunningStage.BYPASS -> showBypassLoading(stage)
         }
         syncLoadingStatusAnimation()
@@ -1345,6 +1359,7 @@ class MainActivity : AppCompatActivity() {
                     infoSection = locationInfoSection,
                     infoDivider = locationDivider,
                 )
+                RunningStage.IP_CONSENSUS -> cardIpChannels.visibility = View.GONE
                 RunningStage.BYPASS -> showBypassStopped(stage)
             }
         }
@@ -1466,6 +1481,7 @@ class MainActivity : AppCompatActivity() {
             RunningStage.DIRECT -> getString(R.string.main_loading_direct)
             RunningStage.INDIRECT -> getString(R.string.main_loading_indirect)
             RunningStage.LOCATION -> getString(R.string.main_loading_location)
+            RunningStage.IP_CONSENSUS -> getString(R.string.main_loading_ip_comparison)
             RunningStage.BYPASS -> getString(R.string.main_loading_bypass)
         }
     }
@@ -1485,6 +1501,7 @@ class MainActivity : AppCompatActivity() {
             RunningStage.DIRECT -> cardDirect
             RunningStage.INDIRECT -> cardIndirect
             RunningStage.LOCATION -> cardLocation
+            RunningStage.IP_CONSENSUS -> cardIpChannels
             RunningStage.BYPASS -> cardBypass
         }
     }
@@ -1497,6 +1514,7 @@ class MainActivity : AppCompatActivity() {
             RunningStage.DIRECT -> statusDirect
             RunningStage.INDIRECT -> statusIndirect
             RunningStage.LOCATION -> statusLocation
+            RunningStage.IP_CONSENSUS -> statusGeoIp
             RunningStage.BYPASS -> statusBypass
         }
     }
@@ -2036,6 +2054,111 @@ class MainActivity : AppCompatActivity() {
         }
 
         return container
+    }
+
+    private fun displayIpChannels(consensus: IpConsensusResult, privacyMode: Boolean = false) {
+        if (consensus.observedIps.isEmpty()) {
+            cardIpChannels.visibility = View.GONE
+            return
+        }
+        cardIpChannels.visibility = View.VISIBLE
+        ipChannelsContainer.removeAllViews()
+
+        consensus.observedIps.forEach { ip ->
+            ipChannelsContainer.addView(createIpChannelRow(ip, privacyMode))
+        }
+
+        val hasWarning = consensus.crossChannelMismatch || consensus.warpLikeIndicator ||
+                consensus.geoCountryMismatch || consensus.probeTargetDivergence ||
+                consensus.probeTargetDirectDivergence || consensus.channelConflict.isNotEmpty() ||
+                consensus.needsReview
+
+        if (hasWarning) {
+            val flagsContainer = LinearLayout(themedContext()).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = 8.dp }
+            }
+
+            val warningColor = ContextCompat.getColor(themedContext(), R.color.finding_detected)
+            val warningBackground = TextView(themedContext()).apply {
+                text = buildString {
+                    if (consensus.crossChannelMismatch) appendLine("⚠ Cross-channel mismatch detected")
+                    if (consensus.warpLikeIndicator) appendLine("⚠ WARP-like behavior detected")
+                    if (consensus.geoCountryMismatch) appendLine("⚠ Geo-country mismatch")
+                    if (consensus.probeTargetDivergence) appendLine("⚠ Probe-target divergence")
+                    if (consensus.probeTargetDirectDivergence) appendLine("⚠ Probe-target direct divergence")
+                    if (consensus.channelConflict.isNotEmpty()) {
+                        appendLine("⚠ Channel conflict: ${consensus.channelConflict.joinToString(", ")}")
+                    }
+                    if (consensus.needsReview) appendLine("⚠ Needs review")
+                }
+                textSize = 12f
+                setTextColor(warningColor)
+                setPadding(8.dp, 8.dp, 8.dp, 8.dp)
+            }
+
+            flagsContainer.addView(warningBackground)
+            ipChannelsContainer.addView(flagsContainer)
+        }
+    }
+
+    private fun createIpChannelRow(ip: com.notcvnt.rknhardering.model.ObservedIp, privacyMode: Boolean): View {
+        val row = LinearLayout(themedContext()).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 4.dp, 0, 4.dp)
+        }
+
+        val channelChip = TextView(themedContext()).apply {
+            text = ip.channel.name
+            textSize = 11f
+            setTextColor(onSurfaceColor())
+            typeface = Typeface.DEFAULT_BOLD
+            val padding = 6.dp
+            setPadding(padding, padding / 2, padding, padding / 2)
+            setBackgroundColor(MaterialColors.getColor(themedContext(), com.google.android.material.R.attr.colorSurfaceVariant, 0))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                .apply { marginEnd = 8.dp }
+        }
+
+        val targetChip = if (ip.targetGroup != null) {
+            TextView(themedContext()).apply {
+                text = ip.targetGroup.name
+                textSize = 11f
+                setTextColor(onSurfaceColor())
+                typeface = Typeface.DEFAULT_BOLD
+                val padding = 6.dp
+                setPadding(padding, padding / 2, padding, padding / 2)
+                setBackgroundColor(ContextCompat.getColor(themedContext(), R.color.verdict_yellow))
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                    .apply { marginEnd = 8.dp }
+            }
+        } else null
+
+        val infoText = buildString {
+            val maskedIp = maskInfoValue(ip.value, privacyMode)
+            append(maskedIp)
+            if (ip.countryCode != null) append(" (${ip.countryCode})")
+            if (ip.asn != null) append(" ${ip.asn}")
+        }
+
+        val infoView = TextView(themedContext()).apply {
+            text = infoText
+            textSize = 13f
+            setTextColor(onSurfaceColor())
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            textDirection = View.TEXT_DIRECTION_LOCALE
+            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        }
+
+        row.addView(channelChip)
+        if (targetChip != null) row.addView(targetChip)
+        row.addView(infoView)
+
+        return row
     }
 
     private fun displayBypass(bypass: BypassResult, privacyMode: Boolean = false) {

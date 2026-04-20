@@ -154,6 +154,43 @@ class IpComparisonCheckerTest {
     }
 
     @Test
+    fun `ignored ipv6 error does not render null summary when ru group is inconsistent`() {
+        val result = IpComparisonChecker.evaluate(
+            context,
+            listOf(
+                response("2ip.ru", IpCheckerScope.RU, ip = "104.28.0.1"),
+                response("sypexgeo.net", IpCheckerScope.RU, ip = "157.180.0.1"),
+                response("Yandex IPv4", IpCheckerScope.RU, error = "timeout"),
+                response("Yandex IPv6", IpCheckerScope.RU, error = "connect failed", ignoredIpv6Error = true),
+                response("ifconfig.me IPv4", IpCheckerScope.NON_RU, ip = "157.180.0.1"),
+                response("ifconfig.me IPv6", IpCheckerScope.NON_RU, error = "connect failed", ignoredIpv6Error = true),
+            ),
+        )
+
+        assertTrue(result.needsReview)
+        assertEquals(context.getString(R.string.checker_ip_comp_summary_incomplete), result.summary)
+        assertFalse(result.summary.contains("null"))
+    }
+
+    @Test
+    fun `successful responses with group conflicts do not collapse to no response`() {
+        val result = IpComparisonChecker.evaluate(
+            context,
+            listOf(
+                response("2ip.ru", IpCheckerScope.RU, ip = "104.28.0.1"),
+                response("sypexgeo.net", IpCheckerScope.RU, ip = "157.180.0.1"),
+                response("ifconfig.me IPv4", IpCheckerScope.NON_RU, error = "timeout"),
+                response("ip.sb IPv4", IpCheckerScope.NON_RU, ip = "157.180.0.1"),
+                response("ip.sb IPv6", IpCheckerScope.NON_RU, ip = "2a01:4f9:c013:d2ba::1"),
+            ),
+        )
+
+        assertTrue(result.needsReview)
+        assertEquals(context.getString(R.string.checker_ip_comp_summary_incomplete), result.summary)
+        assertFalse(result.summary.contains(context.getString(R.string.checker_ip_comp_summary_no_response)))
+    }
+
+    @Test
     fun `same ip with ordinary errors stays clean`() {
         val result = IpComparisonChecker.evaluate(
             context,

@@ -38,11 +38,13 @@ object PublicIpClient {
 
     fun fetchIp(
         endpoint: String,
-        timeoutMs: Int = 7000,
+        timeoutMs: Int = 5_000,
         proxy: Proxy? = null,
         resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
         binding: ResolverBinding? = null,
         addressFamily: Class<out InetAddress>? = null,
+        okHttpRetryCount: Int = ResolverNetworkStack.OKHTTP_RETRY_COUNT,
+        nativeCurlRetryCount: Int = ResolverNetworkStack.NATIVE_CURL_RETRY_COUNT,
         executionContext: ScanExecutionContext = ScanExecutionContext.currentOrDefault(),
     ): Result<String> {
         fetchIpOverride?.let { return it(endpoint, timeoutMs, proxy, resolverConfig, binding) }
@@ -62,6 +64,8 @@ object PublicIpClient {
                 proxy = proxy,
                 binding = binding,
                 addressFamily = addressFamily,
+                okHttpRetryCount = okHttpRetryCount,
+                nativeCurlRetryCount = nativeCurlRetryCount,
                 cancellationSignal = executionContext.cancellationSignal,
             )
             val response = executeRequest(request)
@@ -197,6 +201,8 @@ object PublicIpClient {
             proxy = request.proxy,
             binding = request.binding,
             addressFamily = request.addressFamily,
+            okHttpRetryCount = request.okHttpRetryCount,
+            nativeCurlRetryCount = request.nativeCurlRetryCount,
             cancellationSignal = request.cancellationSignal,
         )
         TransportPolicy.NATIVE_CURL_ONLY -> {

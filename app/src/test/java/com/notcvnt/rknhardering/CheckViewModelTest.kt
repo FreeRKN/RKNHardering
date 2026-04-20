@@ -84,13 +84,15 @@ class CheckViewModelTest {
         viewModel.cancelScan()
 
         assertFalse(viewModel.isRunning.value)
-        assertTrue(viewModel.scanEvents.value.last() is ScanEvent.Cancelled)
+        assertTrue(viewModel.scanEvents.value.events.last() is ScanEvent.Cancelled)
 
         shadowOf(Looper.getMainLooper()).idle()
         assertTrue(finished.await(1, TimeUnit.SECONDS))
         shadowOf(Looper.getMainLooper()).idle()
 
-        val events = viewModel.scanEvents.value
+        val timeline = viewModel.scanEvents.value
+        val events = timeline.events
+        assertTrue(timeline.scanId != null)
         assertEquals(2, events.size)
         assertTrue(events[0] is ScanEvent.Started)
         assertTrue(events[1] is ScanEvent.Cancelled)

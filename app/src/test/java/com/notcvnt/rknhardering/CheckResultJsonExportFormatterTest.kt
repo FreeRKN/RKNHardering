@@ -36,6 +36,7 @@ class CheckResultJsonExportFormatterTest {
         assertTrue(results.has("geoIp"))
         assertTrue(results.has("ipComparison"))
         assertTrue(results.has("cdnPulling"))
+        assertTrue(results.has("icmpSpoofing"))
         assertTrue(results.has("bypass"))
         assertTrue(results.getJSONObject("ipComparison").getJSONObject("ruGroup").has("responses"))
         val outbound = results
@@ -76,5 +77,78 @@ class CheckResultJsonExportFormatterTest {
         assertTrue(rawBody.contains("203.0.*.*"))
         assertFalse(rawBody.contains("203.0.113.64"))
         assertFalse(results.toString().contains("198.51.100.7"))
+    }
+
+    @Test
+    fun `json export includes ipConsensus with observed IPs across channels`() {
+        val json = JSONObject(
+            CheckResultJsonExportFormatter.format(
+                context = context,
+                snapshot = createCompletedExportSnapshot(
+                    result = exportRichCheckResult(),
+                    privacyMode = false,
+                    finishedAtMillis = 0L,
+                ),
+                appVersionName = "1.0",
+                buildType = "debug",
+            ),
+        )
+
+        val ipConsensus = json.getJSONObject("ipConsensus")
+        val observedIps = ipConsensus.getJSONArray("observedIps")
+        assertEquals(2, observedIps.length())
+        assertTrue(ipConsensus.has("observedIps"))
+        assertTrue(ipConsensus.has("crossChannelMismatch"))
+        assertTrue(ipConsensus.has("warpLikeIndicator"))
+        assertTrue(ipConsensus.has("probeTargetDivergence"))
+        assertTrue(ipConsensus.has("probeTargetDirectDivergence"))
+        assertTrue(ipConsensus.has("geoCountryMismatch"))
+        assertTrue(ipConsensus.has("channelConflict"))
+        assertTrue(ipConsensus.has("foreignIps"))
+        assertTrue(ipConsensus.has("needsReview"))
+        assertEquals("DIRECT", observedIps.getJSONObject(0).getString("channel"))
+        assertEquals("V4", observedIps.getJSONObject(0).getString("family"))
+        assertEquals("VPN", observedIps.getJSONObject(1).getString("channel"))
+    }
+
+    @Test
+    fun `json export handles empty ipConsensus`() {
+        val json = JSONObject(
+            CheckResultJsonExportFormatter.format(
+                context = context,
+                snapshot = createCompletedExportSnapshot(
+                    result = exportEmptyCheckResult(),
+                    privacyMode = false,
+                    finishedAtMillis = 0L,
+                ),
+                appVersionName = "1.0",
+                buildType = "debug",
+            ),
+        )
+
+        val ipConsensus = json.getJSONObject("ipConsensus")
+        assertEquals(0, ipConsensus.getJSONArray("observedIps").length())
+        assertFalse(ipConsensus.getBoolean("crossChannelMismatch"))
+        assertFalse(ipConsensus.getBoolean("needsReview"))
+    }
+
+    @Test
+    fun `json export includes icmp spoofing category separately`() {
+        val json = JSONObject(
+            CheckResultJsonExportFormatter.format(
+                context = context,
+                snapshot = createCompletedExportSnapshot(
+                    result = exportRichCheckResult(),
+                    privacyMode = false,
+                    finishedAtMillis = 0L,
+                ),
+                appVersionName = "1.0",
+                buildType = "debug",
+            ),
+        )
+
+        val icmp = json.getJSONObject("results").getJSONObject("icmpSpoofing")
+        assertTrue(icmp.getBoolean("needsReview"))
+        assertEquals("ICMP spoofing", icmp.getString("name"))
     }
 }

@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -34,6 +35,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.transition.AutoTransition
+import androidx.transition.TransitionManager
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
@@ -49,14 +52,19 @@ import com.notcvnt.rknhardering.model.CallTransportService
 import com.notcvnt.rknhardering.model.CallTransportStatus
 import com.notcvnt.rknhardering.model.CdnPullingResponse
 import com.notcvnt.rknhardering.model.CdnPullingResult
+import com.notcvnt.rknhardering.model.Channel
 import com.notcvnt.rknhardering.model.CategoryResult
 import com.notcvnt.rknhardering.model.CheckResult
 import com.notcvnt.rknhardering.model.Finding
+import com.notcvnt.rknhardering.model.IpFamily
 import com.notcvnt.rknhardering.model.IpCheckerGroupResult
 import com.notcvnt.rknhardering.model.IpCheckerResponse
 import com.notcvnt.rknhardering.model.IpComparisonResult
+import com.notcvnt.rknhardering.model.IpConsensusResult
+import com.notcvnt.rknhardering.model.ObservedIp
 import com.notcvnt.rknhardering.model.StunProbeGroupResult
 import com.notcvnt.rknhardering.model.StunScope
+import com.notcvnt.rknhardering.model.TargetGroup
 import com.notcvnt.rknhardering.model.Verdict
 import com.notcvnt.rknhardering.network.DnsResolverConfig
 import kotlinx.coroutines.Job
@@ -192,19 +200,20 @@ class MainActivity : AppCompatActivity() {
         CDN_PULLING,
         DIRECT,
         INDIRECT,
+        ICMP,
         LOCATION,
+        IP_CONSENSUS,
         BYPASS,
     }
 
     private lateinit var btnRunCheck: MaterialButton
-    private lateinit var btnStopCheck: MaterialButton
-    private lateinit var btnCopyDiagnostics: MaterialButton
-    private lateinit var btnExport: MaterialButton
-    private lateinit var resultActionsContainer: LinearLayout
+    private lateinit var btnCopyDiagnostics: ImageButton
+    private lateinit var btnExport: ImageButton
     private lateinit var resultsScrollView: TouchAwareScrollView
     private lateinit var textCheckStatus: TextView
     private lateinit var viewModel: CheckViewModel
     private var processedEventCount = 0
+    private var processedEventScanId: Long? = null
     private lateinit var cardGeoIp: MaterialCardView
     private lateinit var cardIpComparison: MaterialCardView
     private lateinit var cardCdnPulling: MaterialCardView
@@ -217,6 +226,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var textCallTransportSummary: TextView
     private lateinit var stunGroupsContainer: LinearLayout
     private lateinit var findingsCallTransport: LinearLayout
+    private lateinit var cardIcmpSpoofing: MaterialCardView
+    private lateinit var iconIcmpSpoofing: ImageView
+    private lateinit var statusIcmpSpoofing: TextView
+    private lateinit var findingsIcmpSpoofing: LinearLayout
+    private lateinit var cardNativeSigns: MaterialCardView
+    private lateinit var iconNativeSigns: ImageView
+    private lateinit var statusNativeSigns: TextView
+    private lateinit var textNativeSignsSummary: TextView
+    private lateinit var findingsNativeSigns: LinearLayout
+    private lateinit var cardIpChannels: MaterialCardView
+    private lateinit var ipChannelsContainer: LinearLayout
     private lateinit var cardVerdict: MaterialCardView
     private lateinit var iconGeoIp: ImageView
     private lateinit var iconIpComparison: ImageView
@@ -276,31 +296,28 @@ class MainActivity : AppCompatActivity() {
 
     // Redesign
     private lateinit var mainContentRoot: LinearLayout
-    private lateinit var categoryGrid: android.widget.GridLayout
+    private lateinit var categoryContainer: LinearLayout
     private lateinit var verdictHero: MaterialCardView
     private lateinit var verdictAvatar: View
     private lateinit var verdictAvatarIcon: ImageView
     private lateinit var verdictLabel: TextView
     private lateinit var verdictTitle: TextView
     private lateinit var verdictSubtitle: TextView
-    private lateinit var expandedDetail: MaterialCardView
-    private lateinit var detailIcon: ImageView
-    private lateinit var detailTitle: TextView
-    private lateinit var detailStatusChip: TextView
-    private lateinit var detailContentSlot: android.widget.FrameLayout
     private lateinit var hiddenLegacyCardsHost: LinearLayout
     private lateinit var btnPrivacyInfo: MaterialButton
     private val tiles = mutableMapOf<String, TileHolder>()
-    private var expandedCategoryId: String? = null
+    private val expandedCategoryIds = linkedSetOf<String>()
     private var lastCompletedResult: CheckResult? = null
 
     private data class TileHolder(
         val id: String,
         val card: MaterialCardView,
-        val icon: ImageView,
+        val header: View,
         val statusDot: View,
         val title: TextView,
         val hint: TextView,
+        val chevron: ImageView,
+        val body: View,
     )
 
     private val prefs by lazy { AppUiSettings.prefs(this) }
@@ -344,8 +361,13 @@ class MainActivity : AppCompatActivity() {
         viewModel = ViewModelProvider(this)[CheckViewModel::class.java]
         bindViews()
 
-        btnRunCheck.setOnClickListener { onRunCheckClicked() }
-        btnStopCheck.setOnClickListener { viewModel.cancelScan() }
+        btnRunCheck.setOnClickListener {
+            if (viewModel.isRunning.value) {
+                viewModel.cancelScan()
+            } else {
+                onRunCheckClicked()
+            }
+        }
         btnCopyDiagnostics.setOnClickListener { copyTunProbeDiagnostics() }
         btnExport.setOnClickListener { showExportFormatDialog() }
         observeScanEvents()
@@ -355,6 +377,18 @@ class MainActivity : AppCompatActivity() {
             reRequestPermissions()
         } else if (!prefs.getBoolean(PREF_RATIONALE_SHOWN, false)) {
             showPermissionRationale()
+        }
+
+        checkForAppUpdates()
+    }
+
+    private fun checkForAppUpdates() {
+        lifecycleScope.launch {
+            val updateInfo = AppUpdateChecker.fetchLatestRelease() ?: return@launch
+            val currentVersion = BuildConfig.VERSION_NAME
+            if (!AppUpdateChecker.isNewerVersion(currentVersion, updateInfo.latestVersion)) return@launch
+            if (AppUpdateChecker.isVersionSkipped(this@MainActivity, updateInfo.latestVersion)) return@launch
+            AppUpdateChecker.showUpdateDialog(this@MainActivity, currentVersion, updateInfo)
         }
     }
 
@@ -373,10 +407,8 @@ class MainActivity : AppCompatActivity() {
     private fun bindViews() {
         resultsScrollView = findViewById(R.id.resultsScrollView)
         btnRunCheck = findViewById(R.id.btnRunCheck)
-        btnStopCheck = findViewById(R.id.btnStopCheck)
         btnCopyDiagnostics = findViewById(R.id.btnCopyDiagnostics)
         btnExport = findViewById(R.id.btnExport)
-        resultActionsContainer = findViewById(R.id.resultActionsContainer)
         textCheckStatus = findViewById(R.id.textCheckStatus)
         cardGeoIp = findViewById(R.id.cardGeoIp)
         cardIpComparison = findViewById(R.id.cardIpComparison)
@@ -390,6 +422,17 @@ class MainActivity : AppCompatActivity() {
         textCallTransportSummary = findViewById(R.id.textCallTransportSummary)
         stunGroupsContainer = findViewById(R.id.stunGroupsContainer)
         findingsCallTransport = findViewById(R.id.findingsCallTransport)
+        cardIcmpSpoofing = findViewById(R.id.cardIcmpSpoofing)
+        iconIcmpSpoofing = findViewById(R.id.iconIcmpSpoofing)
+        statusIcmpSpoofing = findViewById(R.id.statusIcmpSpoofing)
+        findingsIcmpSpoofing = findViewById(R.id.findingsIcmpSpoofing)
+        cardNativeSigns = findViewById(R.id.cardNativeSigns)
+        iconNativeSigns = findViewById(R.id.iconNativeSigns)
+        statusNativeSigns = findViewById(R.id.statusNativeSigns)
+        textNativeSignsSummary = findViewById(R.id.textNativeSignsSummary)
+        findingsNativeSigns = findViewById(R.id.findingsNativeSigns)
+        cardIpChannels = findViewById(R.id.cardIpChannels)
+        ipChannelsContainer = findViewById(R.id.ipChannelsContainer)
         cardVerdict = findViewById(R.id.cardVerdict)
         iconGeoIp = findViewById(R.id.iconGeoIp)
         iconIpComparison = findViewById(R.id.iconIpComparison)
@@ -432,75 +475,175 @@ class MainActivity : AppCompatActivity() {
 
         // Redesign bindings
         mainContentRoot = findViewById(R.id.mainContentRoot)
-        categoryGrid = findViewById(R.id.categoryGrid)
+        categoryContainer = findViewById(R.id.categoryContainer)
         verdictHero = findViewById(R.id.verdictHero)
         verdictAvatar = findViewById(R.id.verdictAvatar)
         verdictAvatarIcon = findViewById(R.id.verdictAvatarIcon)
         verdictLabel = findViewById(R.id.verdictLabel)
         verdictTitle = findViewById(R.id.verdictTitle)
         verdictSubtitle = findViewById(R.id.verdictSubtitle)
-        expandedDetail = findViewById(R.id.expandedDetail)
-        detailIcon = findViewById(R.id.detailIcon)
-        detailTitle = findViewById(R.id.detailTitle)
-        detailStatusChip = findViewById(R.id.detailStatusChip)
-        detailContentSlot = findViewById(R.id.detailContentSlot)
         hiddenLegacyCardsHost = findViewById(R.id.hiddenLegacyCardsHost)
         btnPrivacyInfo = findViewById(R.id.btnPrivacyInfo)
         btnPrivacyInfo.setOnClickListener { showPrivacyFooterDialog() }
 
-        setupCategoryGrid()
+        setupCategoryAccordion()
         bindVerdictHeroIdle()
         setupResultsScrollTracking()
         updateCheckControls(isRunning = false)
         updateResultActionButtonsVisibility()
     }
 
-    private fun setupCategoryGrid() {
-        categoryGrid.removeAllViews()
+    private fun setupCategoryAccordion() {
         tiles.clear()
-        val inflater = layoutInflater
-        val columnCount = 2
-        val gap = 8.dp
-        data class Spec(val id: String, val title: String, val iconRes: Int)
+        expandedCategoryIds.clear()
         val specs = listOf(
-            Spec(CATEGORY_GEO, getString(R.string.main_card_geo_ip), R.drawable.ic_globe),
-            Spec(CATEGORY_IPC, getString(R.string.main_card_ip_comparison), R.drawable.ic_compare),
-            Spec(CATEGORY_CDN, getString(R.string.main_card_cdn_pulling), R.drawable.ic_cloud),
-            Spec(CATEGORY_DIR, getString(R.string.main_card_direct_signs), R.drawable.ic_shield),
-            Spec(CATEGORY_IND, getString(R.string.main_card_indirect_signs), R.drawable.ic_network),
-            Spec(CATEGORY_STN, getString(R.string.main_card_call_transport), R.drawable.ic_phone),
-            Spec(CATEGORY_LOC, getString(R.string.main_card_location_signals), R.drawable.ic_pin),
-            Spec(CATEGORY_BYP, getString(R.string.settings_split_tunnel), R.drawable.ic_split),
+            Triple(CATEGORY_GEO, getString(R.string.main_card_geo_ip), R.drawable.ic_public),
+            Triple(CATEGORY_IPC, getString(R.string.main_card_ip_comparison), R.drawable.ic_compare_arrows),
+            Triple(CATEGORY_CDN, getString(R.string.main_card_cdn_pulling), R.drawable.ic_cloud),
+            Triple(CATEGORY_DIR, getString(R.string.main_card_direct_signs), R.drawable.ic_security),
+            Triple(CATEGORY_IND, getString(R.string.main_card_indirect_signs), R.drawable.ic_lan),
+            Triple(CATEGORY_NAT, getString(R.string.main_card_native_signs), R.drawable.ic_lock),
+            Triple(CATEGORY_STN, getString(R.string.main_card_call_transport), R.drawable.ic_call),
+            Triple(CATEGORY_ICM, getString(R.string.main_card_icmp_spoofing), R.drawable.ic_network),
+            Triple(CATEGORY_LOC, getString(R.string.main_card_location_signals), R.drawable.ic_location_on),
+            Triple(CATEGORY_BYP, getString(R.string.settings_split_tunnel), R.drawable.ic_call_split),
         )
-        specs.forEachIndexed { index, spec ->
-            val tile = inflater.inflate(R.layout.view_category_tile, categoryGrid, false) as MaterialCardView
-            val row = index / columnCount
-            val col = index % columnCount
-            val lp = android.widget.GridLayout.LayoutParams().apply {
-                width = 0
-                height = android.widget.GridLayout.LayoutParams.WRAP_CONTENT
-                columnSpec = android.widget.GridLayout.spec(col, 1, 1f)
-                rowSpec = android.widget.GridLayout.spec(row)
-                setMargins(
-                    if (col == 0) 0 else gap / 2,
-                    if (row == 0) 0 else gap,
-                    if (col == columnCount - 1) 0 else gap / 2,
-                    0,
-                )
-            }
-            tile.layoutParams = lp
-            val tileIcon = tile.findViewById<ImageView>(R.id.tileIcon)
-            val tileStatusDot = tile.findViewById<View>(R.id.tileStatusDot)
-            val tileTitle = tile.findViewById<TextView>(R.id.tileTitle)
-            val tileHint = tile.findViewById<TextView>(R.id.tileHint)
-            tileIcon.setImageResource(spec.iconRes)
-            tileTitle.text = spec.title
-            tileHint.text = getString(R.string.tile_hint_placeholder)
-            val holder = TileHolder(spec.id, tile, tileIcon, tileStatusDot, tileTitle, tileHint)
-            tiles[spec.id] = holder
-            tile.setOnClickListener { onTileClicked(spec.id) }
-            categoryGrid.addView(tile)
+        specs.forEach { (id, title, iconRes) ->
+            val holder = createTileHolder(id)
+            holder.title.text = title
+            findViewById<ImageView>(headerIconId(id)).setImageResource(iconRes)
+            holder.hint.text = getString(R.string.tile_hint_placeholder)
+            holder.body.visibility = View.GONE
+            holder.chevron.rotation = 0f
+            holder.header.setBackgroundResource(R.drawable.bg_category_header_collapsed)
+            holder.header.setOnClickListener { onTileClicked(id) }
+            tiles[id] = holder
         }
+    }
+
+    private fun createTileHolder(id: String): TileHolder {
+        return TileHolder(
+            id = id,
+            card = findViewById(cardId(id)),
+            header = findViewById(headerId(id)),
+            statusDot = findViewById(headerDotId(id)),
+            title = findViewById(headerTitleId(id)),
+            hint = findViewById(headerHintId(id)),
+            chevron = findViewById(chevronId(id)),
+            body = findViewById(bodyId(id)),
+        )
+    }
+
+    private fun cardId(id: String): Int = when (id) {
+        CATEGORY_GEO -> R.id.cardGeoIp
+        CATEGORY_IPC -> R.id.cardIpComparison
+        CATEGORY_CDN -> R.id.cardCdnPulling
+        CATEGORY_DIR -> R.id.cardDirect
+        CATEGORY_IND -> R.id.cardIndirect
+        CATEGORY_NAT -> R.id.cardNativeSigns
+        CATEGORY_STN -> R.id.cardCallTransport
+        CATEGORY_ICM -> R.id.cardIcmpSpoofing
+        CATEGORY_LOC -> R.id.cardLocation
+        CATEGORY_BYP -> R.id.cardBypass
+        else -> error("Unknown category id: $id")
+    }
+
+    private fun headerId(id: String): Int = when (id) {
+        CATEGORY_GEO -> R.id.headerGeoIp
+        CATEGORY_IPC -> R.id.headerIpComparison
+        CATEGORY_CDN -> R.id.headerCdnPulling
+        CATEGORY_DIR -> R.id.headerDirect
+        CATEGORY_IND -> R.id.headerIndirect
+        CATEGORY_NAT -> R.id.headerNativeSigns
+        CATEGORY_STN -> R.id.headerCallTransport
+        CATEGORY_ICM -> R.id.headerIcmpSpoofing
+        CATEGORY_LOC -> R.id.headerLocation
+        CATEGORY_BYP -> R.id.headerBypass
+        else -> error("Unknown category id: $id")
+    }
+
+    private fun headerDotId(id: String): Int = when (id) {
+        CATEGORY_GEO -> R.id.headerDotGeoIp
+        CATEGORY_IPC -> R.id.headerDotIpComparison
+        CATEGORY_CDN -> R.id.headerDotCdnPulling
+        CATEGORY_DIR -> R.id.headerDotDirect
+        CATEGORY_IND -> R.id.headerDotIndirect
+        CATEGORY_NAT -> R.id.headerDotNativeSigns
+        CATEGORY_STN -> R.id.headerDotCallTransport
+        CATEGORY_ICM -> R.id.headerDotIcmpSpoofing
+        CATEGORY_LOC -> R.id.headerDotLocation
+        CATEGORY_BYP -> R.id.headerDotBypass
+        else -> error("Unknown category id: $id")
+    }
+
+    private fun headerIconId(id: String): Int = when (id) {
+        CATEGORY_GEO -> R.id.headerIconGeoIp
+        CATEGORY_IPC -> R.id.headerIconIpComparison
+        CATEGORY_CDN -> R.id.headerIconCdnPulling
+        CATEGORY_DIR -> R.id.headerIconDirect
+        CATEGORY_IND -> R.id.headerIconIndirect
+        CATEGORY_NAT -> R.id.headerIconNativeSigns
+        CATEGORY_STN -> R.id.headerIconCallTransport
+        CATEGORY_ICM -> R.id.headerIconIcmpSpoofing
+        CATEGORY_LOC -> R.id.headerIconLocation
+        CATEGORY_BYP -> R.id.headerIconBypass
+        else -> error("Unknown category id: $id")
+    }
+
+    private fun headerTitleId(id: String): Int = when (id) {
+        CATEGORY_GEO -> R.id.headerTitleGeoIp
+        CATEGORY_IPC -> R.id.headerTitleIpComparison
+        CATEGORY_CDN -> R.id.headerTitleCdnPulling
+        CATEGORY_DIR -> R.id.headerTitleDirect
+        CATEGORY_IND -> R.id.headerTitleIndirect
+        CATEGORY_NAT -> R.id.headerTitleNativeSigns
+        CATEGORY_STN -> R.id.headerTitleCallTransport
+        CATEGORY_ICM -> R.id.headerTitleIcmpSpoofing
+        CATEGORY_LOC -> R.id.headerTitleLocation
+        CATEGORY_BYP -> R.id.headerTitleBypass
+        else -> error("Unknown category id: $id")
+    }
+
+    private fun headerHintId(id: String): Int = when (id) {
+        CATEGORY_GEO -> R.id.headerHintGeoIp
+        CATEGORY_IPC -> R.id.headerHintIpComparison
+        CATEGORY_CDN -> R.id.headerHintCdnPulling
+        CATEGORY_DIR -> R.id.headerHintDirect
+        CATEGORY_IND -> R.id.headerHintIndirect
+        CATEGORY_NAT -> R.id.headerHintNativeSigns
+        CATEGORY_STN -> R.id.headerHintCallTransport
+        CATEGORY_ICM -> R.id.headerHintIcmpSpoofing
+        CATEGORY_LOC -> R.id.headerHintLocation
+        CATEGORY_BYP -> R.id.headerHintBypass
+        else -> error("Unknown category id: $id")
+    }
+
+    private fun chevronId(id: String): Int = when (id) {
+        CATEGORY_GEO -> R.id.chevronGeoIp
+        CATEGORY_IPC -> R.id.chevronIpComparison
+        CATEGORY_CDN -> R.id.chevronCdnPulling
+        CATEGORY_DIR -> R.id.chevronDirect
+        CATEGORY_IND -> R.id.chevronIndirect
+        CATEGORY_NAT -> R.id.chevronNativeSigns
+        CATEGORY_STN -> R.id.chevronCallTransport
+        CATEGORY_ICM -> R.id.chevronIcmpSpoofing
+        CATEGORY_LOC -> R.id.chevronLocation
+        CATEGORY_BYP -> R.id.chevronBypass
+        else -> error("Unknown category id: $id")
+    }
+
+    private fun bodyId(id: String): Int = when (id) {
+        CATEGORY_GEO -> R.id.bodyGeoIp
+        CATEGORY_IPC -> R.id.bodyIpComparison
+        CATEGORY_CDN -> R.id.bodyCdnPulling
+        CATEGORY_DIR -> R.id.bodyDirect
+        CATEGORY_IND -> R.id.bodyIndirect
+        CATEGORY_NAT -> R.id.bodyNativeSigns
+        CATEGORY_STN -> R.id.bodyCallTransport
+        CATEGORY_ICM -> R.id.bodyIcmpSpoofing
+        CATEGORY_LOC -> R.id.bodyLocation
+        CATEGORY_BYP -> R.id.bodyBypass
+        else -> error("Unknown category id: $id")
     }
 
     private fun showPrivacyFooterDialog() {
@@ -746,15 +889,29 @@ class MainActivity : AppCompatActivity() {
         val runButtonBackground = MaterialColors.getColor(btnRunCheck, runButtonBackgroundAttr)
         val runButtonForeground = MaterialColors.getColor(btnRunCheck, runButtonForegroundAttr)
 
-        btnRunCheck.isEnabled = !isRunning
-        btnRunCheck.isClickable = !isRunning
-        btnRunCheck.isFocusable = !isRunning
-        btnRunCheck.alpha = if (isRunning) 0.72f else 1.0f
+        btnRunCheck.isEnabled = true
+        btnRunCheck.isClickable = true
+        btnRunCheck.isFocusable = true
+        btnRunCheck.alpha = 1.0f
         btnRunCheck.backgroundTintList = ColorStateList.valueOf(runButtonBackground)
         btnRunCheck.setTextColor(runButtonForeground)
         btnRunCheck.iconTint = ColorStateList.valueOf(runButtonForeground)
-
-        btnStopCheck.visibility = if (isRunning) View.VISIBLE else View.GONE
+        btnRunCheck.text = getString(
+            if (isRunning) {
+                R.string.main_stop_check
+            } else if (lastCompletedResult != null || processedEventCount > 0) {
+                R.string.main_run_check_again
+            } else {
+                R.string.main_run_check
+            },
+        )
+        btnRunCheck.setIconResource(
+            if (isRunning) {
+                R.drawable.ic_stop_circle
+            } else {
+                R.drawable.ic_refresh
+            },
+        )
         if (isRunning) {
             updateCheckStatus(getString(R.string.main_check_running))
         } else if (textCheckStatus.text != checkStatusStopped()) {
@@ -798,23 +955,19 @@ class MainActivity : AppCompatActivity() {
         val debugEnabled = prefs.getBoolean(SettingsActivity.PREF_TUN_PROBE_DEBUG_ENABLED, false)
         val canShow = retainedDiagnosticsSnapshot != null &&
             debugEnabled
-        btnCopyDiagnostics.visibility = if (canShow) View.VISIBLE else View.GONE
+        btnCopyDiagnostics.isEnabled = canShow
+        btnCopyDiagnostics.alpha = if (canShow) 1.0f else 0.42f
     }
 
     private fun updateExportVisibility() {
-        btnExport.visibility = if (completedExportSnapshot != null) View.VISIBLE else View.GONE
+        val canShow = completedExportSnapshot != null
+        btnExport.isEnabled = canShow
+        btnExport.alpha = if (canShow) 1.0f else 0.42f
     }
 
     private fun updateResultActionButtonsVisibility() {
         updateCopyDiagnosticsVisibility()
         updateExportVisibility()
-        resultActionsContainer.visibility = if (
-            btnCopyDiagnostics.visibility == View.VISIBLE || btnExport.visibility == View.VISIBLE
-        ) {
-            View.VISIBLE
-        } else {
-            View.GONE
-        }
     }
 
     private fun copyTunProbeDiagnostics() {
@@ -887,26 +1040,32 @@ class MainActivity : AppCompatActivity() {
     private fun observeScanEvents() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.scanEvents.collect { events ->
+                viewModel.scanEvents.collect { timeline ->
+                    val events = timeline.events
                     if (events.isEmpty()) return@collect
 
-                    val firstEvent = events.first()
-                    val isNewScan = firstEvent is ScanEvent.Started &&
-                        (processedEventCount == 0 || events.size <= processedEventCount)
+                    val isNewScan = timeline.scanId != processedEventScanId
                     if (isNewScan) {
+                        processedEventScanId = timeline.scanId
+                        processedEventCount = 0
+                    }
+                    if (processedEventCount >= events.size) return@collect
+
+                    if (processedEventCount == 0) {
+                        val firstEvent = events.firstOrNull() as? ScanEvent.Started ?: return@collect
                         prepareCheckSessionUi(
-                            (firstEvent as ScanEvent.Started).settings,
+                            firstEvent.settings,
                             firstEvent.privacyMode,
                         )
                         processedEventCount = 1
-                        events.drop(1).forEach { event ->
-                            applyScanEvent(event, animate = false)
-                            processedEventCount++
+                        while (processedEventCount < events.size) {
+                            applyScanEvent(events[processedEventCount], animate = false)
+                            processedEventCount += 1
                         }
-                    } else if (events.size > processedEventCount) {
-                        events.drop(processedEventCount).forEach { event ->
-                            applyScanEvent(event, animate = true)
-                            processedEventCount++
+                    } else {
+                        while (processedEventCount < events.size) {
+                            applyScanEvent(events[processedEventCount], animate = true)
+                            processedEventCount += 1
                         }
                     }
                 }
@@ -936,6 +1095,9 @@ class MainActivity : AppCompatActivity() {
         resetBypassProgress()
         clearStageContent()
         resetAllTiles()
+        if (settings.callTransportProbeEnabled) {
+            setTileStatus(CATEGORY_STN, TILE_STATUS_NEUTRAL, getString(R.string.tile_hint_loading))
+        }
         bindVerdictHeroRunning()
         showAllLoadingCardsNow(settings)
         updateResultActionButtonsVisibility()
@@ -987,6 +1149,9 @@ class MainActivity : AppCompatActivity() {
                         getString(R.string.tile_hint_stopped),
                     )
                 }
+                if (isCallTransportTileLoading()) {
+                    setTileStatus(CATEGORY_STN, TILE_STATUS_REVIEW, getString(R.string.tile_hint_stopped))
+                }
                 bindVerdictHeroIdle()
                 verdictSubtitle.text = getString(R.string.main_check_stopped)
                 updateResultActionButtonsVisibility()
@@ -1019,8 +1184,26 @@ class MainActivity : AppCompatActivity() {
         locationDivider.visibility = View.GONE
         findingsLocation.removeAllViews()
 
+        textCallTransportSummary.text = ""
+        textCallTransportSummary.visibility = View.GONE
+        stunGroupsContainer.removeAllViews()
+        stunGroupsContainer.visibility = View.GONE
+        findingsCallTransport.removeAllViews()
+        findingsCallTransport.visibility = View.GONE
+
+        findingsIcmpSpoofing.removeAllViews()
+        findingsIcmpSpoofing.visibility = View.GONE
+
+        textNativeSignsSummary.text = ""
+        textNativeSignsSummary.visibility = View.GONE
+        findingsNativeSigns.removeAllViews()
+        findingsNativeSigns.visibility = View.GONE
+
         findingsBypass.removeAllViews()
         findingsBypass.visibility = View.GONE
+
+        ipChannelsContainer.removeAllViews()
+        cardIpChannels.visibility = View.GONE
 
         clearVerdictCard()
     }
@@ -1033,10 +1216,16 @@ class MainActivity : AppCompatActivity() {
             if (settings.cdnPullingEnabled) {
                 stages += RunningStage.CDN_PULLING
             }
+            if (settings.icmpSpoofingEnabled) {
+                stages += RunningStage.ICMP
+            }
         }
         stages += RunningStage.DIRECT
         stages += RunningStage.INDIRECT
         stages += RunningStage.LOCATION
+        if (settings.networkRequestsEnabled || settings.splitTunnelEnabled) {
+            stages += RunningStage.IP_CONSENSUS
+        }
         if (settings.splitTunnelEnabled) {
             stages += RunningStage.BYPASS
         }
@@ -1072,6 +1261,20 @@ class MainActivity : AppCompatActivity() {
                 displayCdnPulling(update.result, activeCheckPrivacyMode)
                 updateTileFromCdn(update.result)
                 if (animate) animateContentReveal(textCdnPullingSummary, cdnPullingResponses)
+            }
+            is CheckUpdate.IcmpSpoofingReady -> {
+                markStageCompleted(RunningStage.ICMP)
+                ensureCardVisible(cardIcmpSpoofing, animate = false)
+                displayCategory(
+                    update.result,
+                    cardIcmpSpoofing,
+                    iconIcmpSpoofing,
+                    statusIcmpSpoofing,
+                    findingsIcmpSpoofing,
+                    activeCheckPrivacyMode,
+                )
+                updateTileFromCategory(CATEGORY_ICM, update.result)
+                if (animate) animateContentReveal(findingsIcmpSpoofing)
             }
             is CheckUpdate.DirectSignsReady -> {
                 markStageCompleted(RunningStage.DIRECT)
@@ -1124,6 +1327,11 @@ class MainActivity : AppCompatActivity() {
                 updateTileFromCategory(CATEGORY_LOC, update.result)
                 if (animate) animateContentReveal(findingsLocation, locationInfoSection, locationDivider)
             }
+            is CheckUpdate.NativeSignsReady -> {
+                displayNativeSigns(update.result, activeCheckPrivacyMode)
+                updateTileFromCategory(CATEGORY_NAT, update.result)
+                if (animate) animateContentReveal(findingsNativeSigns, textNativeSignsSummary)
+            }
             is CheckUpdate.BypassProgress -> {
                 showLoadingCardForStage(RunningStage.BYPASS)
                 updateBypassProgress(update.progress)
@@ -1134,6 +1342,9 @@ class MainActivity : AppCompatActivity() {
                 displayBypass(update.result, activeCheckPrivacyMode)
                 updateTileFromBypass(update.result)
                 if (animate) animateContentReveal(findingsBypass)
+            }
+            is CheckUpdate.IpConsensusReady -> {
+                markStageCompleted(RunningStage.IP_CONSENSUS)
             }
             is CheckUpdate.VerdictReady -> {
                 Unit
@@ -1147,11 +1358,14 @@ class MainActivity : AppCompatActivity() {
         RunningStage.CDN_PULLING -> CATEGORY_CDN
         RunningStage.DIRECT -> CATEGORY_DIR
         RunningStage.INDIRECT -> CATEGORY_IND
+        RunningStage.ICMP -> CATEGORY_ICM
         RunningStage.LOCATION -> CATEGORY_LOC
+        RunningStage.IP_CONSENSUS -> CATEGORY_IPS
         RunningStage.BYPASS -> CATEGORY_BYP
     }
 
     private fun showLoadingCardForStage(stage: RunningStage) {
+        if (stage == RunningStage.IP_CONSENSUS) return
         if (stage in completedStages) return
         if (stage in loadingStages && cardForStage(stage).isVisible) return
 
@@ -1170,6 +1384,14 @@ class MainActivity : AppCompatActivity() {
             )
             RunningStage.IP_COMPARISON -> showIpComparisonLoading(stage)
             RunningStage.CDN_PULLING -> showCdnPullingLoading(stage)
+            RunningStage.ICMP -> showCategoryLoading(
+                stage = stage,
+                card = cardIcmpSpoofing,
+                icon = iconIcmpSpoofing,
+                status = statusIcmpSpoofing,
+                findingsContainer = findingsIcmpSpoofing,
+                hint = stageLoadingMessage(stage),
+            )
             RunningStage.DIRECT -> showCategoryLoading(
                 stage = stage,
                 card = cardDirect,
@@ -1198,6 +1420,7 @@ class MainActivity : AppCompatActivity() {
                 infoSection = locationInfoSection,
                 infoDivider = locationDivider,
             )
+            RunningStage.IP_CONSENSUS -> Unit
             RunningStage.BYPASS -> showBypassLoading(stage)
         }
         syncLoadingStatusAnimation()
@@ -1276,6 +1499,13 @@ class MainActivity : AppCompatActivity() {
                 )
                 RunningStage.IP_COMPARISON -> showIpComparisonStopped(stage)
                 RunningStage.CDN_PULLING -> showCdnPullingStopped(stage)
+                RunningStage.ICMP -> showCategoryStopped(
+                    card = cardIcmpSpoofing,
+                    icon = iconIcmpSpoofing,
+                    status = statusIcmpSpoofing,
+                    findingsContainer = findingsIcmpSpoofing,
+                    message = stageStoppedMessage(stage),
+                )
                 RunningStage.DIRECT -> showCategoryStopped(
                     card = cardDirect,
                     icon = iconDirect,
@@ -1301,6 +1531,7 @@ class MainActivity : AppCompatActivity() {
                     infoSection = locationInfoSection,
                     infoDivider = locationDivider,
                 )
+                RunningStage.IP_CONSENSUS -> Unit
                 RunningStage.BYPASS -> showBypassStopped(stage)
             }
         }
@@ -1419,9 +1650,11 @@ class MainActivity : AppCompatActivity() {
             RunningStage.GEO_IP -> getString(R.string.main_loading_geo_ip)
             RunningStage.IP_COMPARISON -> getString(R.string.main_loading_ip_comparison)
             RunningStage.CDN_PULLING -> getString(R.string.main_loading_cdn_pulling)
+            RunningStage.ICMP -> getString(R.string.main_loading_icmp)
             RunningStage.DIRECT -> getString(R.string.main_loading_direct)
             RunningStage.INDIRECT -> getString(R.string.main_loading_indirect)
             RunningStage.LOCATION -> getString(R.string.main_loading_location)
+            RunningStage.IP_CONSENSUS -> getString(R.string.main_loading_ip_comparison)
             RunningStage.BYPASS -> getString(R.string.main_loading_bypass)
         }
     }
@@ -1438,9 +1671,11 @@ class MainActivity : AppCompatActivity() {
             RunningStage.GEO_IP -> cardGeoIp
             RunningStage.IP_COMPARISON -> cardIpComparison
             RunningStage.CDN_PULLING -> cardCdnPulling
+            RunningStage.ICMP -> cardIcmpSpoofing
             RunningStage.DIRECT -> cardDirect
             RunningStage.INDIRECT -> cardIndirect
             RunningStage.LOCATION -> cardLocation
+            RunningStage.IP_CONSENSUS -> cardIpChannels
             RunningStage.BYPASS -> cardBypass
         }
     }
@@ -1450,9 +1685,11 @@ class MainActivity : AppCompatActivity() {
             RunningStage.GEO_IP -> statusGeoIp
             RunningStage.IP_COMPARISON -> statusIpComparison
             RunningStage.CDN_PULLING -> statusCdnPulling
+            RunningStage.ICMP -> statusIcmpSpoofing
             RunningStage.DIRECT -> statusDirect
             RunningStage.INDIRECT -> statusIndirect
             RunningStage.LOCATION -> statusLocation
+            RunningStage.IP_CONSENSUS -> statusGeoIp
             RunningStage.BYPASS -> statusBypass
         }
     }
@@ -1462,12 +1699,8 @@ class MainActivity : AppCompatActivity() {
         animate: Boolean = true,
         shouldAutoScroll: Boolean = false,
     ) {
-        // В редизайне все старые карточки лежат в hiddenLegacyCardsHost и никогда
-        // не показываются напрямую — их контент переносится в expandedDetail
-        // по тапу плитки. Auto-scroll на них тоже не имеет смысла.
         val inHiddenHost = card.parent === hiddenLegacyCardsHost
-        val wasVisible = card.isVisible
-        if (!wasVisible) {
+        if (!card.isVisible) {
             card.animate().cancel()
             card.visibility = View.VISIBLE
             card.alpha = 1f
@@ -1515,22 +1748,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun hideCards() {
-        listOf(
-            cardGeoIp,
-            cardIpComparison,
-            cardCdnPulling,
-            cardDirect,
-            cardIndirect,
-            cardCallTransport,
-            cardLocation,
-            cardBypass,
-            cardVerdict,
-        ).forEach { card ->
-            card.animate().cancel()
-            card.alpha = 1f
-            card.translationY = 0f
-            card.visibility = View.GONE
-        }
+        collapseExpanded()
+        cardIpChannels.visibility = View.GONE
+        cardVerdict.visibility = View.GONE
     }
 
     private fun displayCategory(
@@ -1639,36 +1859,36 @@ class MainActivity : AppCompatActivity() {
     private fun createFindingView(finding: Finding, privacyMode: Boolean = false): View {
         val row = LinearLayout(themedContext()).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 4.dp, 0, 4.dp)
+            gravity = Gravity.TOP
+            setPadding(0, 3.dp, 0, 3.dp)
         }
 
-        val indicator = TextView(themedContext()).apply {
-            text = when {
-                finding.detected -> "\u26A0"
-                finding.needsReview -> "?"
-                else -> "\u2713"
+        val indicator = View(themedContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(6.dp, 6.dp).apply {
+                topMargin = 6.dp
+                marginEnd = 8.dp
             }
-            setTextColor(
-                ContextCompat.getColor(
-                    themedContext(),
-                    when {
-                        finding.detected -> R.color.finding_detected
-                        finding.needsReview -> R.color.verdict_yellow
-                        else -> R.color.finding_ok
-                    },
-                ),
-            )
-            textSize = 14f
-            typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, 0, 8.dp, 0)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(
+                    ContextCompat.getColor(
+                        themedContext(),
+                        when {
+                            finding.detected -> R.color.status_red
+                            finding.needsReview -> R.color.status_amber
+                            else -> R.color.status_green
+                        },
+                    ),
+                )
+            }
         }
 
         val descriptionText = if (privacyMode) maskIpsInText(finding.description) else finding.description
         val description = TextView(themedContext()).apply {
             text = wrapForDisplay(descriptionText)
             textSize = 13f
-            setTextColor(onSurfaceColor())
+            setLineSpacing(0f, 1.45f)
+            setTextColor(onSurfaceVariantColor())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             textDirection = View.TEXT_DIRECTION_LOCALE
             textAlignment = View.TEXT_ALIGNMENT_VIEW_START
@@ -1684,15 +1904,12 @@ class MainActivity : AppCompatActivity() {
         val row = LinearLayout(themedContext()).apply {
             orientation = if (rtl) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
             gravity = if (rtl) Gravity.END else Gravity.CENTER_VERTICAL
-            setPadding(0, 4.dp, 0, if (rtl) 6.dp else 4.dp)
+            setPadding(0, 2.dp, 0, if (rtl) 6.dp else 2.dp)
         }
 
         val labelView = TextView(themedContext()).apply {
             text = wrapForDisplay(label)
-            textSize = 11f
-            typeface = Typeface.DEFAULT_BOLD
-            isAllCaps = !rtl
-            letterSpacing = 0.05f
+            textSize = 13f
             setTextColor(onSurfaceVariantColor())
             layoutParams = if (rtl) {
                 LinearLayout.LayoutParams(
@@ -1700,7 +1917,7 @@ class MainActivity : AppCompatActivity() {
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                 )
             } else {
-                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.38f)
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.32f)
             }
             textDirection = View.TEXT_DIRECTION_LOCALE
             textAlignment = if (rtl) View.TEXT_ALIGNMENT_VIEW_END else View.TEXT_ALIGNMENT_VIEW_START
@@ -1718,7 +1935,7 @@ class MainActivity : AppCompatActivity() {
                     topMargin = 2.dp
                 }
             } else {
-                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.62f)
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.68f)
             }
             textDirection = View.TEXT_DIRECTION_LOCALE
             textAlignment = if (rtl) View.TEXT_ALIGNMENT_VIEW_END else View.TEXT_ALIGNMENT_VIEW_START
@@ -1993,6 +2210,139 @@ class MainActivity : AppCompatActivity() {
         return container
     }
 
+    private fun displayIpChannels(consensus: IpConsensusResult, privacyMode: Boolean = false) {
+        if (consensus.observedIps.isEmpty()) {
+            cardIpChannels.visibility = View.GONE
+            return
+        }
+        cardIpChannels.visibility = View.VISIBLE
+        ipChannelsContainer.removeAllViews()
+
+        consensus.observedIps.forEach { ip ->
+            ipChannelsContainer.addView(createIpChannelRow(ip, privacyMode))
+        }
+
+        val hasWarning = consensus.crossChannelMismatch || consensus.warpLikeIndicator ||
+                consensus.geoCountryMismatch || consensus.probeTargetDivergence ||
+                consensus.probeTargetDirectDivergence || consensus.channelConflict.isNotEmpty() ||
+                consensus.needsReview
+
+        if (hasWarning) {
+            val flagsContainer = LinearLayout(themedContext()).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = 8.dp }
+            }
+
+            val warningColor = ContextCompat.getColor(themedContext(), R.color.finding_detected)
+            val warningBackground = TextView(themedContext()).apply {
+                text = buildIpConsensusWarningText(consensus)
+                textSize = 12f
+                setTextColor(warningColor)
+                setPadding(8.dp, 8.dp, 8.dp, 8.dp)
+            }
+
+            flagsContainer.addView(warningBackground)
+            ipChannelsContainer.addView(flagsContainer)
+        }
+    }
+
+    private fun createIpChannelRow(ip: ObservedIp, privacyMode: Boolean): View {
+        val row = LinearLayout(themedContext()).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 4.dp, 0, 4.dp)
+        }
+
+        val channelChip = TextView(themedContext()).apply {
+            text = ipChannelLabel(ip.channel)
+            textSize = 11f
+            setTextColor(onSurfaceColor())
+            typeface = Typeface.DEFAULT_BOLD
+            val padding = 6.dp
+            setPadding(padding, padding / 2, padding, padding / 2)
+            setBackgroundColor(MaterialColors.getColor(themedContext(), com.google.android.material.R.attr.colorSurfaceVariant, 0))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                .apply { marginEnd = 8.dp }
+        }
+
+        val targetChip = if (ip.targetGroup != null) {
+            TextView(themedContext()).apply {
+                text = ipTargetGroupLabel(ip.targetGroup)
+                textSize = 11f
+                setTextColor(onSurfaceColor())
+                typeface = Typeface.DEFAULT_BOLD
+                val padding = 6.dp
+                setPadding(padding, padding / 2, padding, padding / 2)
+                setBackgroundColor(ContextCompat.getColor(themedContext(), R.color.verdict_yellow))
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                    .apply { marginEnd = 8.dp }
+            }
+        } else null
+
+        val infoText = buildString {
+            val maskedIp = maskInfoValue(ip.value, privacyMode)
+            append(maskedIp)
+            if (ip.countryCode != null) append(" (${ip.countryCode})")
+            if (ip.asn != null) append(" ${ip.asn}")
+            append(" • ${ipFamilyLabel(ip.family)}")
+        }
+
+        val infoView = TextView(themedContext()).apply {
+            text = infoText
+            textSize = 13f
+            setTextColor(onSurfaceColor())
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            textDirection = View.TEXT_DIRECTION_LOCALE
+            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        }
+
+        row.addView(channelChip)
+        if (targetChip != null) row.addView(targetChip)
+        row.addView(infoView)
+
+        return row
+    }
+
+    private fun buildIpConsensusWarningText(consensus: IpConsensusResult): String {
+        val warnings = buildList {
+            if (consensus.crossChannelMismatch) add(getString(R.string.ip_channels_flag_cross_channel_mismatch))
+            if (consensus.warpLikeIndicator) add(getString(R.string.ip_channels_flag_warp_like_behavior))
+            if (consensus.geoCountryMismatch) add(getString(R.string.ip_channels_flag_geo_country_mismatch))
+            if (consensus.probeTargetDivergence) add(getString(R.string.ip_channels_flag_probe_target_divergence))
+            if (consensus.probeTargetDirectDivergence) {
+                add(getString(R.string.ip_channels_flag_probe_target_direct_divergence))
+            }
+            if (consensus.channelConflict.isNotEmpty()) {
+                val channels = consensus.channelConflict
+                    .sortedBy { it.ordinal }
+                    .joinToString(", ") { ipChannelLabel(it) }
+                add(getString(R.string.ip_channels_flag_channel_conflict, channels))
+            }
+            if (consensus.needsReview) add(getString(R.string.ip_channels_flag_needs_review))
+        }
+        return warnings.joinToString(separator = "\n") { "\u26A0 $it" }
+    }
+
+    private fun ipChannelLabel(channel: Channel): String = when (channel) {
+        Channel.DIRECT -> getString(R.string.ip_channels_channel_direct)
+        Channel.VPN -> getString(R.string.ip_channels_channel_vpn)
+        Channel.PROXY -> getString(R.string.ip_channels_channel_proxy)
+        Channel.CDN -> getString(R.string.ip_channels_channel_cdn)
+    }
+
+    private fun ipTargetGroupLabel(targetGroup: TargetGroup): String = when (targetGroup) {
+        TargetGroup.RU -> getString(R.string.ip_channels_target_ru)
+        TargetGroup.NON_RU -> getString(R.string.ip_channels_target_non_ru)
+    }
+
+    private fun ipFamilyLabel(family: IpFamily): String = when (family) {
+        IpFamily.V4 -> getString(R.string.main_card_call_transport_stun_ipv4)
+        IpFamily.V6 -> getString(R.string.main_card_call_transport_stun_ipv6)
+    }
+
     private fun displayBypass(bypass: BypassResult, privacyMode: Boolean = false) {
         cardBypass.visibility = View.VISIBLE
         resetBypassProgress()
@@ -2059,6 +2409,44 @@ class MainActivity : AppCompatActivity() {
             }
         } else {
             findingsCallTransport.visibility = View.GONE
+        }
+    }
+
+    private fun displayNativeSigns(result: CategoryResult, privacyMode: Boolean) {
+        if (result.findings.isEmpty() && result.evidence.isEmpty()) {
+            cardNativeSigns.visibility = View.GONE
+            return
+        }
+        cardNativeSigns.visibility = View.VISIBLE
+
+        bindCardStatus(
+            detected = result.detected,
+            needsReview = result.needsReview,
+            icon = iconNativeSigns,
+            status = statusNativeSigns,
+            hasError = result.hasError,
+        )
+
+        val summaryFinding = result.findings.firstOrNull { finding ->
+            finding.description.startsWith("getifaddrs():") ||
+                finding.description.startsWith("Native library not loaded")
+        }
+        if (summaryFinding != null) {
+            textNativeSignsSummary.text = summaryFinding.description
+            textNativeSignsSummary.visibility = View.VISIBLE
+        } else {
+            textNativeSignsSummary.visibility = View.GONE
+        }
+
+        findingsNativeSigns.removeAllViews()
+        val rest = result.findings.filter { it !== summaryFinding }
+        if (rest.isNotEmpty()) {
+            findingsNativeSigns.visibility = View.VISIBLE
+            for (finding in rest) {
+                findingsNativeSigns.addView(createFindingView(finding, privacyMode))
+            }
+        } else {
+            findingsNativeSigns.visibility = View.GONE
         }
     }
 
@@ -2549,11 +2937,14 @@ class MainActivity : AppCompatActivity() {
         private const val CATEGORY_GEO = "geo"
         private const val CATEGORY_IPC = "ipc"
         private const val CATEGORY_CDN = "cdn"
+        private const val CATEGORY_IPS = "ip_channels"
         private const val CATEGORY_DIR = "dir"
         private const val CATEGORY_IND = "ind"
         private const val CATEGORY_STN = "stn"
+        private const val CATEGORY_ICM = "icmp"
         private const val CATEGORY_LOC = "loc"
         private const val CATEGORY_BYP = "byp"
+        private const val CATEGORY_NAT = "nat"
 
         private const val TILE_STATUS_NEUTRAL = 0
         private const val TILE_STATUS_CLEAN = 1
@@ -2562,130 +2953,64 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onTileClicked(id: String) {
-        if (expandedCategoryId == id) {
-            collapseExpanded()
+        if (expandedCategoryIds.contains(id)) {
+            collapseCategory(id)
         } else {
             expandCategory(id)
         }
     }
 
+    private fun beginCategoryTransition() {
+        TransitionManager.beginDelayedTransition(categoryContainer, AutoTransition().apply {
+            duration = 200L
+        })
+    }
+
+    private fun collapseCategory(id: String) {
+        if (!expandedCategoryIds.contains(id)) return
+        val holder = tiles[id] ?: return
+        beginCategoryTransition()
+        setTileExpanded(holder, expanded = false)
+        expandedCategoryIds.remove(id)
+    }
+
     private fun collapseExpanded() {
-        val currentId = expandedCategoryId ?: return
-        androidx.transition.TransitionManager.beginDelayedTransition(mainContentRoot)
-        returnDetailContentToHost(currentId)
-        expandedDetail.visibility = View.GONE
-        expandedCategoryId = null
-        tiles.values.forEach { holder ->
-            holder.card.strokeColor = android.graphics.Color.TRANSPARENT
+        if (expandedCategoryIds.isEmpty()) return
+        beginCategoryTransition()
+        expandedCategoryIds.toList().forEach { currentId ->
+            tiles[currentId]?.let { holder ->
+                setTileExpanded(holder, expanded = false)
+            }
         }
+        expandedCategoryIds.clear()
     }
 
     private fun expandCategory(id: String) {
+        if (expandedCategoryIds.contains(id)) return
         val holder = tiles[id] ?: return
-        val content = legacyContentFor(id) ?: return
+        beginCategoryTransition()
+        setTileExpanded(holder, expanded = true)
+        expandedCategoryIds.add(id)
+    }
 
-        androidx.transition.TransitionManager.beginDelayedTransition(mainContentRoot)
-        if (expandedCategoryId != null && expandedCategoryId != id) {
-            returnDetailContentToHost(expandedCategoryId!!)
-        }
-
-        val parent = content.parent as? android.view.ViewGroup
-        parent?.removeView(content)
-        detailContentSlot.removeAllViews()
-        detailContentSlot.addView(
-            content,
-            android.view.ViewGroup.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-            ),
-        )
-
-        val iconRes = categoryIcon(id)
-        detailIcon.setImageResource(iconRes)
-        detailTitle.text = holder.title.text
-        detailStatusChip.text = holder.hint.text
-        detailStatusChip.setTextColor(
-            (holder.statusDot.background as? android.graphics.drawable.GradientDrawable)?.let {
-                tileStatusChipColor(holder)
-            } ?: onSurfaceVariantColor(),
-        )
-        expandedDetail.visibility = View.VISIBLE
-        expandedCategoryId = id
-
-        tiles.values.forEach { h ->
-            h.card.strokeColor = if (h.id == id) {
-                MaterialColors.getColor(h.card, com.google.android.material.R.attr.colorOutline, 0)
+    private fun setTileExpanded(holder: TileHolder, expanded: Boolean) {
+        holder.body.visibility = if (expanded) View.VISIBLE else View.GONE
+        holder.header.setBackgroundResource(
+            if (expanded) {
+                R.drawable.bg_category_header_expanded
             } else {
-                android.graphics.Color.TRANSPARENT
-            }
-        }
-    }
-
-    private fun tileStatusChipColor(holder: TileHolder): Int {
-        val tag = holder.statusDot.tag as? Int ?: TILE_STATUS_NEUTRAL
-        return when (tag) {
-            TILE_STATUS_CLEAN -> ContextCompat.getColor(this, R.color.status_green)
-            TILE_STATUS_REVIEW -> ContextCompat.getColor(this, R.color.status_amber)
-            TILE_STATUS_DETECTED -> ContextCompat.getColor(this, R.color.status_red)
-            else -> onSurfaceVariantColor()
-        }
-    }
-
-    private fun returnDetailContentToHost(id: String) {
-        val host = legacyCardFor(id) ?: return
-        val content = detailContentSlot.getChildAt(0) ?: return
-        detailContentSlot.removeView(content)
-        host.addView(
-            content,
-            android.view.ViewGroup.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-            ),
+                R.drawable.bg_category_header_collapsed
+            },
         )
-    }
-
-    private fun legacyCardFor(id: String): MaterialCardView? = when (id) {
-        CATEGORY_GEO -> cardGeoIp
-        CATEGORY_IPC -> cardIpComparison
-        CATEGORY_CDN -> cardCdnPulling
-        CATEGORY_DIR -> cardDirect
-        CATEGORY_IND -> cardIndirect
-        CATEGORY_STN -> cardCallTransport
-        CATEGORY_LOC -> cardLocation
-        CATEGORY_BYP -> cardBypass
-        else -> null
-    }
-
-    private fun legacyContentFor(id: String): View? {
-        val contentId = when (id) {
-            CATEGORY_GEO -> R.id.cardGeoIpContent
-            CATEGORY_IPC -> R.id.cardIpComparisonContent
-            CATEGORY_CDN -> R.id.cardCdnPullingContent
-            CATEGORY_DIR -> R.id.cardDirectContent
-            CATEGORY_IND -> R.id.cardIndirectContent
-            CATEGORY_STN -> R.id.cardCallTransportContent
-            CATEGORY_LOC -> R.id.cardLocationContent
-            CATEGORY_BYP -> R.id.cardBypassContent
-            else -> return null
-        }
-        // Content может быть либо ещё в своей карточке, либо уже в detailContentSlot
-        return findViewById(contentId)
-    }
-
-    private fun categoryIcon(id: String): Int = when (id) {
-        CATEGORY_GEO -> R.drawable.ic_globe
-        CATEGORY_IPC -> R.drawable.ic_compare
-        CATEGORY_CDN -> R.drawable.ic_cloud
-        CATEGORY_DIR -> R.drawable.ic_shield
-        CATEGORY_IND -> R.drawable.ic_network
-        CATEGORY_STN -> R.drawable.ic_phone
-        CATEGORY_LOC -> R.drawable.ic_pin
-        CATEGORY_BYP -> R.drawable.ic_split
-        else -> R.drawable.ic_help
+        holder.chevron.animate()
+            .rotation(if (expanded) 90f else 0f)
+            .setDuration(200L)
+            .start()
     }
 
     private fun setTileStatus(id: String, status: Int, hint: String?) {
         val holder = tiles[id] ?: return
+        val previousStatus = holder.statusDot.tag as? Int
         val dotRes = when (status) {
             TILE_STATUS_CLEAN -> R.drawable.dot_status_green
             TILE_STATUS_REVIEW -> R.drawable.dot_status_amber
@@ -2697,9 +3022,11 @@ class MainActivity : AppCompatActivity() {
         if (hint != null) {
             holder.hint.text = hint
         }
-        if (expandedCategoryId == id) {
-            detailStatusChip.text = holder.hint.text
-            detailStatusChip.setTextColor(tileStatusChipColor(holder))
+        if (
+            (status == TILE_STATUS_REVIEW || status == TILE_STATUS_DETECTED) &&
+            previousStatus != status
+        ) {
+            expandCategory(id)
         }
     }
 
@@ -2707,7 +3034,7 @@ class MainActivity : AppCompatActivity() {
         tiles.keys.forEach { id ->
             setTileStatus(id, TILE_STATUS_NEUTRAL, getString(R.string.tile_hint_placeholder))
         }
-        if (expandedCategoryId != null) {
+        if (expandedCategoryIds.isNotEmpty()) {
             collapseExpanded()
         }
     }
@@ -2767,6 +3094,29 @@ class MainActivity : AppCompatActivity() {
         setTileStatus(CATEGORY_BYP, status, hint)
     }
 
+    private fun updateTileFromIpConsensus(result: IpConsensusResult) {
+        val hasDetectedSignal = result.crossChannelMismatch ||
+            result.warpLikeIndicator ||
+            result.probeTargetDivergence ||
+            result.probeTargetDirectDivergence ||
+            result.geoCountryMismatch ||
+            result.foreignIps.isNotEmpty()
+        val hasReviewSignal = result.channelConflict.isNotEmpty() || result.needsReview
+        val observedCount = result.observedIps.size
+        val status = when {
+            hasDetectedSignal -> TILE_STATUS_DETECTED
+            hasReviewSignal -> TILE_STATUS_REVIEW
+            observedCount > 0 -> TILE_STATUS_CLEAN
+            else -> TILE_STATUS_NEUTRAL
+        }
+        val hint = when {
+            hasDetectedSignal || hasReviewSignal -> getString(R.string.tile_hint_review)
+            observedCount > 0 -> getString(R.string.tile_hint_clean_count, observedCount)
+            else -> getString(R.string.tile_hint_placeholder)
+        }
+        setTileStatus(CATEGORY_IPS, status, hint)
+    }
+
     private fun updateTileFromCallTransport(leaks: List<CallTransportLeakResult>, stunGroups: List<StunProbeGroupResult>) {
         val respondedCount = stunGroups.sumOf { it.respondedCount }
         val totalCount = stunGroups.sumOf { it.totalCount }
@@ -2786,6 +3136,12 @@ class MainActivity : AppCompatActivity() {
         else
             getString(R.string.tile_hint_clean_count, leaks.size)
         setTileStatus(CATEGORY_STN, status, hint)
+    }
+
+    private fun isCallTransportTileLoading(): Boolean {
+        val holder = tiles[CATEGORY_STN] ?: return false
+        return holder.statusDot.tag == TILE_STATUS_NEUTRAL &&
+            holder.hint.text?.toString() == getString(R.string.tile_hint_loading)
     }
 
     private fun buildTileHintForCategory(category: CategoryResult): String {

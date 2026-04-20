@@ -99,7 +99,7 @@ object IpComparisonChecker {
 
     suspend fun check(
         context: Context,
-        timeoutMs: Int = 7000,
+        timeoutMs: Int = 5_000,
         resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
     ): IpComparisonResult = withContext(Dispatchers.IO) {
         coroutineScope {
@@ -209,15 +209,24 @@ object IpComparisonChecker {
                 rawMismatch
             )
 
+        val ipv4OnlyConsensusIp = (ruGroup.canonicalIp ?: nonRuGroup.canonicalIp)?.takeIf {
+            (ruGroup.ignoredIpv6ErrorCount > 0 || nonRuGroup.ignoredIpv6ErrorCount > 0) &&
+                !ruGroup.detected &&
+                !nonRuGroup.detected &&
+                !ruGroup.needsReview &&
+                !nonRuGroup.needsReview
+        }
+        val hasAnySuccessfulIp = responses.any { it.ip != null }
+
         val summary = when {
             detected -> context.getString(R.string.checker_ip_comp_summary_detected, ruGroup.canonicalIp, nonRuGroup.canonicalIp)
             familyMismatch -> context.getString(R.string.checker_ip_comp_summary_family_mismatch, ruGroup.canonicalIp, nonRuGroup.canonicalIp)
             rawMismatch -> context.getString(R.string.checker_ip_comp_summary_raw_mismatch, ruGroup.canonicalIp, nonRuGroup.canonicalIp)
-            ruGroup.ignoredIpv6ErrorCount > 0 || nonRuGroup.ignoredIpv6ErrorCount > 0 ->
-                context.getString(R.string.checker_ip_comp_summary_ipv4_only, ruGroup.canonicalIp ?: nonRuGroup.canonicalIp)
+            ipv4OnlyConsensusIp != null ->
+                context.getString(R.string.checker_ip_comp_summary_ipv4_only, ipv4OnlyConsensusIp)
             ruGroup.canonicalIp != null && nonRuGroup.canonicalIp != null ->
                 context.getString(R.string.checker_ip_comp_summary_all_same, ruGroup.canonicalIp)
-            ruGroup.canonicalIp == null && nonRuGroup.canonicalIp == null ->
+            !hasAnySuccessfulIp ->
                 context.getString(R.string.checker_ip_comp_summary_no_response)
             else -> context.getString(R.string.checker_ip_comp_summary_incomplete)
         }

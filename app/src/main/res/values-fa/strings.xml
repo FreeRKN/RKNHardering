@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">RKNHardering</string>
     <string name="github_repo_url">https://github.com/xtclovver/RKNHardering</string>
-    <string name="run_check_notice">در زمان اجرای بررسی، برنامه به این دامنه‌ها درخواست شبکه ارسال می‌کند:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ipv4-internet.yandex.net\n• ipv6-internet.yandex.net\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nاگر در تنظیمات یک DNS resolver سفارشی انتخاب شده باشد، برنامه همچنین به آدرس‌های IP آن یا دامنه DoH متصل می‌شود.\n\nاگر CDN pulling فعال باشد، برنامه علاوه بر این به redirector.googlevideo.com و نیز rutracker.org و meduza.io درخواست HTTPS می‌فرستد تا ببیند این endpointها چه IP عمومی و داده‌های trace برمی‌گردانند.\n\nاگر Debug diagnostics فعال باشد، برنامه می‌تواند از آخرین بررسی تکمیل‌شده یک گزارش تشخیصی قابل کپی بسازد، حتی اگر بررسی با موفقیت تمام شده باشد. این گزارش فقط تا زمان کپی شدن در حافظه نگه داشته می‌شود و پاسخ‌های CDN pulling را هم شامل می‌شود.\n\nبا لمس دکمه «اجرای بررسی»، موافقت می‌کنید که این درخواست‌های شبکه از دستگاه شما ارسال شوند.\n\nبرنامه لاگ این درخواست‌ها را نگه نمی‌دارد. دسترسی به شبکه را می‌توان از تنظیمات برنامه غیرفعال کرد.</string>
+    <string name="run_check_notice">در زمان اجرای بررسی، برنامه به این دامنه‌ها درخواست شبکه ارسال می‌کند:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ipv4-internet.yandex.net\n• ipv6-internet.yandex.net\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nاگر در تنظیمات یک DNS resolver سفارشی انتخاب شده باشد، برنامه همچنین به آدرس‌های IP آن یا دامنه DoH متصل می‌شود.\n\nاگر CDN pulling فعال باشد، برنامه علاوه بر این به redirector.googlevideo.com و نیز rutracker.org و meduza.io درخواست HTTPS می‌فرستد تا ببیند این endpointها چه IP عمومی و داده‌های trace برمی‌گردانند.\n\nاگر بررسی نشت call transport فعال باشد، برنامه علاوه بر این درخواست‌های UDP/STUN را به هدف‌های Telegram که همراه برنامه هستند می‌فرستد. هدف‌های WhatsApp فقط در buildهای debug یا experimental استفاده می‌شوند.\n\nاگر Debug diagnostics فعال باشد، برنامه می‌تواند از آخرین بررسی تکمیل‌شده یک گزارش تشخیصی قابل کپی بسازد، حتی اگر بررسی با موفقیت تمام شده باشد. این گزارش فقط تا زمان کپی شدن در حافظه نگه داشته می‌شود و پاسخ‌های CDN pulling را هم شامل می‌شود.\n\nبا لمس دکمه «اجرای بررسی»، موافقت می‌کنید که این درخواست‌های شبکه از دستگاه شما ارسال شوند.\n\nبرنامه لاگ این درخواست‌ها را نگه نمی‌دارد. دسترسی به شبکه را می‌توان از تنظیمات برنامه غیرفعال کرد.</string>
 
     <string name="settings_title">تنظیمات</string>
     <string name="settings_section_checks">بررسی‌ها</string>
@@ -49,7 +49,7 @@
     <string name="settings_port_full">کامل</string>
     <string name="settings_port_custom">سفارشی</string>
     <string name="settings_network_requests">درخواست‌های شبکه</string>
-    <string name="settings_network_requests_desc">GeoIP، مقایسه IP، CDN pulling، BeaconDB</string>
+    <string name="settings_network_requests_desc">GeoIP، مقایسه IP، CDN pulling، BeaconDB، بررسی call transport</string>
     <string name="settings_network_disable_title">درخواست‌های شبکه غیرفعال شوند؟</string>
     <string name="settings_network_disable_message">در صورت غیرفعال شدن:\n\n• بررسی‌های GeoIP اجرا نخواهند شد\n• مقایسه IP از طریق سرویس‌های خارجی غیرفعال می‌شود\n• بررسی CDN pulling غیرفعال می‌شود\n• مکان‌یابی از طریق BeaconDB (دکل‌ها/Wi-Fi) غیرفعال می‌شود\n• بررسی نشت call transport غیرفعال می‌شود\n\nفقط بررسی‌های محلی باقی می‌مانند: نشانه‌های مستقیم، نشانه‌های غیرمستقیم و اسکن پورت</string>
     <string name="settings_network_disable_confirm">غیرفعال کردن</string>
@@ -109,7 +109,9 @@
 
     <string name="main_subtitle">خودآزمایی VPN/Proxy</string>
     <string name="main_run_check">اجرای بررسی</string>
+    <string name="main_run_check_again">اجرای دوباره بررسی</string>
     <string name="main_stop_check">توقف</string>
+    <string name="main_card_geo_ip" translatable="false">GeoIP</string>
     <string name="main_card_ip_comparison">مقایسه IP</string>
     <string name="main_card_cdn_pulling">CDN pulling</string>
     <string name="main_card_direct_signs">نشانه‌های مستقیم</string>
@@ -129,13 +131,29 @@
     <string name="main_card_call_transport_reason_targets_unavailable">اهداف این بررسی در دسترس نیستند</string>
     <string name="main_card_call_transport_stun_group_global">STUN جهانی</string>
     <string name="main_card_call_transport_stun_group_ru">STUN روسی</string>
+    <string name="ip_channels_title">کانال‌های IP</string>
+    <string name="ip_channels_channel_direct">مستقیم</string>
+    <string name="ip_channels_channel_vpn">VPN</string>
+    <string name="ip_channels_channel_proxy">پراکسی</string>
+    <string name="ip_channels_channel_cdn">CDN</string>
+    <string name="ip_channels_target_ru">RU</string>
+    <string name="ip_channels_target_non_ru">غیر RU</string>
+    <string name="ip_channels_flag_cross_channel_mismatch">ناهمخوانی بین کانال‌ها شناسایی شد</string>
+    <string name="ip_channels_flag_warp_like_behavior">رفتار شبیه WARP شناسایی شد</string>
+    <string name="ip_channels_flag_geo_country_mismatch">ناهمخوانی geo-country</string>
+    <string name="ip_channels_flag_probe_target_divergence">واگرایی probe-target</string>
+    <string name="ip_channels_flag_probe_target_direct_divergence">واگرایی direct probe-target</string>
+    <string name="ip_channels_flag_channel_conflict">تعارض کانال‌ها: %1$s</string>
+    <string name="ip_channels_flag_needs_review">نیاز به بررسی</string>
     <string name="main_card_call_transport_stun_responded">%1$d از %2$d پاسخ داد</string>
     <string name="main_card_call_transport_stun_none_responded">بدون پاسخ</string>
     <string name="main_card_call_transport_stun_ipv4">IPv4</string>
     <string name="main_card_call_transport_stun_ipv6">IPv6</string>
     <string name="main_card_call_transport_stun_no_response">بدون پاسخ</string>
     <string name="main_card_call_transport_stun_error">خطا</string>
+    <string name="main_card_icmp_spoofing">جعل ICMP β</string>
     <string name="main_card_location_signals">نشانه‌های مکان</string>
+    <string name="main_card_native_signs">نشانه‌های بومی</string>
     <string name="main_verdict_details">جزئیات</string>
 
     <string name="main_perm_title">مجوز اضافی</string>
@@ -155,10 +173,12 @@
 
     <string name="main_loading_status_scanning">اسکن</string>
     <string name="main_loading_status_checking">در حال بررسی</string>
+    <string name="main_loading_status_progress" translatable="false">%1$s%2$s</string>
 
     <string name="main_loading_geo_ip">در حال بررسی کشور، ASN و نشانه‌های میزبانی.</string>
     <string name="main_loading_ip_comparison">در حال مقایسه IP عمومی از طریق چند سرویس مستقل.</string>
     <string name="main_loading_cdn_pulling">در حال بررسی اینکه endpointهای مسدود یا CDN-backed چه داده‌ای درباره شبکه شما برمی‌گردانند.</string>
+    <string name="main_loading_icmp">در حال resolve و ping کردن میزبان‌های مسدود و کنترلی از طریق مسیر فعال.</string>
     <string name="main_loading_direct">در حال جست‌وجوی نشانه‌های مستقیم VPN، proxy و کلاینت‌های نصب‌شده.</string>
     <string name="main_loading_indirect">در حال بررسی اینترفیس‌ها، DNS، مسیرها و نشانه‌های فنی محلی.</string>
     <string name="main_loading_location">در حال جمع‌آوری نشانه‌های اپراتور، دکل و Wi-Fiهای نزدیک.</string>
@@ -189,6 +209,8 @@
     <string name="settings_port_range_preview_proxy_only">پورت‌های لوکال‌هاست برای اسکن proxy: %1$s (%2$s)</string>
     <string name="settings_port_range_preview_xray_only">پورت‌های لوکال‌هاست برای اسکن API Xray: %1$s (%2$s)</string>
     <string name="settings_port_range_preview_disabled">اسکن‌های proxy محلی و Xray غیرفعال هستند.</string>
+    <string name="settings_port_range_start_default" translatable="false">1024</string>
+    <string name="settings_port_range_end_default" translatable="false">65535</string>
     <plurals name="settings_port_word">
         <item quantity="one">%1$s پورت</item>
         <item quantity="other">%1$s پورت</item>
@@ -209,6 +231,19 @@
     <string name="narrative_explanation_exposure_local_proxy">فقط یک proxy/API محلی روی دستگاه دیده شد، بدون آدرس نقطه پایانی راه‌دور.</string>
     <string name="narrative_explanation_exposure_technical">فقط نشانه‌های فنی شبکه و مسیریابی موجود بود، بدون آدرس سرور.</string>
     <string name="narrative_explanation_exposure_insufficient">نه آدرس سرور و نه IP عمومی به دست نیامد.</string>
+    <string name="narrative_reason_icmp_signal">پاسخ‌های ICMP یا زمان رفت‌وبرگشت غیرواقعی دیده شد و نیاز به بررسی دستی دارد.</string>
+
+    <string name="checker_icmp_summary_clean">%1$s پاسخ نداد و %2$s بالاتر از آستانه RTT باقی ماند (میانگین %3$s)</string>
+    <string name="checker_icmp_summary_blocked_replied">%1$s به ICMP پاسخ داد، در حالی که انتظار می‌رود روی مسیر روسیه بی‌پاسخ بماند</string>
+    <string name="checker_icmp_summary_control_too_fast">%1$s با RTT مشکوکاً پایین پاسخ داد (کمینه %2$s، میانگین %3$s)</string>
+    <string name="checker_icmp_summary_both_suspicious">%1$s پاسخ داد و %2$s بیش از حد سریع بود (کمینه %3$s، میانگین %4$s)</string>
+    <string name="checker_icmp_summary_inconclusive">بررسی ICMP قطعی نیست، چون %1$s پاسخ نداد</string>
+    <string name="checker_icmp_summary_unavailable">پینگ سیستمی در دسترس نبود یا خروجی آن قابل تفسیر نبود.</string>
+    <string name="checker_icmp_target_blocked">هدف مسدودشده %1$s (%2$s): %3$d/%4$d پاسخ</string>
+    <string name="checker_icmp_target_control">هدف کنترلی %1$s (%2$s): %3$d/%4$d پاسخ، کمینه %5$s، میانگین %6$s، بیشینه %7$s</string>
+    <string name="checker_icmp_evidence_both">%1$s پاسخ داد و RTT برای %2$s پایین‌تر از آستانه مورد انتظار ماند</string>
+    <string name="checker_icmp_evidence_blocked_replied">%1$s روی مسیر فعال از طریق ICMP پاسخ داد</string>
+    <string name="checker_icmp_evidence_control_too_fast">RTT برای %1$s روی مسیر فعال پایین‌تر از آستانه مورد انتظار ماند</string>
 
     <string name="narrative_meaning_detected">نتیجه قرمز یعنی بررسی خودکار نشانه‌های کافی از دور زدن را جمع کرده است.</string>
     <string name="narrative_meaning_needs_review">نتیجه زرد یعنی نشانه‌هایی وجود دارد، اما نیاز به بررسی دستی دارد.</string>
@@ -462,4 +497,54 @@
     <string name="tile_hint_detected_count">%1$d از %2$d شناسایی شد</string>
     <string name="tile_hint_review">نیاز به بررسی</string>
     <string name="tile_hint_error">خطا</string>
+    <string name="settings_value_on">روشن</string>
+    <string name="settings_value_off">خاموش</string>
+    <string name="settings_value_network_all">همه درخواست‌ها</string>
+    <string name="settings_value_network_disabled">غیرفعال</string>
+    <string name="settings_value_privacy_masking">پنهان‌سازی IP</string>
+    <string name="settings_value_appearance_format">%1$s \u00b7 %2$s</string>
+
+    <!-- NativeSignsChecker -->
+    <string name="checker_native_category_name">نشانه‌های بومی β</string>
+    <string name="checker_native_card_title">بررسی‌های بومی سطح پایین β</string>
+    <string name="checker_native_unavailable">کتابخانه بومی بارگذاری نشد؛ بررسی‌ها در دسترس نیستند.</string>
+    <string name="checker_native_unavailable_with_reason">کتابخانه بومی بارگذاری نشد: %1$s</string>
+    <string name="checker_native_no_anomalies">سیگنال‌های بومی: هیچ ناهنجاری شناسایی نشد</string>
+    <string name="checker_native_interfaces_empty">getifaddrs() هیچ واسطی برنگرداند</string>
+    <string name="checker_native_interfaces_summary">getifaddrs(): %1$d واسط (%2$d فعال)</string>
+    <string name="checker_native_vpn_interface">واسط VPN بومی: %1$s (ایندکس %2$d، MTU %3$d)</string>
+    <string name="checker_native_ipsec_interface">واسط IPsec بومی: %1$s (ایندکس %2$d)</string>
+    <string name="checker_native_mismatch_missing_in_jvm">واسط %1$s: در بومی هست اما در JVM نیست</string>
+    <string name="checker_native_mismatch_missing_in_native">واسط %1$s: در JVM هست اما در بومی نیست</string>
+    <string name="checker_native_mismatch_index">عدم تطابق ایندکس %1$s: native=%2$d jvm=%3$d</string>
+    <string name="checker_native_mismatch_addresses">عدم تطابق آدرس %1$s: native-only=%2$s, jvm-only=%3$s</string>
+    <string name="checker_native_routes_empty">/proc/net/route: در دسترس نیست</string>
+    <string name="checker_native_routes_no_default">/proc/net/route: مسیر پیش‌فرض وجود ندارد</string>
+    <string name="checker_native_route_default">مسیر پیش‌فرض از طریق %1$s</string>
+    <string name="checker_native_hooks_clean">/proc/self/maps: نشانگر hook شناخته شده‌ای یافت نشد</string>
+    <string name="checker_native_hook_marker">نشانگر hook در /proc/self/maps: %1$s</string>
+    <string name="checker_native_rwx_regions">/proc/self/maps: %1$s ناحیه بزرگ RWX</string>
+    <string name="checker_native_symbols_clean">سمبل‌های libc به‌درستی resolve می‌شوند</string>
+    <string name="checker_native_symbol_missing">dlsym %1$s: یافت نشد</string>
+    <string name="checker_native_symbol_foreign_library">dlsym %1$s به کتابخانه دیگری اشاره می‌کند: %2$s</string>
+
+    <!-- NativeSignsChecker: root detection -->
+    <string name="checker_native_root_clean">نشانگرهای root: هیچ نشانه‌ای از دسترسی root شناسایی نشد</string>
+    <string name="checker_native_root_su_binary">فایل اجرایی su پیدا شد: %1$s</string>
+    <string name="checker_native_root_property">ویژگی سیستمی مشکوک: %1$s</string>
+    <string name="checker_native_root_mgmt_artifact">فایل مدیریت root: %1$s</string>
+    <string name="checker_native_root_system_rw">پارتیشن /system قابل نوشتن است</string>
+    <string name="checker_native_root_suspicious_mount">رکورد mount مشکوک: %1$s</string>
+    <string name="checker_native_root_overlay_mount">overlay mount روی پارتیشن سیستم: %1$s</string>
+    <string name="checker_native_root_selinux_permissive">SELinux در حالت permissive است</string>
+    <string name="checker_native_root_selinux_absent">وضعیت اجرای SELinux قابل دسترس نیست</string>
+    <string name="checker_native_root_uid">فرآیند با UID root در حال اجراست: %1$s</string>
+    <string name="checker_native_root_magisk_prop">ویژگی Magisk شناسایی شد: %1$s</string>
+
+    <!-- App update checker -->
+    <string name="update_dialog_title">به‌روزرسانی موجود است</string>
+    <string name="update_dialog_message">نسخه نصب‌شده: %1$s\nآخرین نسخه: %2$s</string>
+    <string name="update_dialog_download">دانلود</string>
+    <string name="update_dialog_skip">رد کردن این نسخه</string>
+    <string name="update_dialog_later">بعداً</string>
 </resources>

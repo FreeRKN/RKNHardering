@@ -4,6 +4,16 @@ import com.notcvnt.rknhardering.probe.ProxyEndpoint
 import com.notcvnt.rknhardering.probe.TunProbeDiagnostics
 import com.notcvnt.rknhardering.probe.XrayApiScanResult
 
+data class GeoIpFacts(
+    val ip: String? = null,
+    val countryCode: String? = null,
+    val asn: String? = null,
+    val outsideRu: Boolean = false,
+    val hosting: Boolean = false,
+    val proxyDb: Boolean = false,
+    val fetchError: Boolean = false,
+)
+
 enum class EvidenceConfidence {
     LOW,
     MEDIUM,
@@ -14,6 +24,7 @@ enum class EvidenceSource {
     GEO_IP,
     DIRECT_NETWORK_CAPABILITIES,
     INDIRECT_NETWORK_CAPABILITIES,
+    ICMP_SPOOFING,
     SYSTEM_PROXY,
     INSTALLED_APP,
     VPN_SERVICE_DECLARATION,
@@ -33,6 +44,13 @@ enum class EvidenceSource {
     TELEGRAM_CALL_TRANSPORT,
     WHATSAPP_CALL_TRANSPORT,
     STUN_PROBE,
+    NATIVE_INTERFACE,
+    NATIVE_ROUTE,
+    NATIVE_SOCKET,
+    NATIVE_HOOK_MARKERS,
+    NATIVE_JVM_MISMATCH,
+    NATIVE_LIBRARY_INTEGRITY,
+    NATIVE_ROOT_DETECTION,
 }
 
 enum class StunScope {
@@ -199,6 +217,7 @@ data class CategoryResult(
     val activeApps: List<ActiveVpnApp> = emptyList(),
     val callTransportLeaks: List<CallTransportLeakResult> = emptyList(),
     val stunProbeGroups: List<StunProbeGroupResult> = emptyList(),
+    val geoFacts: GeoIpFacts? = null,
 ) {
     val hasError: Boolean
         get() = findings.any { it.isError }
@@ -304,4 +323,15 @@ data class CheckResult(
     val bypassResult: BypassResult,
     val verdict: Verdict,
     val tunProbeDiagnostics: TunProbeDiagnostics? = null,
+    val nativeSigns: CategoryResult = CategoryResult(
+        name = "",
+        detected = false,
+        findings = emptyList(),
+    ),
+    val icmpSpoofing: CategoryResult = CategoryResult(
+        name = "",
+        detected = false,
+        findings = emptyList(),
+    ),
+    val ipConsensus: IpConsensusResult = IpConsensusResult.empty(),
 )

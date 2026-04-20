@@ -171,6 +171,83 @@ class IfconfigClientTest {
     }
 
     @Test
+    fun `fetch direct ip supports one okhttp and one native curl attempt`() {
+        var okHttpCalls = 0
+        var nativeCalls = 0
+        ResolverNetworkStack.okHttpExecuteOverride = { request ->
+            okHttpCalls += 1
+            assertEquals(4_000, request.timeoutMs)
+            assertEquals(0, request.okHttpRetryCount)
+            assertEquals(0, request.nativeCurlRetryCount)
+            throw IOException("okhttp down")
+        }
+        NativeCurlBridge.executeOverride = { request ->
+            nativeCalls += 1
+            assertEquals(4_000, request.timeoutMs)
+            NativeCurlResponse(
+                curlCode = 0,
+                httpCode = 200,
+                body = "203.0.113.55",
+            )
+        }
+
+        val result = kotlinx.coroutines.runBlocking {
+            IfconfigClient.fetchDirectIp(
+                timeoutMs = 4_000,
+                resolverConfig = DnsResolverConfig.system(),
+                okHttpRetryCount = 0,
+                nativeCurlRetryCount = 0,
+            )
+        }
+
+        assertTrue(result.isSuccess)
+        assertEquals("203.0.113.55", result.getOrNull())
+        assertEquals(1, okHttpCalls)
+        assertEquals(1, nativeCalls)
+    }
+
+    @Test
+    fun `network comparison forwards custom timeout into strict and curl compatible probes`() {
+        var okHttpCalls = 0
+        var nativeCalls = 0
+        ResolverNetworkStack.okHttpExecuteOverride = { request ->
+            okHttpCalls += 1
+            assertEquals(4_000, request.timeoutMs)
+            assertEquals(0, request.okHttpRetryCount)
+            assertEquals(0, request.nativeCurlRetryCount)
+            throw IOException("strict failed")
+        }
+        NativeCurlBridge.executeOverride = { request ->
+            nativeCalls += 1
+            assertEquals(4_000, request.timeoutMs)
+            NativeCurlResponse(
+                curlCode = 0,
+                httpCode = 200,
+                body = "203.0.113.56",
+            )
+        }
+
+        val comparison = kotlinx.coroutines.runBlocking {
+            IfconfigClient.fetchIpViaNetworkComparison(
+                primaryBinding = ResolverBinding.AndroidNetworkBinding(newNetwork(211)),
+                fallbackBinding = ResolverBinding.OsDeviceBinding(
+                    interfaceName = "tun0",
+                    dnsMode = ResolverBinding.DnsMode.SYSTEM,
+                ),
+                timeoutMs = 4_000,
+                resolverConfig = DnsResolverConfig.system(),
+                okHttpRetryCount = 0,
+                nativeCurlRetryCount = 0,
+            )
+        }
+
+        assertTrue(okHttpCalls >= 1)
+        assertEquals(1, nativeCalls)
+        assertEquals(PublicIpProbeMode.CURL_COMPATIBLE, comparison.selectedMode)
+        assertEquals("203.0.113.56", comparison.selectedIp)
+    }
+
+    @Test
     fun `strict override skips curl compatible branch`() {
         val observedBindings = mutableListOf<ResolverBinding?>()
         PublicIpClient.fetchIpOverride = { _, _, _, _, binding ->

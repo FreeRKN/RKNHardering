@@ -7,10 +7,13 @@ import com.notcvnt.rknhardering.model.CallTransportProbeKind
 import com.notcvnt.rknhardering.model.CallTransportService
 import com.notcvnt.rknhardering.model.CallTransportStatus
 import com.notcvnt.rknhardering.model.CategoryResult
+import com.notcvnt.rknhardering.model.Channel
 import com.notcvnt.rknhardering.model.EvidenceConfidence
 import com.notcvnt.rknhardering.model.EvidenceItem
 import com.notcvnt.rknhardering.model.EvidenceSource
 import com.notcvnt.rknhardering.model.Finding
+import com.notcvnt.rknhardering.model.GeoIpFacts
+import com.notcvnt.rknhardering.model.IpConsensusResult
 import com.notcvnt.rknhardering.model.Verdict
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -18,29 +21,213 @@ import org.junit.Test
 class VerdictEngineTest {
 
     @Test
-    fun `table 2 matrix is implemented literally`() {
-        val cases = listOf(
-            MatrixCase("000", geo = false, direct = false, indirect = false, expected = Verdict.NOT_DETECTED),
-            MatrixCase("010", geo = false, direct = true, indirect = false, expected = Verdict.NOT_DETECTED),
-            MatrixCase("001", geo = false, direct = false, indirect = true, expected = Verdict.NOT_DETECTED),
-            MatrixCase("100", geo = true, direct = false, indirect = false, expected = Verdict.NEEDS_REVIEW),
-            MatrixCase("011", geo = false, direct = true, indirect = true, expected = Verdict.NEEDS_REVIEW),
-            MatrixCase("110", geo = true, direct = true, indirect = false, expected = Verdict.DETECTED),
-            MatrixCase("101", geo = true, direct = false, indirect = true, expected = Verdict.DETECTED),
-            MatrixCase("111", geo = true, direct = true, indirect = true, expected = Verdict.DETECTED),
+    fun `R1 split tunnel evidence yields detected`() {
+        val verdict = VerdictEngine.evaluate(
+            geoIp = category(),
+            directSigns = category(),
+            indirectSigns = category(),
+            locationSignals = category(),
+            bypassResult = bypass(evidence = listOf(evidence(EvidenceSource.SPLIT_TUNNEL_BYPASS, EvidenceConfidence.HIGH))),
+            ipConsensus = IpConsensusResult.empty(),
         )
+        assertEquals(Verdict.DETECTED, verdict)
+    }
 
-        for (case in cases) {
-            val verdict = VerdictEngine.evaluate(
-                geoIp = geoCategory(case.geo),
-                directSigns = directCategory(case.direct),
-                indirectSigns = indirectCategory(case.indirect),
-                locationSignals = category(),
-                bypassResult = bypass(),
-            )
+    @Test
+    fun `R2 transport_vpn evidence alone yields detected`() {
+        val verdict = VerdictEngine.evaluate(
+            geoIp = category(),
+            directSigns = directCategory(true),
+            indirectSigns = category(),
+            locationSignals = category(),
+            bypassResult = bypass(),
+            ipConsensus = IpConsensusResult.empty(),
+        )
+        assertEquals(Verdict.DETECTED, verdict)
+    }
 
-            assertEquals("matrix case ${case.label}", case.expected, verdict)
-        }
+    @Test
+    fun `R3a probeTargetDivergence with geoCountryMismatch yields detected`() {
+        val verdict = VerdictEngine.evaluate(
+            geoIp = category(),
+            directSigns = category(),
+            indirectSigns = category(),
+            locationSignals = category(),
+            bypassResult = bypass(),
+            ipConsensus = IpConsensusResult(
+                probeTargetDivergence = true,
+                geoCountryMismatch = true,
+            ),
+        )
+        assertEquals(Verdict.DETECTED, verdict)
+    }
+
+    @Test
+    fun `R3a probeTargetDivergence alone yields detected`() {
+        val verdict = VerdictEngine.evaluate(
+            geoIp = category(),
+            directSigns = category(),
+            indirectSigns = category(),
+            locationSignals = category(),
+            bypassResult = bypass(),
+            ipConsensus = IpConsensusResult(probeTargetDivergence = true),
+        )
+        assertEquals(Verdict.DETECTED, verdict)
+    }
+
+    @Test
+    fun `R3b probeTargetDirectDivergence with foreign ip yields detected`() {
+        val verdict = VerdictEngine.evaluate(
+            geoIp = category(),
+            directSigns = category(),
+            indirectSigns = category(),
+            locationSignals = category(),
+            bypassResult = bypass(),
+            ipConsensus = IpConsensusResult(
+                probeTargetDirectDivergence = true,
+                foreignIps = setOf("1.2.3.4"),
+            ),
+        )
+        assertEquals(Verdict.DETECTED, verdict)
+    }
+
+    @Test
+    fun `R3c crossChannelMismatch with foreignIps yields detected`() {
+        val verdict = VerdictEngine.evaluate(
+            geoIp = category(),
+            directSigns = category(),
+            indirectSigns = category(),
+            locationSignals = category(),
+            bypassResult = bypass(),
+            ipConsensus = IpConsensusResult(
+                crossChannelMismatch = true,
+                foreignIps = setOf("8.8.8.8"),
+            ),
+        )
+        assertEquals(Verdict.DETECTED, verdict)
+    }
+
+    @Test
+    fun `R3c crossChannelMismatch alone falls through`() {
+        val verdict = VerdictEngine.evaluate(
+            geoIp = category(),
+            directSigns = category(),
+            indirectSigns = category(),
+            locationSignals = category(),
+            bypassResult = bypass(),
+            ipConsensus = IpConsensusResult(crossChannelMismatch = true),
+        )
+        assertEquals(Verdict.NOT_DETECTED, verdict)
+    }
+
+    @Test
+    fun `R4 locationConfirmsRussia with geo outsideRu yields detected`() {
+        val geo = category(
+            geoFacts = GeoIpFacts(outsideRu = true, countryCode = "DE"),
+        )
+        val location = CategoryResult(
+            name = "loc",
+            detected = false,
+            findings = listOf(Finding("network_mcc_ru:true")),
+        )
+        val verdict = VerdictEngine.evaluate(
+            geoIp = geo,
+            directSigns = category(),
+            indirectSigns = category(),
+            locationSignals = location,
+            bypassResult = bypass(),
+            ipConsensus = IpConsensusResult.empty(),
+        )
+        assertEquals(Verdict.DETECTED, verdict)
+    }
+
+    @Test
+    fun `R4 regression issue 15 hosting only yields needs review`() {
+        val geo = category(
+            geoFacts = GeoIpFacts(hosting = true, countryCode = "RU"),
+        )
+        val location = CategoryResult(
+            name = "loc",
+            detected = false,
+            findings = listOf(Finding("network_mcc_ru:true")),
+        )
+        val verdict = VerdictEngine.evaluate(
+            geoIp = geo,
+            directSigns = category(),
+            indirectSigns = category(),
+            locationSignals = location,
+            bypassResult = bypass(),
+            ipConsensus = IpConsensusResult.empty(),
+        )
+        assertEquals(Verdict.NEEDS_REVIEW, verdict)
+    }
+
+    @Test
+    fun `R5 geo outsideRu alone yields needs review`() {
+        val geo = category(geoFacts = GeoIpFacts(outsideRu = true, countryCode = "DE"))
+        val verdict = VerdictEngine.evaluate(
+            geoIp = geo,
+            directSigns = category(),
+            indirectSigns = category(),
+            locationSignals = category(),
+            bypassResult = bypass(),
+            ipConsensus = IpConsensusResult.empty(),
+        )
+        assertEquals(Verdict.NEEDS_REVIEW, verdict)
+    }
+
+    @Test
+    fun `R5 geo outsideRu plus indirect yields detected`() {
+        val geo = category(geoFacts = GeoIpFacts(outsideRu = true, countryCode = "DE"))
+        val verdict = VerdictEngine.evaluate(
+            geoIp = geo,
+            directSigns = category(),
+            indirectSigns = indirectCategory(true),
+            locationSignals = category(),
+            bypassResult = bypass(),
+            ipConsensus = IpConsensusResult.empty(),
+        )
+        assertEquals(Verdict.DETECTED, verdict)
+    }
+
+    @Test
+    fun `R6 channelConflict alone promotes to needs review`() {
+        val verdict = VerdictEngine.evaluate(
+            geoIp = category(),
+            directSigns = category(),
+            indirectSigns = category(),
+            locationSignals = category(),
+            bypassResult = bypass(),
+            ipConsensus = IpConsensusResult(channelConflict = setOf(Channel.DIRECT)),
+        )
+        assertEquals(Verdict.NEEDS_REVIEW, verdict)
+    }
+
+    @Test
+    fun `R6 icmp spoofing review alone promotes to needs review`() {
+        val verdict = VerdictEngine.evaluate(
+            geoIp = category(),
+            directSigns = category(),
+            indirectSigns = category(),
+            locationSignals = category(),
+            bypassResult = bypass(),
+            ipConsensus = IpConsensusResult.empty(),
+            icmpSpoofing = category(needsReview = true),
+        )
+        assertEquals(Verdict.NEEDS_REVIEW, verdict)
+    }
+
+    @Test
+    fun `R7 empty input yields not detected`() {
+        val verdict = VerdictEngine.evaluate(
+            geoIp = category(),
+            directSigns = category(),
+            indirectSigns = category(),
+            locationSignals = category(),
+            bypassResult = bypass(),
+            ipConsensus = IpConsensusResult.empty(),
+        )
+        assertEquals(Verdict.NOT_DETECTED, verdict)
     }
 
     @Test
@@ -53,21 +240,7 @@ class VerdictEngineTest {
             bypassResult = bypass(
                 evidence = listOf(evidence(EvidenceSource.XRAY_API, EvidenceConfidence.HIGH)),
             ),
-        )
-
-        assertEquals(Verdict.DETECTED, verdict)
-    }
-
-    @Test
-    fun `split tunnel bypass override returns detected`() {
-        val verdict = VerdictEngine.evaluate(
-            geoIp = category(),
-            directSigns = category(),
-            indirectSigns = category(),
-            locationSignals = category(),
-            bypassResult = bypass(
-                evidence = listOf(evidence(EvidenceSource.SPLIT_TUNNEL_BYPASS, EvidenceConfidence.HIGH)),
-            ),
+            ipConsensus = IpConsensusResult.empty(),
         )
 
         assertEquals(Verdict.DETECTED, verdict)
@@ -83,6 +256,7 @@ class VerdictEngineTest {
             bypassResult = bypass(
                 evidence = listOf(evidence(EvidenceSource.VPN_GATEWAY_LEAK, EvidenceConfidence.HIGH)),
             ),
+            ipConsensus = IpConsensusResult.empty(),
         )
 
         assertEquals(Verdict.DETECTED, verdict)
@@ -98,54 +272,10 @@ class VerdictEngineTest {
             bypassResult = bypass(
                 evidence = listOf(evidence(EvidenceSource.VPN_NETWORK_BINDING, EvidenceConfidence.HIGH)),
             ),
+            ipConsensus = IpConsensusResult.empty(),
         )
 
         assertEquals(Verdict.DETECTED, verdict)
-    }
-
-    @Test
-    fun `russian location marker plus foreign geoip returns detected`() {
-        val verdict = VerdictEngine.evaluate(
-            geoIp = geoCategory(true),
-            directSigns = category(),
-            indirectSigns = category(),
-            locationSignals = locationCategory("cell_country_ru:true"),
-            bypassResult = bypass(),
-        )
-
-        assertEquals(Verdict.DETECTED, verdict)
-    }
-
-    @Test
-    fun `russian location marker without foreign geoip does not override verdict`() {
-        val verdict = VerdictEngine.evaluate(
-            geoIp = category(),
-            directSigns = category(),
-            indirectSigns = category(),
-            locationSignals = locationCategory("network_mcc_ru:true"),
-            bypassResult = bypass(),
-        )
-
-        assertEquals(Verdict.NOT_DETECTED, verdict)
-    }
-
-    @Test
-    fun `coarse BeaconDB fallback does not override foreign geoip on its own`() {
-        val verdict = VerdictEngine.evaluate(
-            geoIp = geoCategory(true),
-            directSigns = category(),
-            indirectSigns = category(),
-            locationSignals = CategoryResult(
-                name = "location",
-                detected = false,
-                findings = listOf(Finding("BeaconDB: coarse cell area fallback")),
-                needsReview = false,
-                evidence = emptyList(),
-            ),
-            bypassResult = bypass(),
-        )
-
-        assertEquals(Verdict.NEEDS_REVIEW, verdict)
     }
 
     @Test
@@ -164,6 +294,7 @@ class VerdictEngineTest {
             bypassResult = bypass(
                 evidence = listOf(evidence(EvidenceSource.TUN_ACTIVE_PROBE, EvidenceConfidence.LOW)),
             ),
+            ipConsensus = IpConsensusResult.empty(),
         )
 
         assertEquals(Verdict.NOT_DETECTED, verdict)
@@ -177,6 +308,7 @@ class VerdictEngineTest {
             indirectSigns = category(),
             locationSignals = category(),
             bypassResult = bypass(needsReview = true),
+            ipConsensus = IpConsensusResult.empty(),
         )
 
         assertEquals(Verdict.NEEDS_REVIEW, verdict)
@@ -205,6 +337,7 @@ class VerdictEngineTest {
             ),
             locationSignals = category(),
             bypassResult = bypass(),
+            ipConsensus = IpConsensusResult.empty(),
         )
 
         assertEquals(Verdict.NEEDS_REVIEW, verdict)
@@ -233,18 +366,11 @@ class VerdictEngineTest {
             ),
             locationSignals = category(),
             bypassResult = bypass(),
+            ipConsensus = IpConsensusResult.empty(),
         )
 
         assertEquals(Verdict.NOT_DETECTED, verdict)
     }
-
-    private data class MatrixCase(
-        val label: String,
-        val geo: Boolean,
-        val direct: Boolean,
-        val indirect: Boolean,
-        val expected: Verdict,
-    )
 
     private fun geoCategory(present: Boolean): CategoryResult {
         if (!present) return category()
@@ -268,18 +394,11 @@ class VerdictEngineTest {
         )
     }
 
-    private fun locationCategory(marker: String): CategoryResult = CategoryResult(
-        name = "location",
-        detected = false,
-        findings = listOf(Finding(marker)),
-        needsReview = false,
-        evidence = emptyList(),
-    )
-
     private fun category(
         evidence: List<EvidenceItem> = emptyList(),
         needsReview: Boolean = false,
         callTransportLeaks: List<CallTransportLeakResult> = emptyList(),
+        geoFacts: GeoIpFacts? = null,
     ): CategoryResult = CategoryResult(
         name = "test",
         detected = evidence.any { it.detected },
@@ -287,6 +406,7 @@ class VerdictEngineTest {
         needsReview = needsReview,
         evidence = evidence,
         callTransportLeaks = callTransportLeaks,
+        geoFacts = geoFacts,
     )
 
     private fun bypass(

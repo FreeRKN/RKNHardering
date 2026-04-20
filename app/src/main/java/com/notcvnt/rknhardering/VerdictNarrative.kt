@@ -260,6 +260,9 @@ object VerdictNarrativeBuilder {
         if (result.indirectSigns.callTransportLeaks.any { it.status == CallTransportStatus.NEEDS_REVIEW }) {
             reasons += context.getString(R.string.narrative_reason_call_transport_signal)
         }
+        if (result.icmpSpoofing.needsReview) {
+            reasons += context.getString(R.string.narrative_reason_icmp_signal)
+        }
 
         if (reasons.isEmpty()) {
             reasons += when (result.verdict) {
@@ -290,6 +293,8 @@ object VerdictNarrativeBuilder {
             result.locationSignals.needsReview ||
             result.ipComparison.detected ||
             result.ipComparison.needsReview ||
+            result.icmpSpoofing.detected ||
+            result.icmpSpoofing.needsReview ||
             result.directSigns.findings.any { it.source == EvidenceSource.TUN_ACTIVE_PROBE } ||
             result.indirectSigns.callTransportLeaks.any { it.status == CallTransportStatus.NEEDS_REVIEW } ||
             result.bypassResult.findings.any {

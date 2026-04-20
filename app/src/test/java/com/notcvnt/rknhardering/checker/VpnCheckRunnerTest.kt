@@ -13,6 +13,7 @@ import com.notcvnt.rknhardering.model.BypassResult
 import com.notcvnt.rknhardering.model.CdnPullingResponse
 import com.notcvnt.rknhardering.model.CdnPullingResult
 import com.notcvnt.rknhardering.model.CategoryResult
+import com.notcvnt.rknhardering.model.Channel
 import com.notcvnt.rknhardering.model.EvidenceConfidence
 import com.notcvnt.rknhardering.model.EvidenceItem
 import com.notcvnt.rknhardering.model.EvidenceSource
@@ -20,6 +21,8 @@ import com.notcvnt.rknhardering.model.IpCheckerGroupResult
 import com.notcvnt.rknhardering.model.IpComparisonResult
 import com.notcvnt.rknhardering.model.Verdict
 import com.notcvnt.rknhardering.network.DnsResolverConfig
+import com.notcvnt.rknhardering.model.TargetGroup
+import com.notcvnt.rknhardering.probe.PerTargetProbe
 import com.notcvnt.rknhardering.probe.UnderlyingNetworkProber
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -28,6 +31,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.CancellationException
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -99,6 +104,9 @@ class VpnCheckRunnerTest {
         )
 
         assertTrue(result.indirectSigns.callTransportLeaks.any { it.status == CallTransportStatus.NEEDS_REVIEW })
+        assertTrue(
+            result.ipConsensus.observedIps.any { it.channel == Channel.DIRECT && it.value == "198.51.100.20" },
+        )
         assertEquals(Verdict.NEEDS_REVIEW, result.verdict)
     }
 
@@ -144,11 +152,67 @@ class VpnCheckRunnerTest {
     }
 
     @Test
+    fun `icmp spoofing check runs only when network requests are enabled`() = runBlocking {
+        var icmpCalls = 0
+
+        VpnCheckRunner.dependenciesOverride = VpnCheckRunner.Dependencies(
+            geoIpCheck = { _, _ -> category("geo") },
+            ipComparisonCheck = { _, _ -> emptyIpComparison() },
+            icmpSpoofingCheck = { _, _ ->
+                icmpCalls += 1
+                category(
+                    name = "icmp",
+                    needsReview = true,
+                    evidence = listOf(
+                        EvidenceItem(
+                            source = EvidenceSource.ICMP_SPOOFING,
+                            detected = true,
+                            confidence = EvidenceConfidence.MEDIUM,
+                            description = "ICMP looked suspicious",
+                        ),
+                    ),
+                )
+            },
+            directCheck = { _, _ -> category("direct") },
+            indirectCheck = { _, _, _, _ -> category("indirect") },
+            locationCheck = { _, _, _ -> category("location") },
+            bypassCheck = { _, _, _, _, _, _, _, _, _, _ ->
+                error("BypassChecker should not run when split tunnel is disabled")
+            },
+        )
+
+        val disabledResult = VpnCheckRunner.run(
+            context = context,
+            settings = CheckSettings(
+                splitTunnelEnabled = false,
+                networkRequestsEnabled = false,
+                resolverConfig = DnsResolverConfig.system(),
+            ),
+        )
+
+        assertEquals(0, icmpCalls)
+        assertFalse(disabledResult.icmpSpoofing.needsReview)
+
+        val enabledResult = VpnCheckRunner.run(
+            context = context,
+            settings = CheckSettings(
+                splitTunnelEnabled = false,
+                networkRequestsEnabled = true,
+                resolverConfig = DnsResolverConfig.system(),
+            ),
+        )
+
+        assertEquals(1, icmpCalls)
+        assertTrue(enabledResult.icmpSpoofing.needsReview)
+        assertEquals(Verdict.NEEDS_REVIEW, enabledResult.verdict)
+    }
+
+    @Test
     fun `shared underlying probe reaches direct and bypass checks`() = runBlocking {
         val sharedProbe = UnderlyingNetworkProber.ProbeResult(
             vpnActive = true,
             underlyingReachable = false,
-            vpnIp = "198.51.100.10",
+            ruTarget = PerTargetProbe(targetHost = "", targetGroup = TargetGroup.RU, vpnIp = "198.51.100.10"),
             vpnError = "EPERM",
             activeNetworkIsVpn = true,
         )
@@ -323,7 +387,7 @@ class VpnCheckRunnerTest {
 
     @Test
     fun `cancelled execution does not emit late updates`() = runBlocking {
-        val started = CountDownLatch(5)
+        val started = CountDownLatch(6)
         val release = CountDownLatch(1)
         val updates = mutableListOf<CheckUpdate>()
         val executionContext = ScanExecutionContext(scanId = 42L)
@@ -356,6 +420,10 @@ class VpnCheckRunnerTest {
                 awaitRelease()
                 category("location")
             },
+            nativeCheck = { _ ->
+                awaitRelease()
+                category("native")
+            },
             bypassCheck = { _, _, _, _, _, _, _, _, _, _ ->
                 error("BypassChecker should not run when split tunnel is disabled")
             },
@@ -384,6 +452,45 @@ class VpnCheckRunnerTest {
         val error = worker.await()
         assertTrue(error is CancellationException)
         assertTrue(updates.isEmpty())
+    }
+
+    @Test
+    fun `run survives geoIpCheck throwing and produces partial result`() = runBlocking {
+        VpnCheckRunner.dependenciesOverride = VpnCheckRunner.Dependencies(
+            geoIpCheck = { _, _ -> throw java.io.IOException("boom") },
+        )
+        try {
+            val result = VpnCheckRunner.run(context, settings = CheckSettings(networkRequestsEnabled = true))
+            assertNotNull(result)
+            assertTrue(result.geoIp.hasError)
+        } finally {
+            VpnCheckRunner.dependenciesOverride = null
+        }
+    }
+
+    @Test
+    fun `run propagates cancellation from geoIpCheck`(): Unit = runBlocking {
+        VpnCheckRunner.dependenciesOverride = VpnCheckRunner.Dependencies(
+            geoIpCheck = { _, _ -> throw kotlinx.coroutines.CancellationException("stop") },
+        )
+        try {
+            var threw = false
+            try {
+                VpnCheckRunner.run(context)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                threw = true
+            }
+            assertTrue("expected CancellationException", threw)
+        } finally {
+            VpnCheckRunner.dependenciesOverride = null
+        }
+    }
+
+    @Test
+    fun `run forwards ipConsensus into check result`() = runBlocking {
+        // default dependencies + empty settings should still produce an ipConsensus (even if empty)
+        val result = VpnCheckRunner.run(context, settings = CheckSettings(networkRequestsEnabled = false))
+        assertNotNull(result.ipConsensus)
     }
 
     private fun category(

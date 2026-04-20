@@ -85,8 +85,8 @@ internal data class NativeCurlRequest(
                 ipResolveMode = NativeCurlIpResolveMode.fromWireValue(
                     json.optString("ipResolveMode").takeIf { it.isNotBlank() },
                 ),
-                timeoutMs = json.optInt("timeoutMs", 7_000),
-                connectTimeoutMs = json.optInt("connectTimeoutMs", json.optInt("timeoutMs", 7_000)),
+                timeoutMs = json.optInt("timeoutMs", 5_000),
+                connectTimeoutMs = json.optInt("connectTimeoutMs", json.optInt("timeoutMs", 5_000)),
                 caBundlePath = json.optString("caBundlePath", ""),
                 debugVerbose = json.optBoolean("debugVerbose", false),
                 method = json.optString("method", "GET"),

@@ -12,6 +12,7 @@ import com.notcvnt.rknhardering.model.Finding
 import com.notcvnt.rknhardering.model.IpCheckerGroupResult
 import com.notcvnt.rknhardering.model.IpCheckerResponse
 import com.notcvnt.rknhardering.model.IpComparisonResult
+import com.notcvnt.rknhardering.model.IpConsensusResult
 import com.notcvnt.rknhardering.model.LocalProxyCheckResult
 import com.notcvnt.rknhardering.model.MatchedVpnApp
 import com.notcvnt.rknhardering.model.Verdict
@@ -42,7 +43,9 @@ internal object CheckResultMarkdownExportFormatter {
         appendCdnPullingSection(builder, context, result.cdnPulling, snapshot.privacyMode)
         appendCategorySection(builder, context.getString(R.string.main_card_direct_signs), result.directSigns, snapshot.privacyMode)
         appendCategorySection(builder, context.getString(R.string.main_card_indirect_signs), result.indirectSigns, snapshot.privacyMode)
+        appendCategorySection(builder, context.getString(R.string.main_card_icmp_spoofing), result.icmpSpoofing, snapshot.privacyMode)
         appendCategorySection(builder, context.getString(R.string.main_card_location_signals), result.locationSignals, snapshot.privacyMode)
+        appendIpChannelsSection(builder, result.ipConsensus, snapshot.privacyMode)
         appendBypassSection(builder, context, result.bypassResult, snapshot.privacyMode)
         builder.appendLine("## Footer")
         builder.appendLine("- Timestamp: ${formatExportTimestamp(snapshot.finishedAtMillis)}")
@@ -131,6 +134,12 @@ internal object CheckResultMarkdownExportFormatter {
             title = context.getString(R.string.main_card_indirect_signs),
             status = sectionStatusTag(result.indirectSigns.detected, result.indirectSigns.needsReview, result.indirectSigns.hasError),
             summary = buildCategorySummary(result.indirectSigns, snapshot.privacyMode),
+        )
+        appendSectionSummaryRow(
+            builder,
+            title = context.getString(R.string.main_card_icmp_spoofing),
+            status = sectionStatusTag(result.icmpSpoofing.detected, result.icmpSpoofing.needsReview, result.icmpSpoofing.hasError),
+            summary = buildCategorySummary(result.icmpSpoofing, snapshot.privacyMode),
         )
         appendSectionSummaryRow(
             builder,
@@ -462,6 +471,43 @@ internal object CheckResultMarkdownExportFormatter {
             return
         }
         items.forEach { item -> builder.appendLine("- $item") }
+    }
+
+    private fun appendIpChannelsSection(
+        builder: StringBuilder,
+        consensus: IpConsensusResult,
+        privacyMode: Boolean,
+    ) {
+        if (consensus.observedIps.isEmpty()) {
+            return
+        }
+        builder.appendLine("## IP каналы")
+        builder.appendLine("| Канал | Target | IP | Family | Страна | ASN | Источники |")
+        builder.appendLine("| --- | --- | --- | --- | --- | --- | --- |")
+        consensus.observedIps.forEach { ip ->
+            val channel = escapeTableCell(ip.channel.name)
+            val target = escapeTableCell(ip.targetGroup?.name ?: "-")
+            val value = escapeTableCell(maskExportIp(ip.value, privacyMode) ?: ip.value)
+            val family = escapeTableCell(ip.family.name)
+            val country = escapeTableCell(ip.countryCode ?: "-")
+            val asn = escapeTableCell(ip.asn ?: "-")
+            val sources = escapeTableCell(ip.sources.joinToString(", "))
+            builder.appendLine("| $channel | $target | $value | $family | $country | $asn | $sources |")
+        }
+        builder.appendLine()
+        val flags = buildList {
+            if (consensus.crossChannelMismatch) add("crossChannelMismatch=true")
+            if (consensus.warpLikeIndicator) add("warpLikeIndicator=true")
+            if (consensus.probeTargetDivergence) add("probeTargetDivergence=true")
+            if (consensus.probeTargetDirectDivergence) add("probeTargetDirectDivergence=true")
+            if (consensus.geoCountryMismatch) add("geoCountryMismatch=true")
+            if (consensus.channelConflict.isNotEmpty()) add("channelConflict=${consensus.channelConflict.joinToString(", ")}")
+            if (consensus.needsReview) add("needsReview=true")
+        }
+        if (flags.isNotEmpty()) {
+            builder.appendLine("Флаги: ${flags.joinToString(", ")}")
+        }
+        builder.appendLine()
     }
 
     private fun escapeTableCell(value: String): String {

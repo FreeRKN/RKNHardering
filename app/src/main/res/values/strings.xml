@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">RKNHardering</string>
     <string name="github_repo_url">https://github.com/xtclovver/RKNHardering</string>
-    <string name="run_check_notice">During a check, the app will make network requests to these domains:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ipv4-internet.yandex.net\n• ipv6-internet.yandex.net\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nIf a custom DNS resolver is selected in settings, the app will also connect to its IP addresses or DoH domain.\n\nIf CDN pulling is enabled, the app may additionally send HTTPS requests to redirector.googlevideo.com, rutracker.org, and meduza.io to see what public IP and trace data these endpoints return.\n\nIf Call transport leak probe is enabled, the app may additionally send UDP/STUN requests to bundled Telegram targets. WhatsApp targets are used only in debug or experimental builds.\n\nIf Debug diagnostics is enabled, the app can also prepare a copyable diagnostics report from the last completed scan, even when the scan finished successfully. That report is kept only in memory until you copy it. CDN pulling responses are included in that report.\n\nBy tapping "Run check", you agree that these network requests will be made from your device.\n\nThe app does not keep logs of these requests. Network access can be disabled in the app settings.</string>
+    <string name="run_check_notice">During a check, the app will make network requests to these domains:\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ipv4-internet.yandex.net\n• ipv6-internet.yandex.net\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\nIf a custom DNS resolver is selected in settings, the app will also connect to its IP addresses or DoH domain.\n\nIf CDN pulling is enabled, the app may additionally send HTTPS requests to redirector.googlevideo.com, rutracker.org, and meduza.io to see what public IP and trace data these endpoints return.\n\nIf Call transport leak probe is enabled, the app may additionally send UDP/STUN requests to bundled Telegram targets. WhatsApp targets are used only in debug or experimental builds.\n\nIf ICMP spoofing detection is enabled, the app may additionally resolve and ping instagram.com and google.com to compare blocked-host reachability and suspiciously low RTT values.\n\nIf Debug diagnostics is enabled, the app can also prepare a copyable diagnostics report from the last completed scan, even when the scan finished successfully. That report is kept only in memory until you copy it. CDN pulling responses are included in that report.\n\nBy tapping "Run check", you agree that these network requests will be made from your device.\n\nThe app does not keep logs of these requests. Network access can be disabled in the app settings.</string>
 
     <string name="settings_title">Settings</string>
     <string name="settings_section_checks">Checks</string>
@@ -49,9 +49,9 @@
     <string name="settings_port_full">Full</string>
     <string name="settings_port_custom">Custom</string>
     <string name="settings_network_requests">Network requests</string>
-    <string name="settings_network_requests_desc">GeoIP, IP comparison, CDN pulling, BeaconDB, call transport probe</string>
+    <string name="settings_network_requests_desc">GeoIP, IP comparison, CDN pulling, BeaconDB, call transport probe, ICMP spoofing</string>
     <string name="settings_network_disable_title">Disable network requests?</string>
-    <string name="settings_network_disable_message">If disabled:\n\n• GeoIP checks will not run\n• IP address comparison via external services will be disabled\n• CDN pulling checks will be disabled\n• Geolocation via BeaconDB (cell towers/Wi-Fi) will be disabled\n• Call transport leak probing will be disabled\n\nOnly local checks will remain available: direct signs, indirect signs, and port scanning</string>
+    <string name="settings_network_disable_message">If disabled:\n\n• GeoIP checks will not run\n• IP address comparison via external services will be disabled\n• CDN pulling checks will be disabled\n• Geolocation via BeaconDB (cell towers/Wi-Fi) will be disabled\n• Call transport leak probing will be disabled\n• ICMP spoofing checks will be disabled\n\nOnly local checks will remain available: direct signs, indirect signs, and port scanning</string>
     <string name="settings_cdn_pulling">CDN pulling</string>
     <string name="settings_cdn_pulling_desc">Sends HTTPS requests to Google/YouTube redirector and Cloudflare trace endpoints.</string>
     <string name="settings_cdn_pulling_warning_title">Enable CDN pulling?</string>
@@ -109,13 +109,14 @@
 
     <string name="main_subtitle">VPN/Proxy self-check</string>
     <string name="main_run_check">Run check</string>
+    <string name="main_run_check_again">Run check again</string>
     <string name="main_stop_check">Stop</string>
     <string name="main_card_geo_ip" translatable="false">GeoIP</string>
     <string name="main_card_ip_comparison">IP comparison</string>
     <string name="main_card_cdn_pulling">CDN pulling</string>
     <string name="main_card_direct_signs">Direct signs</string>
     <string name="main_card_indirect_signs">Indirect signs</string>
-    <string name="main_card_call_transport">STUN mapped IP</string>
+    <string name="main_card_call_transport">STUN servers</string>
     <string name="main_card_call_transport_status_baseline">Responded</string>
     <string name="main_card_call_transport_status_no_signal">No response</string>
     <string name="main_card_call_transport_status_needs_review">Needs review</string>
@@ -130,13 +131,29 @@
     <string name="main_card_call_transport_reason_targets_unavailable">Targets for this check are unavailable</string>
     <string name="main_card_call_transport_stun_group_global">Global STUN</string>
     <string name="main_card_call_transport_stun_group_ru">RU STUN</string>
+    <string name="ip_channels_title">IP channels</string>
+    <string name="ip_channels_channel_direct">Direct</string>
+    <string name="ip_channels_channel_vpn">VPN</string>
+    <string name="ip_channels_channel_proxy">Proxy</string>
+    <string name="ip_channels_channel_cdn">CDN</string>
+    <string name="ip_channels_target_ru">RU</string>
+    <string name="ip_channels_target_non_ru">Non-RU</string>
+    <string name="ip_channels_flag_cross_channel_mismatch">Cross-channel mismatch detected</string>
+    <string name="ip_channels_flag_warp_like_behavior">WARP-like behavior detected</string>
+    <string name="ip_channels_flag_geo_country_mismatch">Geo-country mismatch</string>
+    <string name="ip_channels_flag_probe_target_divergence">Probe-target divergence</string>
+    <string name="ip_channels_flag_probe_target_direct_divergence">Probe-target direct divergence</string>
+    <string name="ip_channels_flag_channel_conflict">Channel conflict: %1$s</string>
+    <string name="ip_channels_flag_needs_review">Needs review</string>
     <string name="main_card_call_transport_stun_responded">%1$d of %2$d responded</string>
     <string name="main_card_call_transport_stun_none_responded">No response</string>
     <string name="main_card_call_transport_stun_ipv4">IPv4</string>
     <string name="main_card_call_transport_stun_ipv6">IPv6</string>
     <string name="main_card_call_transport_stun_no_response">No response</string>
     <string name="main_card_call_transport_stun_error">Error</string>
+    <string name="main_card_icmp_spoofing">ICMP spoofing β</string>
     <string name="main_card_location_signals">Location signals</string>
+    <string name="main_card_native_signs">Native signs</string>
     <string name="main_verdict_details">Details</string>
 
     <string name="main_perm_title">Additional permission</string>
@@ -161,6 +178,7 @@
     <string name="main_loading_geo_ip">Checking country, ASN, and hosting indicators.</string>
     <string name="main_loading_ip_comparison">Comparing the public IP through multiple independent services.</string>
     <string name="main_loading_cdn_pulling">Checking what blocked or CDN-backed endpoints return about your network.</string>
+    <string name="main_loading_icmp">Resolving and pinging blocked and control hosts through the active route.</string>
     <string name="main_loading_direct">Looking for direct signs of VPNs, proxies, and installed clients.</string>
     <string name="main_loading_indirect">Checking interfaces, DNS, routes, and local technical signals.</string>
     <string name="main_loading_location">Collecting carrier, cell tower, and nearby Wi-Fi signals.</string>
@@ -264,6 +282,7 @@
     <string name="narrative_reason_direct_signs">Direct signs of a local proxy/VPN were found.</string>
     <string name="narrative_reason_indirect_signs">Indirect signs of tunneling, routing changes, or DNS replacement were found.</string>
     <string name="narrative_reason_call_transport_signal">A call transport endpoint responded and exposed mapped/public network data.</string>
+    <string name="narrative_reason_icmp_signal">ICMP reachability or RTT looked inconsistent with a normal Russian route.</string>
     <string name="narrative_reason_fallback_detected">The verdict is based on a combination of multiple check signals.</string>
     <string name="narrative_reason_fallback_review">Signals are partial or contradictory, so manual review is needed.</string>
     <string name="narrative_reason_fallback_clean">No decisive bypass signals were found.</string>
@@ -468,7 +487,7 @@
     <string name="verdict_title_idle">Check not started</string>
     <string name="verdict_subtitle_idle">Run the check to see the verdict</string>
     <string name="verdict_subtitle_running">Check in progress\u2026</string>
-    <string name="verdict_subtitle_done">Check completed \u00b7 %1$d categories</string>
+    <string name="verdict_subtitle_done">Completed \u00b7 %1$d categories</string>
     <string name="section_check_details">Check details</string>
     <string name="privacy_footer_text">Check runs locally \u00b7 16 domains</string>
     <string name="privacy_footer_action">What\u2019s this?</string>
@@ -480,4 +499,65 @@
     <string name="tile_hint_detected_count">%1$d of %2$d detected</string>
     <string name="tile_hint_review">Needs review</string>
     <string name="tile_hint_error">Error</string>
+    <string name="settings_value_on">On</string>
+    <string name="settings_value_off">Off</string>
+    <string name="settings_value_network_all">All requests</string>
+    <string name="settings_value_network_disabled">Disabled</string>
+    <string name="settings_value_privacy_masking">IP masking</string>
+    <string name="settings_value_appearance_format">%1$s \u00b7 %2$s</string>
+
+    <!-- NativeSignsChecker -->
+    <string name="checker_native_category_name">Native signs β</string>
+    <string name="checker_icmp_summary_clean">%1$s did not reply, and %2$s stayed above the RTT threshold (avg %3$s)</string>
+    <string name="checker_icmp_summary_blocked_replied">%1$s replied to ICMP even though it is expected to stay silent on a Russian route</string>
+    <string name="checker_icmp_summary_control_too_fast">%1$s replied with suspiciously low RTT (min %2$s, avg %3$s)</string>
+    <string name="checker_icmp_summary_both_suspicious">%1$s replied and %2$s was too fast (min %3$s, avg %4$s)</string>
+    <string name="checker_icmp_summary_inconclusive">ICMP check is inconclusive because %1$s did not reply</string>
+    <string name="checker_icmp_summary_unavailable">ICMP spoofing check is unavailable on this device</string>
+    <string name="checker_icmp_target_blocked">Blocked target %1$s (%2$s): %3$d/%4$d replies</string>
+    <string name="checker_icmp_target_control">Control target %1$s (%2$s): %3$d/%4$d replies, min %5$s, avg %6$s, max %7$s</string>
+    <string name="checker_icmp_evidence_both">%1$s replied and %2$s RTT stayed below the expected threshold</string>
+    <string name="checker_icmp_evidence_blocked_replied">%1$s replied over ICMP on the active route</string>
+    <string name="checker_icmp_evidence_control_too_fast">%1$s RTT stayed below the expected threshold on the active route</string>
+    <string name="checker_native_card_title">Native low-level checks β</string>
+    <string name="checker_native_unavailable">Native library not loaded; native checks are unavailable.</string>
+    <string name="checker_native_unavailable_with_reason">Native library not loaded: %1$s</string>
+    <string name="checker_native_no_anomalies">Native signals: no anomalies detected</string>
+    <string name="checker_native_interfaces_empty">getifaddrs() returned no interfaces</string>
+    <string name="checker_native_interfaces_summary">getifaddrs(): %1$d interfaces (%2$d up)</string>
+    <string name="checker_native_vpn_interface">Native VPN-like interface: %1$s (index %2$d, MTU %3$d)</string>
+    <string name="checker_native_ipsec_interface">Native IPsec-like interface: %1$s (index %2$d)</string>
+    <string name="checker_native_mismatch_missing_in_jvm">Interface %1$s: visible in native but missing in JVM</string>
+    <string name="checker_native_mismatch_missing_in_native">Interface %1$s: visible in JVM but missing in native</string>
+    <string name="checker_native_mismatch_index">Interface %1$s index mismatch: native=%2$d jvm=%3$d</string>
+    <string name="checker_native_mismatch_addresses">Interface %1$s address mismatch: native-only=%2$s, jvm-only=%3$s</string>
+    <string name="checker_native_routes_empty">/proc/net/route: unavailable</string>
+    <string name="checker_native_routes_no_default">/proc/net/route: no default route</string>
+    <string name="checker_native_route_default">Default route via %1$s</string>
+    <string name="checker_native_hooks_clean">/proc/self/maps: no known hook markers</string>
+    <string name="checker_native_hook_marker">Hook marker in /proc/self/maps: %1$s</string>
+    <string name="checker_native_rwx_regions">/proc/self/maps: %1$s large RWX regions</string>
+    <string name="checker_native_symbols_clean">Library symbols: all resolve to libc</string>
+    <string name="checker_native_symbol_missing">dlsym %1$s: missing</string>
+    <string name="checker_native_symbol_foreign_library">dlsym %1$s resolves to foreign library: %2$s</string>
+
+    <!-- NativeSignsChecker: root detection -->
+    <string name="checker_native_root_clean">Root indicators: no signs of root access detected</string>
+    <string name="checker_native_root_su_binary">su binary found: %1$s</string>
+    <string name="checker_native_root_property">Suspicious system property: %1$s</string>
+    <string name="checker_native_root_mgmt_artifact">Root management artifact: %1$s</string>
+    <string name="checker_native_root_system_rw">/system partition is writable</string>
+    <string name="checker_native_root_suspicious_mount">Suspicious mount entry: %1$s</string>
+    <string name="checker_native_root_overlay_mount">Overlay mount on system partition: %1$s</string>
+    <string name="checker_native_root_selinux_permissive">SELinux is in permissive mode</string>
+    <string name="checker_native_root_selinux_absent">SELinux enforcement status is not accessible</string>
+    <string name="checker_native_root_uid">Process is running with root UID: %1$s</string>
+    <string name="checker_native_root_magisk_prop">Magisk property detected: %1$s</string>
+
+    <!-- App update checker -->
+    <string name="update_dialog_title">Update available</string>
+    <string name="update_dialog_message">Installed version: %1$s\nLatest version: %2$s</string>
+    <string name="update_dialog_download">Download</string>
+    <string name="update_dialog_skip">Skip this version</string>
+    <string name="update_dialog_later">Later</string>
 </resources>

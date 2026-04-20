@@ -19,18 +19,26 @@ sealed interface ScanEvent {
     data object Cancelled : ScanEvent
 }
 
+data class ScanEventTimeline(
+    val scanId: Long? = null,
+    val version: Long = 0L,
+    val events: List<ScanEvent> = emptyList(),
+)
+
 class CheckViewModel(app: Application) : AndroidViewModel(app) {
     internal companion object {
         var runScanOverride: (suspend (Application, CheckSettings, ScanExecutionContext, (suspend (CheckUpdate) -> Unit)?) -> CheckResult)? = null
     }
 
-    private val _scanEvents = MutableStateFlow<List<ScanEvent>>(emptyList())
-    val scanEvents: StateFlow<List<ScanEvent>> = _scanEvents
+    private val _scanEvents = MutableStateFlow(ScanEventTimeline())
+    val scanEvents: StateFlow<ScanEventTimeline> = _scanEvents
 
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning
 
     private var scanJob: Job? = null
+    private var scanEventBuffer: MutableList<ScanEvent> = mutableListOf()
+    private var scanEventVersion = 0L
     private var nextScanId = 1L
     private var activeScanId: Long? = null
     private var activeExecutionContext: ScanExecutionContext? = null
@@ -39,13 +47,13 @@ class CheckViewModel(app: Application) : AndroidViewModel(app) {
     fun startScan(settings: CheckSettings, privacyMode: Boolean) {
         if (scanJob?.isActive == true && activeExecutionContext?.cancellationSignal?.isCancelled() == false) return
 
-        resetCompletedDiagnosticsRetention()
-        _scanEvents.value = listOf(ScanEvent.Started(settings, privacyMode))
-        _isRunning.value = true
         val scanId = nextScanId++
         val executionContext = ScanExecutionContext(scanId = scanId)
         activeScanId = scanId
         activeExecutionContext = executionContext
+        resetCompletedDiagnosticsRetention()
+        replaceScanEvents(scanId, ScanEvent.Started(settings, privacyMode))
+        _isRunning.value = true
 
         lateinit var launchedJob: Job
         launchedJob = viewModelScope.launch {
@@ -58,7 +66,7 @@ class CheckViewModel(app: Application) : AndroidViewModel(app) {
                         executionContext,
                     ) { update ->
                         if (isCurrentScan(scanId, executionContext)) {
-                            _scanEvents.value = _scanEvents.value + ScanEvent.Update(update)
+                            appendScanEvent(scanId, ScanEvent.Update(update))
                         }
                     }
                 } else {
@@ -68,16 +76,16 @@ class CheckViewModel(app: Application) : AndroidViewModel(app) {
                         executionContext = executionContext,
                     ) { update ->
                         if (isCurrentScan(scanId, executionContext)) {
-                            _scanEvents.value = _scanEvents.value + ScanEvent.Update(update)
+                            appendScanEvent(scanId, ScanEvent.Update(update))
                         }
                     }
                 }
                 if (isCurrentScan(scanId, executionContext)) {
-                    _scanEvents.value = _scanEvents.value + ScanEvent.Completed(result, privacyMode)
+                    appendScanEvent(scanId, ScanEvent.Completed(result, privacyMode))
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 if (isCurrentScan(scanId, executionContext)) {
-                    _scanEvents.value = _scanEvents.value + ScanEvent.Cancelled
+                    appendScanEvent(scanId, ScanEvent.Cancelled)
                 }
                 throw e
             } finally {
@@ -98,7 +106,7 @@ class CheckViewModel(app: Application) : AndroidViewModel(app) {
         val executionContext = activeExecutionContext ?: return
         val scanId = activeScanId
         if (scanId != null) {
-            _scanEvents.value = _scanEvents.value + ScanEvent.Cancelled
+            appendScanEvent(scanId, ScanEvent.Cancelled)
         }
         activeExecutionContext = null
         activeScanId = null
@@ -109,6 +117,25 @@ class CheckViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun isCurrentScan(scanId: Long, executionContext: ScanExecutionContext): Boolean {
         return activeScanId == scanId && activeExecutionContext === executionContext
+    }
+
+    private fun replaceScanEvents(scanId: Long, event: ScanEvent) {
+        scanEventBuffer = mutableListOf(event)
+        publishScanEvents(scanId)
+    }
+
+    private fun appendScanEvent(scanId: Long, event: ScanEvent) {
+        scanEventBuffer.add(event)
+        publishScanEvents(scanId)
+    }
+
+    private fun publishScanEvents(scanId: Long) {
+        scanEventVersion += 1
+        _scanEvents.value = ScanEventTimeline(
+            scanId = scanId,
+            version = scanEventVersion,
+            events = scanEventBuffer,
+        )
     }
 
     internal fun canRetainCompletedDiagnostics(): Boolean = !completedDiagnosticsConsumed

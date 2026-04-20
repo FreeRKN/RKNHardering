@@ -20,6 +20,19 @@ class VpnDumpsysParserTest {
     }
 
     @Test
+    fun `ignores numbered vpn management service blocks without active package`() {
+        val output = """
+            VPNs:
+              0: service=u0a123 something
+              1: state=CONNECTED
+        """.trimIndent()
+
+        val records = VpnDumpsysParser.parseVpnManagement(output)
+
+        assertTrue(records.isEmpty())
+    }
+
+    @Test
     fun `parses active vpn service record`() {
         val output = """
             ServiceRecord{12345 u0 com.v2ray.ang/com.v2ray.ang.service.VpnService}

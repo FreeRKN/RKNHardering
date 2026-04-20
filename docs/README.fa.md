@@ -18,8 +18,11 @@ VpnCheckRunner
 ├── IpComparisonChecker    — checkerهای IP برای RU/غیر RU (تشخیصی)
 ├── DirectSignsChecker     — NetworkCapabilities، system proxy، برنامه‌های VPN نصب‌شده
 ├── IndirectSignsChecker   — اینترفیس‌ها، routeها، DNS، dumpsys، proxy-tech signals
+├── CallTransportChecker   — نشست‌های STUN/MTProto (نشت‌ها و دسترسی‌پذیری)
+├── CdnPullingChecker      — درخواست‌های HTTPS به CDN/redirector
 ├── LocationSignalsChecker — MCC/SIM/cell/Wi-Fi/BeaconDB
-└── BypassChecker          — localhost proxy، Xray gRPC API، underlying-network leak
+├── BypassChecker          — localhost proxy، Xray gRPC API، underlying-network leak
+└── NativeSignsChecker     — بررسی‌های JNI (مسیرها، هوک‌ها، root)
         └── VerdictEngine  — منطق نتیجه نهایی
 ```
 
@@ -331,6 +334,27 @@ open localhost proxy به‌تنهایی bypass تأییدشده محسوب نم
 
 ---
 
+### 7. CDN Pulling (`CdnPullingChecker`)
+
+درخواست‌های HTTPS را به redirectorها و endpointهای شناخته‌شده trace (مانند Google Video, Cloudflare trace, Meduza) ارسال می‌کند تا ببیند چه IP عمومی یا متادیتا شبکه‌ای نمایش داده می‌شود. تفاوت در پاسخ‌ها می‌تواند نشان‌دهنده پروکسی یا تونل باشد.
+
+### 8. Call Transport (`CallTransportChecker`)
+
+دسترسی‌پذیری UDP/STUN را در endpointهای جهانی و منطقه‌ای بررسی می‌کند و دسترسی‌پذیری TCP MTProto را از طریق پروکسی‌های محلی آزمایش می‌کند. این می‌تواند IPهای عمومی نگاشت‌شده (mapped) یا نشت‌های شبکه‌های زیرین که تونل‌های معمولی را دور می‌زنند، آشکار کند.
+
+### 9. نشانه‌های بومی/Native (`NativeSignsChecker`)
+
+بررسی‌های JNI سطح پایین را مستقیماً از C++ انجام می‌دهد:
+- لیست کردن اینترفیس‌های بومی و بررسی‌های `getifaddrs()`
+- پردازش مستقیم `/proc/net/route`
+- اسکن کردن متنی `/proc/self/maps` برای نشانگرهای شناخته‌شده hook
+- بررسی یکپارچگی تفکیک نمادهای `libc`
+- تشخیص Root (فایل‌های باینری su، ویژگی‌های magisk، حالت selinux، دسترسی rw مسیر /system و غیره)
+
+یافته‌های سطح بومی می‌توانند به حالت‌های `needsReview` یا نشانه‌های عمومی غیرمستقیم مسیریابی ترجمه شوند.
+
+---
+
 ## نتیجه نهایی (`VerdictEngine`)
 
 `VerdictEngine` از تمام بلوک‌های جمع‌آوری‌شده به یک اندازه استفاده نمی‌کند.
@@ -362,7 +386,8 @@ open localhost proxy به‌تنهایی bypass تأییدشده محسوب نم
 نکات:
 
 - `IpComparisonChecker` فعلاً در `VerdictEngine` استفاده نمی‌شود؛
-- سیگنال‌های `INSTALLED_APP` و `VPN_SERVICE_DECLARATION` نیز وارد ماتریس نمی‌شوند و فقط نقش تشخیصی دارند.
+- سیگنال‌های `INSTALLED_APP` و `VPN_SERVICE_DECLARATION` نیز وارد ماتریس نمی‌شوند و فقط نقش تشخیصی دارند؛
+- نشت‌های عملیاتی (actionable) از `CallTransportChecker` یا یافته‌های نیازمند بررسی از `NativeSignsChecker` (مانند نشانگرهای hook) وضعیت را از `NOT_DETECTED` به `NEEDS_REVIEW` ارتقا می‌دهند.
 
 ---
 

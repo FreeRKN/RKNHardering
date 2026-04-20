@@ -18,8 +18,11 @@ VpnCheckRunner
 ├── IpComparisonChecker    — RU/非 RU IP checker（诊断）
 ├── DirectSignsChecker     — NetworkCapabilities、系统代理、已安装 VPN 应用
 ├── IndirectSignsChecker   — 接口、路由、DNS、dumpsys、proxy-tech signals
+├── CallTransportChecker   — STUN/MTProto 探测（泄漏与连通性）
+├── CdnPullingChecker      — 对 CDN/redirector 的 HTTPS 请求
 ├── LocationSignalsChecker — MCC/SIM/cell/Wi-Fi/BeaconDB
-└── BypassChecker          — localhost 代理、Xray gRPC API、underlying-network leak
+├── BypassChecker          — localhost 代理、Xray gRPC API、underlying-network leak
+└── NativeSignsChecker     — JNI 检查（路由、接口、钩子、root 等）
         └── VerdictEngine  — 最终结论逻辑
 ```
 
@@ -331,6 +334,27 @@ API：`ConnectivityManager.getLinkProperties(activeNetwork).dnsServers`
 
 ---
 
+### 7. CDN Pulling (`CdnPullingChecker`)
+
+向已知的 redirector 和 trace 端点（例如 Google Video、Cloudflare trace、Meduza）发送 HTTPS 请求，以查看暴露了什么公网 IP 或网络元数据。响应内容的不同往往能指示代理或隧道的存在。
+
+### 8. Call Transport (`CallTransportChecker`)
+
+检查全球与区域端点的 UDP/STUN 可达性，并通过本地代理测试 TCP MTProto 的连通性。该项检查能够揭示重定向的公网 IP 或是绕过常规隧道的底层网络泄漏。
+
+### 9. 原生迹象 (`NativeSignsChecker`)
+
+直接在 C++ 层执行底层 JNI 检查：
+- 枚举原生接口并检查 `getifaddrs()`
+- 直接解析 `/proc/net/route`
+- 扫描 `/proc/self/maps` 寻找已知的 hook 标记
+- 检查 `libc` 符号解析 (dlsym) 的完整性
+- 检查 Root（su 二进制文件、magisk 属性、selinux 状态、/system rw 挂载等）
+
+原生发现可被解释为 `needsReview` 或一般的间接路由迹象。
+
+---
+
 ## 结论 (`VerdictEngine`)
 
 `VerdictEngine` 并不会同等使用所有收集到的模块结果。
@@ -362,7 +386,8 @@ API：`ConnectivityManager.getLinkProperties(activeNetwork).dnsServers`
 说明：
 
 - `IpComparisonChecker` 当前不参与 `VerdictEngine`；
-- `INSTALLED_APP` 与 `VPN_SERVICE_DECLARATION` 信号也不属于该矩阵，仅用于诊断。
+- `INSTALLED_APP` 与 `VPN_SERVICE_DECLARATION` 信号也不属于该矩阵，仅用于诊断；
+- `CallTransportChecker` 中具可操作性的泄漏迹象或 `NativeSignsChecker` 中需复查的发现（例如 hook 标记）会将判定从 `NOT_DETECTED` 提升至 `NEEDS_REVIEW`。
 
 ---
 

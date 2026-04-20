@@ -31,7 +31,7 @@ object CdnPullingClient {
 
     fun fetchBody(
         endpoint: String,
-        timeoutMs: Int = 7000,
+        timeoutMs: Int = 5_000,
         resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
         binding: ResolverBinding? = null,
         addressFamily: Class<out java.net.InetAddress>? = null,

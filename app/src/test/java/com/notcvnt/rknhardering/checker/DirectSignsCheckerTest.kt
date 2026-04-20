@@ -8,8 +8,12 @@ import com.notcvnt.rknhardering.probe.PublicIpModeProbeResult
 import com.notcvnt.rknhardering.probe.PublicIpNetworkComparison
 import com.notcvnt.rknhardering.probe.PublicIpProbeMode
 import com.notcvnt.rknhardering.probe.PublicIpProbeStatus
+import com.notcvnt.rknhardering.probe.PublicIpTransportDiagnostics
 import com.notcvnt.rknhardering.probe.TunProbeDiagnostics
 import com.notcvnt.rknhardering.probe.TunProbeModeOverride
+import com.notcvnt.rknhardering.probe.TunProbeResolveStrategy
+import com.notcvnt.rknhardering.model.TargetGroup
+import com.notcvnt.rknhardering.probe.PerTargetProbe
 import com.notcvnt.rknhardering.probe.UnderlyingNetworkProber
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -187,33 +191,63 @@ class DirectSignsCheckerTest {
     }
 
     @Test
-    fun `check marks tun probe success as detected direct signal`() {
+    fun `check marks tun probe success as needs review without mismatch`() {
+        // existing setup that produces a successful TUN probe with vpnIp != null and no dnsPathMismatch
         val result = DirectSignsChecker.check(
             context = context,
             tunActiveProbeResult = UnderlyingNetworkProber.ProbeResult(
                 vpnActive = true,
                 underlyingReachable = false,
-                vpnIp = "198.51.100.10",
+                ruTarget = PerTargetProbe(targetHost = "", targetGroup = TargetGroup.RU, vpnIp = "198.51.100.10"),
                 activeNetworkIsVpn = true,
             ),
         )
 
-        assertTrue(
-            result.findings.any {
-                it.detected &&
-                    it.source == EvidenceSource.TUN_ACTIVE_PROBE &&
-                    it.description.contains("198.51.100.10")
-            },
+        assertFalse(result.detected)
+        assertTrue(result.needsReview)
+        assertTrue(result.evidence.any { it.source == EvidenceSource.TUN_ACTIVE_PROBE && !it.detected })
+    }
+
+    @Test
+    fun `check marks tun probe success as detected when dns path mismatches`() {
+        // construct probeResult where vpnIpComparison.dnsPathMismatch == true
+        val result = DirectSignsChecker.check(
+            context = context,
+            tunActiveProbeResult = UnderlyingNetworkProber.ProbeResult(
+                vpnActive = true,
+                underlyingReachable = false,
+                ruTarget = PerTargetProbe(
+                    targetHost = "",
+                    targetGroup = TargetGroup.RU,
+                    vpnIp = "198.51.100.10",
+                    comparison = PublicIpNetworkComparison(
+                        strict = PublicIpModeProbeResult(
+                            mode = PublicIpProbeMode.STRICT_SAME_PATH,
+                            status = PublicIpProbeStatus.SUCCEEDED,
+                            ip = "198.51.100.10",
+                            transportDiagnostics = PublicIpTransportDiagnostics(
+                                resolveStrategy = TunProbeResolveStrategy.KOTLIN_INJECTED,
+                            ),
+                        ),
+                        curlCompatible = PublicIpModeProbeResult(
+                            mode = PublicIpProbeMode.CURL_COMPATIBLE,
+                            status = PublicIpProbeStatus.SUCCEEDED,
+                            ip = "198.51.100.10",
+                        ),
+                        selectedMode = PublicIpProbeMode.STRICT_SAME_PATH,
+                        selectedIp = "198.51.100.10",
+                        dnsPathMismatch = true,
+                    ),
+                ),
+                activeNetworkIsVpn = true,
+            ),
         )
+
         assertTrue(result.detected)
-        assertFalse(result.needsReview)
-        assertTrue(
-            result.evidence.any {
-                it.source == EvidenceSource.TUN_ACTIVE_PROBE &&
-                    it.detected &&
-                    it.description.contains("198.51.100.10")
-            },
-        )
+        assertTrue(result.evidence.any {
+            it.source == EvidenceSource.TUN_ACTIVE_PROBE && it.detected &&
+                it.confidence == EvidenceConfidence.HIGH
+        })
     }
 
     @Test
@@ -255,14 +289,14 @@ class DirectSignsCheckerTest {
             ),
             selectedMode = PublicIpProbeMode.CURL_COMPATIBLE,
             selectedIp = "198.51.100.31",
+            dnsPathMismatch = true,
         )
         val result = DirectSignsChecker.check(
             context = context,
             tunActiveProbeResult = UnderlyingNetworkProber.ProbeResult(
                 vpnActive = true,
                 underlyingReachable = false,
-                vpnIp = "198.51.100.31",
-                vpnIpComparison = comparison,
+                ruTarget = PerTargetProbe(targetHost = "", targetGroup = TargetGroup.RU, vpnIp = "198.51.100.31", comparison = comparison),
                 activeNetworkIsVpn = true,
                 tunProbeDiagnostics = TunProbeDiagnostics(
                     enabled = true,
@@ -278,17 +312,10 @@ class DirectSignsCheckerTest {
         assertTrue(result.detected)
         assertFalse(result.needsReview)
         assertTrue(
-            result.findings.any {
+            result.evidence.any {
                 it.detected &&
                     it.source == EvidenceSource.TUN_ACTIVE_PROBE &&
                     it.confidence == EvidenceConfidence.HIGH
-            },
-        )
-        assertFalse(
-            result.findings.any {
-                it.detected &&
-                    it.source == EvidenceSource.TUN_ACTIVE_PROBE &&
-                    it.description.contains("transport-only")
             },
         )
     }
@@ -300,21 +327,25 @@ class DirectSignsCheckerTest {
             tunActiveProbeResult = UnderlyingNetworkProber.ProbeResult(
                 vpnActive = true,
                 underlyingReachable = false,
-                vpnIp = "198.51.100.30",
-                vpnIpComparison = PublicIpNetworkComparison(
-                    strict = PublicIpModeProbeResult(
-                        mode = PublicIpProbeMode.STRICT_SAME_PATH,
-                        status = PublicIpProbeStatus.FAILED,
-                        error = "strict timeout",
+                ruTarget = PerTargetProbe(
+                    targetHost = "",
+                    targetGroup = TargetGroup.RU,
+                    vpnIp = "198.51.100.30",
+                    comparison = PublicIpNetworkComparison(
+                        strict = PublicIpModeProbeResult(
+                            mode = PublicIpProbeMode.STRICT_SAME_PATH,
+                            status = PublicIpProbeStatus.FAILED,
+                            error = "strict timeout",
+                        ),
+                        curlCompatible = PublicIpModeProbeResult(
+                            mode = PublicIpProbeMode.CURL_COMPATIBLE,
+                            status = PublicIpProbeStatus.SUCCEEDED,
+                            ip = "198.51.100.30",
+                        ),
+                        selectedMode = PublicIpProbeMode.CURL_COMPATIBLE,
+                        selectedIp = "198.51.100.30",
+                        dnsPathMismatch = true,
                     ),
-                    curlCompatible = PublicIpModeProbeResult(
-                        mode = PublicIpProbeMode.CURL_COMPATIBLE,
-                        status = PublicIpProbeStatus.SUCCEEDED,
-                        ip = "198.51.100.30",
-                    ),
-                    selectedMode = PublicIpProbeMode.CURL_COMPATIBLE,
-                    selectedIp = "198.51.100.30",
-                    dnsPathMismatch = true,
                 ),
                 activeNetworkIsVpn = true,
                 tunProbeDiagnostics = TunProbeDiagnostics(
@@ -343,19 +374,18 @@ class DirectSignsCheckerTest {
         )
 
         assertTrue(result.detected)
-        assertTrue(result.needsReview)
+        assertFalse(result.needsReview)
         assertTrue(
-            result.findings.any {
+            result.evidence.any {
                 it.detected &&
-                    it.source == EvidenceSource.TUN_ACTIVE_PROBE &&
-                    it.description.contains("SO_BINDTODEVICE + system DNS")
+                    it.source == EvidenceSource.TUN_ACTIVE_PROBE
             },
         )
         assertTrue(
             result.findings.any {
-                it.needsReview &&
+                it.isInformational &&
                     it.source == EvidenceSource.TUN_ACTIVE_PROBE &&
-                    it.description.contains("strict timeout")
+                    it.description.contains("SO_BINDTODEVICE + system DNS")
             },
         )
         assertTrue(

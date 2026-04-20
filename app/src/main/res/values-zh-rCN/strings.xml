@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">RKNHardering</string>
     <string name="github_repo_url">https://github.com/xtclovver/RKNHardering</string>
-    <string name="run_check_notice">执行检查时，应用会向以下域名发起网络请求：\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ipv4-internet.yandex.net\n• ipv6-internet.yandex.net\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\n如果在设置中选择了自定义 DNS resolver，应用还会连接到其 IP 地址或 DoH 域名。\n\n如果启用了 CDN pulling，应用还会向 redirector.googlevideo.com、rutracker.org 和 meduza.io 发送 HTTPS 请求，以查看这些端点会返回什么公网 IP 和 trace 数据。\n\n如果启用了 Debug diagnostics，应用还可以基于最近一次已完成的检查生成可复制的诊断报告，即使这次检查成功完成也一样。该报告只保存在内存中，直到你复制它，并且也会包含 CDN pulling 的响应。\n\n点击“运行检查”即表示你同意这些网络请求将从你的设备发出。\n\n应用不会记录这些请求的日志。可以在应用设置中关闭网络访问。</string>
+    <string name="run_check_notice">执行检查时，应用会向以下域名发起网络请求：\n• api.beacondb.net\n• api.ipapi.is\n• www.iplocate.io\n• ip.mail.ru\n• api4.ipify.org\n• api6.ipify.org\n• 2ip.ru\n• ipv4-internet.yandex.net\n• ipv6-internet.yandex.net\n• ifconfig.me\n• ipv4.ifconfig.me\n• ipv6.ifconfig.me\n• checkip.amazonaws.com\n• api.ipify.org\n• api-ipv4.ip.sb\n• api-ipv6.ip.sb\n\n如果在设置中选择了自定义 DNS resolver，应用还会连接到其 IP 地址或 DoH 域名。\n\n如果启用了 CDN pulling，应用还会向 redirector.googlevideo.com、rutracker.org 和 meduza.io 发送 HTTPS 请求，以查看这些端点会返回什么公网 IP 和 trace 数据。\n\n如果启用了 call transport 泄露检查，应用还会向内置的 Telegram 目标发送 UDP/STUN 请求。WhatsApp 目标只会在 debug 或 experimental build 中使用。\n\n如果启用了 Debug diagnostics，应用还可以基于最近一次已完成的检查生成可复制的诊断报告，即使这次检查成功完成也一样。该报告只保存在内存中，直到你复制它，并且也会包含 CDN pulling 的响应。\n\n点击“运行检查”即表示你同意这些网络请求将从你的设备发出。\n\n应用不会记录这些请求的日志。可以在应用设置中关闭网络访问。</string>
 
     <string name="settings_title">设置</string>
     <string name="settings_section_checks">检查</string>
@@ -49,7 +49,7 @@
     <string name="settings_port_full">完整</string>
     <string name="settings_port_custom">自定义</string>
     <string name="settings_network_requests">网络请求</string>
-    <string name="settings_network_requests_desc">GeoIP、IP 比较、CDN pulling、BeaconDB</string>
+    <string name="settings_network_requests_desc">GeoIP、IP 比较、CDN pulling、BeaconDB、call transport 检查</string>
     <string name="settings_network_disable_title">要禁用网络请求吗？</string>
     <string name="settings_network_disable_message">禁用后：\n\n• GeoIP 检查将不会运行\n• 通过外部服务进行的 IP 比较将被禁用\n• CDN pulling 检查将被禁用\n• 通过 BeaconDB（基站/Wi-Fi）进行的位置判断将被禁用\n• Call transport 泄露探测将被禁用\n\n届时只保留本地检查：直接迹象、间接迹象和端口扫描</string>
     <string name="settings_network_disable_confirm">禁用</string>
@@ -109,7 +109,9 @@
 
     <string name="main_subtitle">VPN/代理自检</string>
     <string name="main_run_check">运行检查</string>
+    <string name="main_run_check_again">再次运行检查</string>
     <string name="main_stop_check">停止</string>
+    <string name="main_card_geo_ip" translatable="false">GeoIP</string>
     <string name="main_card_ip_comparison">IP 比较</string>
     <string name="main_card_cdn_pulling">CDN pulling</string>
     <string name="main_card_direct_signs">直接迹象</string>
@@ -129,13 +131,29 @@
     <string name="main_card_call_transport_reason_targets_unavailable">此检查的目标不可用</string>
     <string name="main_card_call_transport_stun_group_global">全球 STUN</string>
     <string name="main_card_call_transport_stun_group_ru">俄罗斯 STUN</string>
+    <string name="ip_channels_title">IP 通道</string>
+    <string name="ip_channels_channel_direct">直连</string>
+    <string name="ip_channels_channel_vpn">VPN</string>
+    <string name="ip_channels_channel_proxy">代理</string>
+    <string name="ip_channels_channel_cdn">CDN</string>
+    <string name="ip_channels_target_ru">RU</string>
+    <string name="ip_channels_target_non_ru">非 RU</string>
+    <string name="ip_channels_flag_cross_channel_mismatch">检测到通道间不一致</string>
+    <string name="ip_channels_flag_warp_like_behavior">检测到类似 WARP 的行为</string>
+    <string name="ip_channels_flag_geo_country_mismatch">Geo-country 不一致</string>
+    <string name="ip_channels_flag_probe_target_divergence">Probe-target 不一致</string>
+    <string name="ip_channels_flag_probe_target_direct_divergence">Direct probe-target 不一致</string>
+    <string name="ip_channels_flag_channel_conflict">通道冲突：%1$s</string>
+    <string name="ip_channels_flag_needs_review">需要复核</string>
     <string name="main_card_call_transport_stun_responded">%1$d / %2$d 已响应</string>
     <string name="main_card_call_transport_stun_none_responded">无响应</string>
     <string name="main_card_call_transport_stun_ipv4">IPv4</string>
     <string name="main_card_call_transport_stun_ipv6">IPv6</string>
     <string name="main_card_call_transport_stun_no_response">无响应</string>
     <string name="main_card_call_transport_stun_error">错误</string>
+    <string name="main_card_icmp_spoofing">ICMP 伪造 β</string>
     <string name="main_card_location_signals">位置迹象</string>
+    <string name="main_card_native_signs">原生迹象</string>
     <string name="main_verdict_details">详情</string>
 
     <string name="main_perm_title">额外权限</string>
@@ -155,10 +173,12 @@
 
     <string name="main_loading_status_scanning">扫描中</string>
     <string name="main_loading_status_checking">检查中</string>
+    <string name="main_loading_status_progress" translatable="false">%1$s%2$s</string>
 
     <string name="main_loading_geo_ip">正在检查国家、ASN 和托管迹象。</string>
     <string name="main_loading_ip_comparison">正在通过多个独立服务比较公网 IP。</string>
     <string name="main_loading_cdn_pulling">正在检查被封锁或 CDN 支持的端点会返回哪些网络数据。</string>
+    <string name="main_loading_icmp">正在通过当前活动路由解析并 ping 被封锁和对照主机。</string>
     <string name="main_loading_direct">正在查找 VPN、代理和已安装客户端的直接迹象。</string>
     <string name="main_loading_indirect">正在检查接口、DNS、路由和本地技术迹象。</string>
     <string name="main_loading_location">正在收集运营商、基站和附近 Wi-Fi 的迹象。</string>
@@ -189,6 +209,8 @@
     <string name="settings_port_range_preview_proxy_only">将扫描用于代理的 localhost 端口：%1$s（%2$s）</string>
     <string name="settings_port_range_preview_xray_only">将扫描用于 Xray API 的 localhost 端口：%1$s（%2$s）</string>
     <string name="settings_port_range_preview_disabled">本地代理和 Xray 扫描已禁用。</string>
+    <string name="settings_port_range_start_default" translatable="false">1024</string>
+    <string name="settings_port_range_end_default" translatable="false">65535</string>
     <plurals name="settings_port_word">
         <item quantity="other">%1$s 个端口</item>
     </plurals>
@@ -208,6 +230,19 @@
     <string name="narrative_explanation_exposure_local_proxy">只能看到设备上的本地 proxy/API，看不到远程节点地址。</string>
     <string name="narrative_explanation_exposure_technical">只获得了技术性网络与路由迹象，没有服务器地址。</string>
     <string name="narrative_explanation_exposure_insufficient">既未获得服务器地址，也未获得公网 IP。</string>
+    <string name="narrative_reason_icmp_signal">检测到了异常 ICMP 响应或不现实的往返时间，需要人工复核。</string>
+
+    <string name="checker_icmp_summary_clean">%1$s 未响应，且 %2$s 保持在 RTT 阈值之上（平均 %3$s）</string>
+    <string name="checker_icmp_summary_blocked_replied">%1$s 返回了 ICMP 响应，但按预期它在俄罗斯路由上应保持静默</string>
+    <string name="checker_icmp_summary_control_too_fast">%1$s 返回了可疑地偏低的 RTT（最小 %2$s，平均 %3$s）</string>
+    <string name="checker_icmp_summary_both_suspicious">%1$s 已响应，且 %2$s 过快（最小 %3$s，平均 %4$s）</string>
+    <string name="checker_icmp_summary_inconclusive">ICMP 检查结论不确定，因为 %1$s 未响应</string>
+    <string name="checker_icmp_summary_unavailable">系统 ping 不可用，或其输出无法解析。</string>
+    <string name="checker_icmp_target_blocked">被封锁目标 %1$s（%2$s）：%3$d/%4$d 次响应</string>
+    <string name="checker_icmp_target_control">对照目标 %1$s（%2$s）：%3$d/%4$d 次响应，最小 %5$s，平均 %6$s，最大 %7$s</string>
+    <string name="checker_icmp_evidence_both">%1$s 已响应，且 %2$s 的 RTT 一直低于预期阈值</string>
+    <string name="checker_icmp_evidence_blocked_replied">%1$s 在当前活动路由上通过 ICMP 返回了响应</string>
+    <string name="checker_icmp_evidence_control_too_fast">%1$s 的 RTT 在当前活动路由上一直低于预期阈值</string>
 
     <string name="narrative_meaning_detected">红色结论表示自动检查已经收集到足够的绕过迹象。</string>
     <string name="narrative_meaning_needs_review">黄色结论表示存在一些迹象，但仍需人工复核。</string>
@@ -460,4 +495,54 @@
     <string name="tile_hint_detected_count">%1$d / %2$d 已检测</string>
     <string name="tile_hint_review">需要核查</string>
     <string name="tile_hint_error">错误</string>
+    <string name="settings_value_on">开启</string>
+    <string name="settings_value_off">关闭</string>
+    <string name="settings_value_network_all">所有请求</string>
+    <string name="settings_value_network_disabled">已禁用</string>
+    <string name="settings_value_privacy_masking">IP 掩码</string>
+    <string name="settings_value_appearance_format">%1$s \u00b7 %2$s</string>
+
+    <!-- NativeSignsChecker -->
+    <string name="checker_native_category_name">原生检查 β</string>
+    <string name="checker_native_card_title">原生底层检查 β</string>
+    <string name="checker_native_unavailable">原生库未加载；无法执行原生检查。</string>
+    <string name="checker_native_unavailable_with_reason">原生库未加载：%1$s</string>
+    <string name="checker_native_no_anomalies">原生信号：未检测到异常</string>
+    <string name="checker_native_interfaces_empty">getifaddrs() 未返回任何接口</string>
+    <string name="checker_native_interfaces_summary">getifaddrs()：%1$d 个接口（%2$d 活动）</string>
+    <string name="checker_native_vpn_interface">原生 VPN 接口：%1$s（索引 %2$d，MTU %3$d）</string>
+    <string name="checker_native_ipsec_interface">原生 IPsec 接口：%1$s（索引 %2$d）</string>
+    <string name="checker_native_mismatch_missing_in_jvm">接口 %1$s：原生可见但 JVM 不可见</string>
+    <string name="checker_native_mismatch_missing_in_native">接口 %1$s：JVM 可见但原生不可见</string>
+    <string name="checker_native_mismatch_index">接口 %1$s 索引不一致：native=%2$d jvm=%3$d</string>
+    <string name="checker_native_mismatch_addresses">接口 %1$s 地址不一致：native-only=%2$s，jvm-only=%3$s</string>
+    <string name="checker_native_routes_empty">/proc/net/route：不可用</string>
+    <string name="checker_native_routes_no_default">/proc/net/route：没有默认路由</string>
+    <string name="checker_native_route_default">默认路由经 %1$s</string>
+    <string name="checker_native_hooks_clean">/proc/self/maps：未发现已知 hook 标记</string>
+    <string name="checker_native_hook_marker">/proc/self/maps 中的 hook 标记：%1$s</string>
+    <string name="checker_native_rwx_regions">/proc/self/maps：大型 RWX 区域 %1$s 个</string>
+    <string name="checker_native_symbols_clean">libc 符号解析正常</string>
+    <string name="checker_native_symbol_missing">dlsym %1$s：未找到</string>
+    <string name="checker_native_symbol_foreign_library">dlsym %1$s 指向外部库：%2$s</string>
+
+    <!-- NativeSignsChecker: root detection -->
+    <string name="checker_native_root_clean">Root 指标：未检测到 root 访问迹象</string>
+    <string name="checker_native_root_su_binary">发现 su 二进制文件：%1$s</string>
+    <string name="checker_native_root_property">可疑系统属性：%1$s</string>
+    <string name="checker_native_root_mgmt_artifact">Root 管理工具文件：%1$s</string>
+    <string name="checker_native_root_system_rw">/system 分区可写</string>
+    <string name="checker_native_root_suspicious_mount">可疑挂载项：%1$s</string>
+    <string name="checker_native_root_overlay_mount">系统分区上的 overlay 挂载：%1$s</string>
+    <string name="checker_native_root_selinux_permissive">SELinux 处于 permissive 模式</string>
+    <string name="checker_native_root_selinux_absent">SELinux 强制执行状态不可访问</string>
+    <string name="checker_native_root_uid">进程以 root UID 运行：%1$s</string>
+    <string name="checker_native_root_magisk_prop">检测到 Magisk 属性：%1$s</string>
+
+    <!-- App update checker -->
+    <string name="update_dialog_title">有更新可用</string>
+    <string name="update_dialog_message">已安装版本：%1$s\n最新版本：%2$s</string>
+    <string name="update_dialog_download">下载</string>
+    <string name="update_dialog_skip">跳过此版本</string>
+    <string name="update_dialog_later">稍后</string>
 </resources>

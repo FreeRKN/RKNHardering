@@ -3,6 +3,7 @@ package com.notcvnt.rknhardering.probe
 import com.notcvnt.rknhardering.ScanExecutionContext
 import com.notcvnt.rknhardering.network.DnsResolverConfig
 import com.notcvnt.rknhardering.network.ResolverBinding
+import com.notcvnt.rknhardering.network.ResolverNetworkStack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -13,6 +14,7 @@ object IfconfigClient {
     private const val CURL_COMPATIBLE_UNAVAILABLE_MESSAGE =
         "OS device bind fallback is unavailable because interfaceName is missing"
     private const val DISABLED_BY_OVERRIDE_MESSAGE = "Disabled by override"
+    private const val DEFAULT_HTTP_TIMEOUT_MS = 5_000
 
     private val ENDPOINTS = listOf(
         IpEndpointSpec("https://ifconfig.me/ip", IpEndpointFamilyHint.IPV4),
@@ -23,19 +25,25 @@ object IfconfigClient {
     )
 
     suspend fun fetchDirectIp(
-        timeoutMs: Int = 7000,
+        timeoutMs: Int = DEFAULT_HTTP_TIMEOUT_MS,
         resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
+        okHttpRetryCount: Int = ResolverNetworkStack.OKHTTP_RETRY_COUNT,
+        nativeCurlRetryCount: Int = ResolverNetworkStack.NATIVE_CURL_RETRY_COUNT,
         executionContext: ScanExecutionContext = ScanExecutionContext.currentOrDefault(),
     ): Result<String> = fetchIpWithFallback(
         timeoutMs = timeoutMs,
         resolverConfig = resolverConfig,
+        okHttpRetryCount = okHttpRetryCount,
+        nativeCurlRetryCount = nativeCurlRetryCount,
         executionContext = executionContext,
     )
 
     suspend fun fetchIpViaProxy(
         endpoint: ProxyEndpoint,
-        timeoutMs: Int = 7000,
+        timeoutMs: Int = DEFAULT_HTTP_TIMEOUT_MS,
         resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
+        okHttpRetryCount: Int = ResolverNetworkStack.OKHTTP_RETRY_COUNT,
+        nativeCurlRetryCount: Int = ResolverNetworkStack.NATIVE_CURL_RETRY_COUNT,
         executionContext: ScanExecutionContext = ScanExecutionContext.currentOrDefault(),
     ): Result<String> = fetchIpWithFallback(
         timeoutMs = timeoutMs,
@@ -47,15 +55,19 @@ object IfconfigClient {
             },
             InetSocketAddress(endpoint.host, endpoint.port),
         ),
+        okHttpRetryCount = okHttpRetryCount,
+        nativeCurlRetryCount = nativeCurlRetryCount,
         executionContext = executionContext,
     )
 
     suspend fun fetchIpViaNetwork(
         primaryBinding: ResolverBinding.AndroidNetworkBinding,
         fallbackBinding: ResolverBinding.OsDeviceBinding? = null,
-        timeoutMs: Int = 7000,
+        timeoutMs: Int = DEFAULT_HTTP_TIMEOUT_MS,
         resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
         modeOverride: TunProbeModeOverride = TunProbeModeOverride.AUTO,
+        okHttpRetryCount: Int = ResolverNetworkStack.OKHTTP_RETRY_COUNT,
+        nativeCurlRetryCount: Int = ResolverNetworkStack.NATIVE_CURL_RETRY_COUNT,
         executionContext: ScanExecutionContext = ScanExecutionContext.currentOrDefault(),
     ): Result<String> = fetchIpViaNetworkComparison(
         primaryBinding = primaryBinding,
@@ -63,18 +75,28 @@ object IfconfigClient {
         timeoutMs = timeoutMs,
         resolverConfig = resolverConfig,
         modeOverride = modeOverride,
+        okHttpRetryCount = okHttpRetryCount,
+        nativeCurlRetryCount = nativeCurlRetryCount,
         executionContext = executionContext,
     ).asResult()
 
     suspend fun fetchIpViaNetworkComparison(
         primaryBinding: ResolverBinding.AndroidNetworkBinding,
         fallbackBinding: ResolverBinding.OsDeviceBinding? = null,
-        timeoutMs: Int = 7000,
+        timeoutMs: Int = DEFAULT_HTTP_TIMEOUT_MS,
         resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
         modeOverride: TunProbeModeOverride = TunProbeModeOverride.AUTO,
         collectTrace: Boolean = false,
+        targetHost: String? = null,
+        okHttpRetryCount: Int = ResolverNetworkStack.OKHTTP_RETRY_COUNT,
+        nativeCurlRetryCount: Int = ResolverNetworkStack.NATIVE_CURL_RETRY_COUNT,
         executionContext: ScanExecutionContext = ScanExecutionContext.currentOrDefault(),
     ): PublicIpNetworkComparison = withContext(Dispatchers.IO) {
+        val endpoints = if (targetHost != null) {
+            listOf(IpEndpointSpec("https://$targetHost", IpEndpointFamilyHint.IPV4))
+        } else {
+            ENDPOINTS
+        }
         val strict = if (modeOverride == TunProbeModeOverride.CURL_COMPATIBLE) {
             PublicIpModeProbeResult(
                 mode = PublicIpProbeMode.STRICT_SAME_PATH,
@@ -88,6 +110,9 @@ object IfconfigClient {
                 resolverConfig = resolverConfig,
                 binding = primaryBinding,
                 collectTrace = collectTrace,
+                endpoints = endpoints,
+                okHttpRetryCount = okHttpRetryCount,
+                nativeCurlRetryCount = nativeCurlRetryCount,
                 executionContext = executionContext,
             )
         }
@@ -103,6 +128,9 @@ object IfconfigClient {
                 resolverConfig = resolverConfig,
                 binding = fallbackBinding,
                 collectTrace = collectTrace,
+                endpoints = endpoints,
+                okHttpRetryCount = okHttpRetryCount,
+                nativeCurlRetryCount = nativeCurlRetryCount,
                 executionContext = executionContext,
             )
             else -> PublicIpModeProbeResult(
@@ -161,6 +189,8 @@ object IfconfigClient {
         proxy: Proxy? = null,
         binding: ResolverBinding? = null,
         fallbackBinding: ResolverBinding.OsDeviceBinding? = null,
+        okHttpRetryCount: Int,
+        nativeCurlRetryCount: Int,
         executionContext: ScanExecutionContext = ScanExecutionContext.currentOrDefault(),
     ): Result<String> = withContext(Dispatchers.IO) {
         executionContext.throwIfCancelled()
@@ -169,6 +199,8 @@ object IfconfigClient {
             resolverConfig = resolverConfig,
             proxy = proxy,
             binding = binding,
+            okHttpRetryCount = okHttpRetryCount,
+            nativeCurlRetryCount = nativeCurlRetryCount,
             executionContext = executionContext,
         )
 
@@ -181,6 +213,8 @@ object IfconfigClient {
             resolverConfig = resolverConfig,
             proxy = proxy,
             binding = fallbackBinding,
+            okHttpRetryCount = okHttpRetryCount,
+            nativeCurlRetryCount = nativeCurlRetryCount,
             executionContext = executionContext,
         )
 
@@ -215,9 +249,12 @@ object IfconfigClient {
         resolverConfig: DnsResolverConfig,
         proxy: Proxy? = null,
         binding: ResolverBinding? = null,
+        endpoints: List<IpEndpointSpec> = ENDPOINTS,
         onEndpointResult: ((IpEndpointSpec, Result<String>) -> Unit)? = null,
+        okHttpRetryCount: Int,
+        nativeCurlRetryCount: Int,
         executionContext: ScanExecutionContext = ScanExecutionContext.currentOrDefault(),
-    ): Result<String> = fetchFirstSuccessfulIp(ENDPOINTS) { endpoint ->
+    ): Result<String> = fetchFirstSuccessfulIp(endpoints) { endpoint ->
         executionContext.throwIfCancelled()
         val result = PublicIpClient.fetchIp(
             endpoint = endpoint.url,
@@ -226,6 +263,8 @@ object IfconfigClient {
             resolverConfig = resolverConfig,
             binding = binding,
             addressFamily = addressFamilyFor(endpoint.familyHint),
+            okHttpRetryCount = okHttpRetryCount,
+            nativeCurlRetryCount = nativeCurlRetryCount,
             executionContext = executionContext,
         )
         onEndpointResult?.invoke(endpoint, result)
@@ -246,12 +285,15 @@ object IfconfigClient {
         resolverConfig: DnsResolverConfig,
         binding: ResolverBinding,
         collectTrace: Boolean = false,
+        endpoints: List<IpEndpointSpec> = ENDPOINTS,
+        okHttpRetryCount: Int,
+        nativeCurlRetryCount: Int,
         executionContext: ScanExecutionContext = ScanExecutionContext.currentOrDefault(),
     ): PublicIpModeProbeResult {
         if (mode == PublicIpProbeMode.CURL_COMPATIBLE && binding is ResolverBinding.OsDeviceBinding) {
             return NativeCurlTransportProbe.fetchModeProbeResult(
                 mode = mode,
-                endpoints = ENDPOINTS,
+                endpoints = endpoints,
                 timeoutMs = timeoutMs,
                 resolverConfig = resolverConfig,
                 binding = binding,
@@ -264,6 +306,9 @@ object IfconfigClient {
             timeoutMs = timeoutMs,
             resolverConfig = resolverConfig,
             binding = binding,
+            endpoints = endpoints,
+            okHttpRetryCount = okHttpRetryCount,
+            nativeCurlRetryCount = nativeCurlRetryCount,
             executionContext = executionContext,
             onEndpointResult = endpointAttempts?.let { attempts ->
                 { endpoint, endpointResult ->

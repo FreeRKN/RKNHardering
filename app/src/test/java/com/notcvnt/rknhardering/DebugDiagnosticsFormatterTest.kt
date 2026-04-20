@@ -1,6 +1,11 @@
 package com.notcvnt.rknhardering
 
+import com.notcvnt.rknhardering.checker.CallTransportPerformanceDiagnostics
 import com.notcvnt.rknhardering.checker.CheckSettings
+import com.notcvnt.rknhardering.checker.DebugStepTiming
+import com.notcvnt.rknhardering.checker.IndirectCheckPerformanceDiagnostics
+import com.notcvnt.rknhardering.checker.IndirectCheckPerformanceRegistry
+import com.notcvnt.rknhardering.checker.StunScopeTiming
 import com.notcvnt.rknhardering.model.ActiveVpnApp
 import com.notcvnt.rknhardering.model.BypassResult
 import com.notcvnt.rknhardering.model.CallTransportLeakResult
@@ -29,6 +34,7 @@ import com.notcvnt.rknhardering.model.Verdict
 import com.notcvnt.rknhardering.model.VpnAppKind
 import com.notcvnt.rknhardering.network.DnsResolverConfig
 import com.notcvnt.rknhardering.network.DnsResolverMode
+import com.notcvnt.rknhardering.model.StunScope
 import com.notcvnt.rknhardering.probe.ProxyEndpoint
 import com.notcvnt.rknhardering.probe.ProxyType
 import com.notcvnt.rknhardering.probe.XrayApiEndpoint
@@ -123,6 +129,7 @@ class DebugDiagnosticsFormatterTest {
 
         assertTrue(report.contains("debugDiagnosticsEnabled: true"))
         assertTrue(report.contains("[geoIp]"))
+        assertTrue(report.contains("[icmpSpoofing]"))
         assertTrue(report.contains("[bypass]"))
         assertTrue(report.contains("[tunProbe]"))
         assertTrue(report.contains("collected: false"))
@@ -436,5 +443,100 @@ class DebugDiagnosticsFormatterTest {
         assertFalse(report.contains("198.51.100.7"))
         assertFalse(report.contains("secret-uuid"))
         assertFalse(report.contains("secret-public-key"))
+    }
+
+    @Test
+    fun `formatter prints indirect performance diagnostics`() {
+        val indirect = CategoryResult(
+            name = "Indirect",
+            detected = false,
+            findings = listOf(Finding("No indirect signs")),
+        )
+        val result = CheckResult(
+            geoIp = CategoryResult(name = "GeoIP", detected = false, findings = emptyList()),
+            ipComparison = IpComparisonResult(
+                detected = false,
+                summary = "",
+                ruGroup = IpCheckerGroupResult(
+                    title = "RU",
+                    detected = false,
+                    statusLabel = "",
+                    summary = "",
+                    responses = emptyList(),
+                ),
+                nonRuGroup = IpCheckerGroupResult(
+                    title = "NON_RU",
+                    detected = false,
+                    statusLabel = "",
+                    summary = "",
+                    responses = emptyList(),
+                ),
+            ),
+            directSigns = CategoryResult(name = "Direct", detected = false, findings = emptyList()),
+            indirectSigns = indirect,
+            locationSignals = CategoryResult(name = "Location", detected = false, findings = emptyList()),
+            bypassResult = BypassResult(
+                proxyEndpoint = null,
+                directIp = null,
+                proxyIp = null,
+                xrayApiScanResult = null,
+                findings = emptyList(),
+                detected = false,
+            ),
+            verdict = Verdict.NOT_DETECTED,
+        )
+        IndirectCheckPerformanceRegistry.attach(
+            category = indirect,
+            diagnostics = IndirectCheckPerformanceDiagnostics(
+                totalDurationMs = 34_500L,
+                steps = listOf(
+                    DebugStepTiming(name = "collectNetworkSnapshots", durationMs = 50L),
+                    DebugStepTiming(name = "checkCallTransportSignals", durationMs = 31_000L),
+                    DebugStepTiming(name = "checkDumpsysVpn", durationMs = 1_200L),
+                    DebugStepTiming(name = "checkDumpsysVpnService", durationMs = 800L),
+                ),
+                callTransport = CallTransportPerformanceDiagnostics(
+                    totalDurationMs = 31_000L,
+                    steps = listOf(
+                        DebugStepTiming(name = "probeDirect", durationMs = 500L),
+                        DebugStepTiming(name = "findLocalProxyEndpoint", durationMs = 500L),
+                        DebugStepTiming(name = "probeProxyAssistedTelegram", durationMs = 0L, skipped = true),
+                        DebugStepTiming(name = "probeStunTargets", durationMs = 30_000L),
+                    ),
+                    stunScopeTimings = listOf(
+                        StunScopeTiming(
+                            scope = StunScope.GLOBAL,
+                            durationMs = 28_000L,
+                            targetCount = 20,
+                            respondedCount = 2,
+                            noResponseCount = 18,
+                        ),
+                        StunScopeTiming(
+                            scope = StunScope.RU,
+                            durationMs = 2_000L,
+                            targetCount = 2,
+                            respondedCount = 0,
+                            noResponseCount = 2,
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val report = DebugDiagnosticsFormatter.format(
+            result = result,
+            settings = CheckSettings(tunProbeDebugEnabled = true, callTransportProbeEnabled = true),
+            privacyMode = false,
+            timestampMillis = 0L,
+            appVersionName = "1.0",
+            buildType = "debug",
+        )
+
+        assertTrue(report.contains("[indirectSigns.performance]"))
+        assertTrue(report.contains("dominantDelay: STUN sweep"))
+        assertTrue(report.contains("callTransport.totalStunTargets: 22"))
+        assertTrue(report.contains("callTransport.respondedStunTargets: 2"))
+        assertTrue(report.contains("scope=GLOBAL"))
+        assertTrue(report.contains("name=probeStunTargets durationMs=30000 skipped=false"))
     }
 }

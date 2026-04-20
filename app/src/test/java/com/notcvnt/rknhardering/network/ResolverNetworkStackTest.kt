@@ -194,6 +194,8 @@ class ResolverNetworkStackTest {
                         proxy = null,
                         binding = null,
                         addressFamily = null,
+                        okHttpRetryCount = ResolverNetworkStack.OKHTTP_RETRY_COUNT,
+                        nativeCurlRetryCount = ResolverNetworkStack.NATIVE_CURL_RETRY_COUNT,
                         cancellationSignal = cancellationSignal,
                     ),
                     executionContext = executionContext,

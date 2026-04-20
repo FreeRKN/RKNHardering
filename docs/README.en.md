@@ -18,8 +18,11 @@ VpnCheckRunner
 ├── IpComparisonChecker    — RU/non-RU IP checkers (diagnostics)
 ├── DirectSignsChecker     — NetworkCapabilities, system proxy, installed VPN apps
 ├── IndirectSignsChecker   — interfaces, routes, DNS, dumpsys, proxy-tech signals
+├── CallTransportChecker   — STUN/MTProto (leaks and connectivity)
+├── CdnPullingChecker      — HTTPS requests to CDN/redirector
 ├── LocationSignalsChecker — MCC/SIM/cell/Wi-Fi/BeaconDB
-└── BypassChecker          — localhost proxy, Xray gRPC API, underlying-network leak
+├── BypassChecker          — localhost proxy, Xray gRPC API, underlying-network leak
+└── NativeSignsChecker     — JNI checks (routes, hooks, root)
         └── VerdictEngine  — final verdict logic
 ```
 
@@ -331,6 +334,27 @@ Final category result:
 
 ---
 
+### 7. CDN Pulling (`CdnPullingChecker`)
+
+Sends HTTPS requests to known redirectors and trace endpoints (e.g., Google Video, Cloudflare trace, Meduza) to see what public IP or network metadata is exposed.
+
+### 8. Call Transport (`CallTransportChecker`)
+
+Checks UDP/STUN accessibility across global and regional endpoints, and tests TCP MTProto reachability via local proxies. This can reveal mapped public IPs or underlying leaks that bypass conventional tunnels.
+
+### 9. Native Signs (`NativeSignsChecker`)
+
+Performs low-level JNI checks directly from C++:
+- Native interface listing and `getifaddrs()` checks
+- Direct `/proc/net/route` parsing
+- `/proc/self/maps` scanning for known hook markers
+- `libc` symbol resolution integrity
+- Root detection (su binaries, magisk properties, selinux, rw /system, etc.)
+
+Native findings can translate into `needsReview` or generic indirect routing signals.
+
+---
+
 ## Verdict (`VerdictEngine`)
 
 `VerdictEngine` does not use all collected blocks equally.
@@ -362,7 +386,8 @@ Combinations:
 Notes:
 
 - `IpComparisonChecker` currently does not participate in `VerdictEngine`;
-- `INSTALLED_APP` and `VPN_SERVICE_DECLARATION` signals are also not part of the matrix and remain diagnostic.
+- `INSTALLED_APP` and `VPN_SERVICE_DECLARATION` signals are also not part of the matrix and remain diagnostic;
+- Actionable leaks from `CallTransportChecker` or review hits from `NativeSignsChecker` (e.g., hook markers) upgrade `NOT_DETECTED` to `NEEDS_REVIEW`.
 
 ---
 

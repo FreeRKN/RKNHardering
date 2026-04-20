@@ -145,6 +145,36 @@ class CallTransportCheckerTest {
     }
 
     @Test
+    fun `probeDirect keeps needs review signal for vpn protected active path`() {
+        CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
+            loadCatalog = { catalogWithStunTarget() },
+            loadPaths = {
+                listOf(
+                    CallTransportChecker.PathDescriptor(
+                        path = CallTransportNetworkPath.ACTIVE,
+                        vpnProtected = true,
+                    ),
+                )
+            },
+            stunDualStackProbe = { _, _, _ -> successDualStackResult() },
+            publicIpFetcher = { _, _ -> Result.success("203.0.113.10") },
+        )
+
+        val results = kotlinx.coroutines.runBlocking {
+            CallTransportChecker.probeDirect(
+                context = context,
+                resolverConfig = DnsResolverConfig.system(),
+            )
+        }
+
+        val directResult = results.single { it.probeKind == CallTransportProbeKind.DIRECT_UDP_STUN }
+        assertEquals(CallTransportStatus.NEEDS_REVIEW, directResult.status)
+        assertEquals(CallTransportNetworkPath.ACTIVE, directResult.networkPath)
+        assertEquals("198.51.100.20", directResult.mappedIp)
+        assertEquals("203.0.113.10", directResult.observedPublicIp)
+    }
+
+    @Test
     fun `reusable udp relay candidates are derived from the same proxy owner`() {
         val owner = LocalProxyOwner(
             uid = 10123,

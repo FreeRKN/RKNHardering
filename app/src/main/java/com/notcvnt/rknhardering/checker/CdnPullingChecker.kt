@@ -64,7 +64,7 @@ object CdnPullingChecker {
 
     suspend fun check(
         context: Context,
-        timeoutMs: Int = 7000,
+        timeoutMs: Int = 5_000,
         resolverConfig: DnsResolverConfig = DnsResolverConfig.system(),
         meduzaEnabled: Boolean = true,
     ): CdnPullingResult = withContext(Dispatchers.IO) {

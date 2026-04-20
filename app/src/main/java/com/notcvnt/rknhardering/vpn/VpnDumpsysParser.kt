@@ -32,14 +32,6 @@ object VpnDumpsysParser {
                         rawLine = trimmed,
                     ),
                 )
-            } else if (trimmed.matches(Regex("^\\d+:.*"))) {
-                records.add(
-                    ParsedActiveVpnRecord(
-                        packageName = null,
-                        serviceName = null,
-                        rawLine = trimmed,
-                    ),
-                )
             }
         }
 

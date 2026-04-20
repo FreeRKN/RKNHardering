@@ -1176,6 +1176,9 @@ class MainActivity : AppCompatActivity() {
                 updateTileFromBypass(update.result)
                 if (animate) animateContentReveal(findingsBypass)
             }
+            is CheckUpdate.IpConsensusReady -> {
+                Unit
+            }
             is CheckUpdate.VerdictReady -> {
                 Unit
             }

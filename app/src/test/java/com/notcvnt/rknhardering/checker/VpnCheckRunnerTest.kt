@@ -30,6 +30,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.CancellationException
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -390,6 +391,45 @@ class VpnCheckRunnerTest {
         val error = worker.await()
         assertTrue(error is CancellationException)
         assertTrue(updates.isEmpty())
+    }
+
+    @Test
+    fun `run survives geoIpCheck throwing and produces partial result`() = runBlocking {
+        VpnCheckRunner.dependenciesOverride = VpnCheckRunner.Dependencies(
+            geoIpCheck = { _, _ -> throw java.io.IOException("boom") },
+        )
+        try {
+            val result = VpnCheckRunner.run(context, settings = CheckSettings(networkRequestsEnabled = true))
+            assertNotNull(result)
+            assertTrue(result.geoIp.hasError)
+        } finally {
+            VpnCheckRunner.dependenciesOverride = null
+        }
+    }
+
+    @Test
+    fun `run propagates cancellation from geoIpCheck`(): Unit = runBlocking {
+        VpnCheckRunner.dependenciesOverride = VpnCheckRunner.Dependencies(
+            geoIpCheck = { _, _ -> throw kotlinx.coroutines.CancellationException("stop") },
+        )
+        try {
+            var threw = false
+            try {
+                VpnCheckRunner.run(context)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                threw = true
+            }
+            assertTrue("expected CancellationException", threw)
+        } finally {
+            VpnCheckRunner.dependenciesOverride = null
+        }
+    }
+
+    @Test
+    fun `run forwards ipConsensus into check result`() = runBlocking {
+        // default dependencies + empty settings should still produce an ipConsensus (even if empty)
+        val result = VpnCheckRunner.run(context, settings = CheckSettings(networkRequestsEnabled = false))
+        assertNotNull(result.ipConsensus)
     }
 
     private fun category(

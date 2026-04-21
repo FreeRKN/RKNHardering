@@ -19,6 +19,7 @@ import com.notcvnt.rknhardering.probe.ProxyType
 import com.notcvnt.rknhardering.probe.PublicIpClient
 import com.notcvnt.rknhardering.probe.Socks5UdpAssociateClient
 import com.notcvnt.rknhardering.probe.StunBindingClient
+import kotlinx.coroutines.delay
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,6 +28,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import kotlin.system.measureTimeMillis
 @RunWith(RobolectricTestRunner::class)
 class CallTransportCheckerTest {
 
@@ -50,6 +52,9 @@ class CallTransportCheckerTest {
                     targetPort = 443,
                     observedPublicIp = "203.0.113.10",
                 )
+            },
+            proxyUdpStunProbe = { _, _, _, _ ->
+                Result.failure(IllegalStateException("UDP STUN is not part of this scenario"))
             },
         )
 
@@ -145,6 +150,52 @@ class CallTransportCheckerTest {
     }
 
     @Test
+    fun `check runs direct and proxy assisted probes in parallel`() {
+        CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
+            loadCatalog = { catalogWithStunTarget() },
+            loadPaths = {
+                listOf(
+                    CallTransportChecker.PathDescriptor(
+                        path = CallTransportNetworkPath.ACTIVE,
+                        vpnProtected = true,
+                    ),
+                )
+            },
+            findLocalProxyEndpoint = {
+                ProxyEndpoint(host = "127.0.0.1", port = 1080, type = ProxyType.SOCKS5)
+            },
+            stunDualStackProbe = { _, _, _ ->
+                Thread.sleep(500)
+                successDualStackResult()
+            },
+            publicIpFetcher = { _, _ -> Result.success("203.0.113.10") },
+            proxyProbe = {
+                delay(500)
+                CallTransportChecker.ProxyProbeOutcome(reachable = false)
+            },
+            proxyUdpStunProbe = { _, _, _, _ ->
+                delay(500)
+                successBindingResult()
+            },
+        )
+
+        val elapsedMs = measureTimeMillis {
+            val evaluation = kotlinx.coroutines.runBlocking {
+                CallTransportChecker.check(
+                    context = context,
+                    resolverConfig = DnsResolverConfig.system(),
+                    callTransportEnabled = true,
+                )
+            }
+
+            assertTrue(evaluation.results.any { it.probeKind == CallTransportProbeKind.DIRECT_UDP_STUN })
+            assertTrue(evaluation.results.any { it.probeKind == CallTransportProbeKind.PROXY_ASSISTED_UDP_STUN })
+        }
+
+        assertTrue("Expected direct and proxy probes to overlap, but took ${elapsedMs}ms", elapsedMs < 1300)
+    }
+
+    @Test
     fun `probeDirect keeps needs review signal for vpn protected active path`() {
         CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
             loadCatalog = { catalogWithStunTarget() },
@@ -172,6 +223,110 @@ class CallTransportCheckerTest {
         assertEquals(CallTransportNetworkPath.ACTIVE, directResult.networkPath)
         assertEquals("198.51.100.20", directResult.mappedIp)
         assertEquals("203.0.113.10", directResult.observedPublicIp)
+    }
+
+    @Test
+    fun `probeDirect reuses active stun sweep results`() {
+        CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
+            loadCatalog = {
+                CallTransportTargetCatalog.Catalog(
+                    stunTargets = listOf(
+                        CallTransportTargetCatalog.StunTarget(
+                            host = "stun.l.google.com",
+                            port = 19302,
+                            scope = StunScope.GLOBAL,
+                            enabled = true,
+                        ),
+                    ),
+                )
+            },
+            loadPaths = {
+                listOf(
+                    CallTransportChecker.PathDescriptor(
+                        path = CallTransportNetworkPath.ACTIVE,
+                        vpnProtected = true,
+                    ),
+                )
+            },
+            stunDualStackProbe = { _, _, _ ->
+                error("active path STUN probe should be reused from sweep")
+            },
+            publicIpFetcher = { _, _ -> Result.success("203.0.113.10") },
+        )
+
+        val results = kotlinx.coroutines.runBlocking {
+            CallTransportChecker.probeDirect(
+                context = context,
+                resolverConfig = DnsResolverConfig.system(),
+                activeStunGroupsProvider = {
+                    listOf(
+                        com.notcvnt.rknhardering.model.StunProbeGroupResult(
+                            scope = StunScope.GLOBAL,
+                            results = listOf(
+                                com.notcvnt.rknhardering.model.StunProbeResult(
+                                    host = "stun.l.google.com",
+                                    port = 19302,
+                                    scope = StunScope.GLOBAL,
+                                    mappedIpv4 = "198.51.100.20",
+                                ),
+                            ),
+                        ),
+                    )
+                },
+            )
+        }
+
+        val directResult = results.single { it.probeKind == CallTransportProbeKind.DIRECT_UDP_STUN }
+        assertEquals("stun.l.google.com", directResult.targetHost)
+        assertEquals("198.51.100.20", directResult.mappedIp)
+        assertEquals(CallTransportStatus.NEEDS_REVIEW, directResult.status)
+    }
+
+    @Test
+    fun `probeDirect prefers priority stun targets before fallback`() {
+        val attemptedHosts = mutableListOf<String>()
+        CallTransportChecker.dependenciesOverride = CallTransportChecker.Dependencies(
+            loadCatalog = {
+                CallTransportTargetCatalog.Catalog(
+                    stunTargets = listOf(
+                        CallTransportTargetCatalog.StunTarget(
+                            host = "stun.ekiga.net",
+                            port = 3478,
+                            scope = StunScope.GLOBAL,
+                            enabled = true,
+                        ),
+                        CallTransportTargetCatalog.StunTarget(
+                            host = "stun.l.google.com",
+                            port = 19302,
+                            scope = StunScope.GLOBAL,
+                            enabled = true,
+                        ),
+                    ),
+                )
+            },
+            loadPaths = {
+                listOf(
+                    CallTransportChecker.PathDescriptor(
+                        path = CallTransportNetworkPath.UNDERLYING,
+                        vpnProtected = false,
+                    ),
+                )
+            },
+            stunDualStackProbe = { target, _, _ ->
+                attemptedHosts += target.host
+                when (target.host) {
+                    "stun.l.google.com" -> successDualStackResult()
+                    else -> error("low priority target should not be probed before successful priority target")
+                }
+            },
+            publicIpFetcher = { _, _ -> Result.success("203.0.113.10") },
+        )
+
+        val results = runBlockingProbeDirect()
+
+        val directResult = results.single()
+        assertEquals("stun.l.google.com", directResult.targetHost)
+        assertEquals(listOf("stun.l.google.com"), attemptedHosts)
     }
 
     @Test

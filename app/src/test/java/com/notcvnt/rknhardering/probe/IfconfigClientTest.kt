@@ -14,6 +14,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.IOException
 import java.net.InetAddress
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.system.measureTimeMillis
 
 @RunWith(RobolectricTestRunner::class)
 class IfconfigClientTest {
@@ -27,7 +30,7 @@ class IfconfigClientTest {
     }
 
     @Test
-    fun `fetch ip via network keeps primary then fallback order`() {
+    fun `fetch ip via network uses primary and fallback bindings`() {
         val events = mutableListOf<String>()
         PublicIpClient.fetchIpOverride = { _, _, _, _, binding ->
             events += "strict:${binding?.javaClass?.simpleName}"
@@ -59,7 +62,7 @@ class IfconfigClientTest {
 
         assertTrue(result.isSuccess)
         assertEquals("203.0.113.20", result.getOrNull())
-        assertEquals("strict:AndroidNetworkBinding", events.first())
+        assertTrue(events.any { it == "strict:AndroidNetworkBinding" })
         assertTrue(events.any { it == "native:tun0" })
     }
 
@@ -171,6 +174,47 @@ class IfconfigClientTest {
     }
 
     @Test
+    fun `network comparison runs strict and curl compatible in parallel for auto mode`() {
+        PublicIpClient.fetchIpOverride = { _, _, _, _, binding ->
+            when (binding) {
+                is ResolverBinding.AndroidNetworkBinding -> {
+                    Thread.sleep(400)
+                    Result.success("198.51.100.10")
+                }
+                null -> Result.failure(IOException("unexpected unbound path"))
+                else -> Result.failure(IOException("unexpected binding"))
+            }
+        }
+        NativeCurlBridge.executeOverride = {
+            Thread.sleep(400)
+            NativeCurlResponse(
+                curlCode = 0,
+                httpCode = 200,
+                body = "203.0.113.22",
+            )
+        }
+
+        val elapsedMs = measureTimeMillis {
+            val comparison = kotlinx.coroutines.runBlocking {
+                IfconfigClient.fetchIpViaNetworkComparison(
+                    primaryBinding = ResolverBinding.AndroidNetworkBinding(newNetwork(214)),
+                    fallbackBinding = ResolverBinding.OsDeviceBinding(
+                        interfaceName = "tun0",
+                        dnsMode = ResolverBinding.DnsMode.SYSTEM,
+                    ),
+                    resolverConfig = DnsResolverConfig.system(),
+                )
+            }
+
+            assertEquals(PublicIpProbeMode.STRICT_SAME_PATH, comparison.selectedMode)
+            assertEquals("198.51.100.10", comparison.selectedIp)
+            assertEquals(PublicIpProbeStatus.SUCCEEDED, comparison.curlCompatible.status)
+        }
+
+        assertTrue("Expected auto mode branches to overlap, but took ${elapsedMs}ms", elapsedMs < 700)
+    }
+
+    @Test
     fun `fetch direct ip supports one okhttp and one native curl attempt`() {
         var okHttpCalls = 0
         var nativeCalls = 0
@@ -202,8 +246,8 @@ class IfconfigClientTest {
 
         assertTrue(result.isSuccess)
         assertEquals("203.0.113.55", result.getOrNull())
-        assertEquals(1, okHttpCalls)
-        assertEquals(1, nativeCalls)
+        assertTrue(okHttpCalls >= 1)
+        assertTrue(nativeCalls >= 1)
     }
 
     @Test
@@ -430,10 +474,8 @@ class IfconfigClientTest {
 
         assertEquals(PublicIpProbeMode.STRICT_SAME_PATH, comparison.selectedMode)
         assertEquals("203.0.113.58", comparison.selectedIp)
-        assertEquals(
-            listOf("https://checkip.amazonaws.com", "https://api-ipv4.ip.sb/ip"),
-            strictEndpoints,
-        )
+        assertTrue(strictEndpoints.contains("https://checkip.amazonaws.com"))
+        assertTrue(strictEndpoints.contains("https://api-ipv4.ip.sb/ip"))
     }
 
     @Test
@@ -510,11 +552,59 @@ class IfconfigClientTest {
     }
 
     @Test
-    fun `ipv6 endpoints are tried after all ipv4 and generic endpoints`() {
-        val calledEndpoints = mutableListOf<String>()
+    fun `fetch direct ip runs primary endpoints in parallel`() {
+        val activePrimary = AtomicInteger(0)
+        val maxActivePrimary = AtomicInteger(0)
         PublicIpClient.fetchIpOverride = { endpoint, _, _, _, _ ->
-            calledEndpoints += endpoint
+            if (!endpoint.contains("api6.ipify.org")) {
+                val current = activePrimary.incrementAndGet()
+                while (true) {
+                    val observed = maxActivePrimary.get()
+                    if (current <= observed || maxActivePrimary.compareAndSet(observed, current)) break
+                }
+                try {
+                    Thread.sleep(200)
+                } finally {
+                    activePrimary.decrementAndGet()
+                }
+            }
             Result.failure(IOException("fail"))
+        }
+
+        measureTimeMillis {
+            kotlinx.coroutines.runBlocking {
+                IfconfigClient.fetchDirectIp(
+                    resolverConfig = DnsResolverConfig.system(),
+                )
+            }
+        }
+
+        assertTrue("Expected primary endpoints to overlap", maxActivePrimary.get() > 1)
+    }
+
+    @Test
+    fun `ipv6 endpoints are tried only after primary group fails`() {
+        val primaryFinished = AtomicBoolean(false)
+        val finishedPrimaryCount = AtomicInteger(0)
+        val ipv6StartedBeforePrimaryFinished = AtomicBoolean(false)
+        val primaryEndpointCount = 5
+
+        PublicIpClient.fetchIpOverride = { endpoint, _, _, _, _ ->
+            if (endpoint.contains("api6.ipify.org")) {
+                if (!primaryFinished.get()) {
+                    ipv6StartedBeforePrimaryFinished.set(true)
+                }
+                Result.failure(IOException("ipv6 fail"))
+            } else {
+                try {
+                    Thread.sleep(150)
+                    Result.failure(IOException("primary fail"))
+                } finally {
+                    if (finishedPrimaryCount.incrementAndGet() == primaryEndpointCount) {
+                        primaryFinished.set(true)
+                    }
+                }
+            }
         }
 
         kotlinx.coroutines.runBlocking {
@@ -523,17 +613,7 @@ class IfconfigClientTest {
             )
         }
 
-        val ipv6Index = calledEndpoints.indexOfFirst { it.contains("api6.ipify.org") }
-        assertTrue("IPv6 endpoint should be present", ipv6Index >= 0)
-        // All endpoints before IPv6 should be non-IPv6
-        for (i in 0 until ipv6Index) {
-            assertTrue(
-                "Non-IPv6 endpoint should come before IPv6: ${calledEndpoints[i]}",
-                !calledEndpoints[i].contains("api6.ipify.org"),
-            )
-        }
-        // IPv6 endpoint should be last
-        assertEquals(calledEndpoints.lastIndex, ipv6Index)
+        assertFalse("IPv6 fallback should start only after primary group fails", ipv6StartedBeforePrimaryFinished.get())
     }
 
     private fun newNetwork(netId: Int): Network {

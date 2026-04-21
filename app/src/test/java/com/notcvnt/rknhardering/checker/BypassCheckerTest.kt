@@ -598,7 +598,7 @@ class BypassCheckerTest {
         )
 
         assertFalse(evaluation.confirmedBypass)
-        assertEquals(listOf(2080, 39365), mtProtoPorts)
+        assertEquals(setOf(2080, 39365), mtProtoPorts.toSet())
         assertEquals(2, evaluation.proxyChecks.size)
         assertTrue(evaluation.proxyChecks.all { it.status == LocalProxyCheckStatus.PROXY_IP_UNAVAILABLE })
         assertEquals(LocalProxySummaryReason.FIRST_DISCOVERED, evaluation.proxyChecks[0].summaryReason)

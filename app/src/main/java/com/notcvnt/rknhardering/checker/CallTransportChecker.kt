@@ -31,13 +31,37 @@ import com.notcvnt.rknhardering.probe.ProxyType
 import com.notcvnt.rknhardering.probe.ScanMode
 import com.notcvnt.rknhardering.probe.Socks5UdpAssociateClient
 import com.notcvnt.rknhardering.probe.StunBindingClient
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
+import java.util.Collections
 
 object CallTransportChecker {
     private const val STUN_HTTP_TIMEOUT_MS = 4_000
     private const val STUN_HTTP_OKHTTP_RETRY_COUNT = 0
     private const val STUN_HTTP_NATIVE_CURL_RETRY_COUNT = 0
+    private const val STUN_SWEEP_MAX_CONCURRENCY = 8
+    private const val STUN_SERVICE_MAX_CONCURRENCY = 6
+    private const val STUN_PRIORITY_BATCH_SIZE = 8
+
+    private val PREFERRED_STUN_HOSTS = listOf(
+        "stun.fitauto.ru",
+        "stun.sberbank.ru",
+        "stun.l.google.com",
+        "stun1.l.google.com",
+        "stun2.l.google.com",
+        "stun3.l.google.com",
+        "stun4.l.google.com",
+        "stun.cloudflare.com",
+        "global.stun.twilio.com",
+        "stun.nextcloud.com",
+    )
 
     internal data class PathDescriptor(
         val path: CallTransportNetworkPath,
@@ -149,40 +173,55 @@ object CallTransportChecker {
 
         val dependencies = dependenciesOverride ?: Dependencies()
         val startedAtMs = IndirectCheckPerformanceSupport.monotonicNowMs()
-        val stepTimings = mutableListOf<DebugStepTiming>()
+        val stepTimings = Collections.synchronizedList(mutableListOf<DebugStepTiming>())
 
         val results = mutableListOf<CallTransportLeakResult>()
-        results += IndirectCheckPerformanceSupport.measureSuspendStep("probeDirect", stepTimings) {
-            probeDirect(
-                context = context,
-                resolverConfig = resolverConfig,
-                onProgress = onProgress,
-            )
+        val proxyEndpointDeferred = async {
+            IndirectCheckPerformanceSupport.measureSuspendStep("findLocalProxyEndpoint", stepTimings) {
+                cancellationAwareRunCatchingSuspend { dependencies.findLocalProxyEndpoint() }.getOrNull()
+            }
+        }
+        val stunSweepDeferred = async {
+            IndirectCheckPerformanceSupport.measureSuspendStep("probeStunTargets", stepTimings) {
+                probeStunTargetsDetailed(
+                    context = context,
+                    resolverConfig = resolverConfig,
+                    onProgress = onProgress,
+                )
+            }
+        }
+        val directDeferred = async {
+            IndirectCheckPerformanceSupport.measureSuspendStep("probeDirect", stepTimings) {
+                probeDirect(
+                    context = context,
+                    resolverConfig = resolverConfig,
+                    onProgress = onProgress,
+                    activeStunGroupsProvider = { stunSweepDeferred.await().groups },
+                )
+            }
         }
 
-        val proxyEndpoint = IndirectCheckPerformanceSupport.measureSuspendStep("findLocalProxyEndpoint", stepTimings) {
-            cancellationAwareRunCatchingSuspend { dependencies.findLocalProxyEndpoint() }.getOrNull()
-        }
-        if (proxyEndpoint?.type == ProxyType.SOCKS5) {
+        val proxyAssistedDeferred = async {
+            val proxyEndpoint = proxyEndpointDeferred.await()
+            if (proxyEndpoint?.type != ProxyType.SOCKS5) {
+                IndirectCheckPerformanceSupport.markSkippedStep("probeProxyAssistedTelegram", stepTimings)
+                return@async emptyList()
+            }
+
             onProgress?.invoke("Telegram", labelForPath(CallTransportNetworkPath.LOCAL_PROXY))
-            results += IndirectCheckPerformanceSupport.measureSuspendStep("probeProxyAssistedTelegram", stepTimings) {
+            IndirectCheckPerformanceSupport.measureSuspendStep("probeProxyAssistedTelegram", stepTimings) {
                 probeProxyAssistedTelegram(
                     context = context,
                     proxyEndpoint = proxyEndpoint,
                     resolverConfig = resolverConfig,
                 )
             }
-        } else {
-            IndirectCheckPerformanceSupport.markSkippedStep("probeProxyAssistedTelegram", stepTimings)
         }
 
-        val stunSweep = IndirectCheckPerformanceSupport.measureSuspendStep("probeStunTargets", stepTimings) {
-            probeStunTargetsDetailed(
-                context = context,
-                resolverConfig = resolverConfig,
-                onProgress = onProgress,
-            )
-        }
+        results += directDeferred.await()
+        results += proxyAssistedDeferred.await()
+
+        val stunSweep = stunSweepDeferred.await()
         stunSweep.error?.let(results::add)
         val stunGroups = stunSweep.groups
 
@@ -255,61 +294,45 @@ object CallTransportChecker {
             ?: return@withContext StunSweepResult(emptyList(), emptyList())
 
         val binding = activePath.primaryBinding()
-        val scopeTimings = mutableListOf<StunScopeTiming>()
-        val groups = StunScope.entries.map { scope ->
-            val startedAtMs = IndirectCheckPerformanceSupport.monotonicNowMs()
-            val targets = catalog.stunTargets.filter { it.scope == scope }
-            onProgress?.invoke("STUN ${scope.name}", labelForPath(CallTransportNetworkPath.ACTIVE))
-            val probeResults = targets.map { target ->
-                val dual = cancellationAwareRunCatching {
-                    dependencies.stunDualStackProbe(target, resolverConfig, binding)
-                }.getOrElse {
-                    StunBindingClient.DualStackBindingResult(null, null)
+        val groupResults = supervisorScope {
+            StunScope.entries.map { scope ->
+                async {
+                    val startedAtMs = IndirectCheckPerformanceSupport.monotonicNowMs()
+                    val targets = catalog.stunTargets.filter { it.scope == scope }
+                    onProgress?.invoke("STUN ${scope.name}", labelForPath(CallTransportNetworkPath.ACTIVE))
+                    val probeResults = probeScopeTargetsConcurrently(
+                        scope = scope,
+                        targets = targets,
+                        resolverConfig = resolverConfig,
+                        binding = binding,
+                        dependencies = dependencies,
+                    )
+                    val group = StunProbeGroupResult(scope = scope, results = probeResults)
+                    val timing = StunScopeTiming(
+                        scope = scope,
+                        durationMs = IndirectCheckPerformanceSupport.elapsedSince(startedAtMs),
+                        targetCount = targets.size,
+                        respondedCount = group.respondedCount,
+                        noResponseCount = group.totalCount - group.respondedCount,
+                    )
+                    group to timing
                 }
-                StunProbeResult(
-                    host = target.host,
-                    port = target.port,
-                    scope = scope,
-                    mappedIpv4 = dual.ipv4Result?.getOrNull()?.mappedIp,
-                    mappedIpv6 = dual.ipv6Result?.getOrNull()?.mappedIp,
-                    error = when {
-                        dual.ipv4Result == null && dual.ipv6Result == null ->
-                            "Не удалось разрешить адрес"
-                        dual.ipv4Result?.isSuccess != true && dual.ipv6Result?.isSuccess != true -> {
-                            val err = dual.ipv4Result?.exceptionOrNull()
-                                ?: dual.ipv6Result?.exceptionOrNull()
-                            err?.message ?: "Нет ответа"
-                        }
-                        else -> null
-                    },
-                )
-            }
-            val group = StunProbeGroupResult(scope = scope, results = probeResults)
-            scopeTimings += StunScopeTiming(
-                scope = scope,
-                durationMs = IndirectCheckPerformanceSupport.elapsedSince(startedAtMs),
-                targetCount = targets.size,
-                respondedCount = group.respondedCount,
-                noResponseCount = group.totalCount - group.respondedCount,
-            )
-            group
+            }.awaitAll()
         }
-        StunSweepResult(groups = groups, scopeTimings = scopeTimings)
+
+        StunSweepResult(
+            groups = groupResults.map { it.first },
+            scopeTimings = groupResults.map { it.second },
+        )
     }
 
     suspend fun probeDirect(
         context: Context,
         resolverConfig: DnsResolverConfig,
         onProgress: (suspend (String, String) -> Unit)? = null,
+        activeStunGroupsProvider: (suspend () -> List<StunProbeGroupResult>)? = null,
     ): List<CallTransportLeakResult> = withContext(Dispatchers.IO) {
         val dependencies = dependenciesOverride ?: Dependencies()
-        val results = mutableListOf<CallTransportLeakResult>()
-        val publicIpCache = mutableMapOf<PathDescriptor, Result<String>>()
-
-        suspend fun fetchPublicIp(path: PathDescriptor): Result<String> {
-            return publicIpCache.getOrPut(path) { dependencies.publicIpFetcher(path, resolverConfig) }
-        }
-
         val paths = cancellationAwareRunCatching { dependencies.loadPaths(context) }
             .getOrElse { error ->
                 return@withContext listOf(
@@ -333,22 +356,43 @@ object CallTransportChecker {
                 )
             }
 
-        for (path in paths) {
-            onProgress?.invoke("Telegram", labelForPath(path.path))
-            results += probeStunServiceTargets(
-                targets = catalog.stunTargets,
-                path = path,
-                fetchPublicIp = { fetchPublicIp(path) },
-                stunProbe = { target ->
-                    preferSuccessfulBinding(
-                        dependencies.stunDualStackProbe(
-                            target,
-                            resolverConfig,
-                            path.primaryBinding(),
-                        ),
+        val results = supervisorScope {
+            paths.map { path ->
+                async {
+                    onProgress?.invoke("Telegram", labelForPath(path.path))
+                    val reusedSweepResult = if (path.path == CallTransportNetworkPath.ACTIVE) {
+                        activeStunGroupsProvider
+                            ?.invoke()
+                            ?.let { sweepGroups ->
+                                buildDirectResultFromSweep(
+                                    targets = catalog.stunTargets,
+                                    path = path,
+                                    sweepGroups = sweepGroups,
+                                    fetchPublicIp = { dependencies.publicIpFetcher(path, resolverConfig) },
+                                )
+                            }
+                    } else {
+                        null
+                    }
+                    if (reusedSweepResult != null) {
+                        return@async reusedSweepResult
+                    }
+                    probeStunServiceTargets(
+                        targets = catalog.stunTargets,
+                        path = path,
+                        fetchPublicIp = { dependencies.publicIpFetcher(path, resolverConfig) },
+                        stunProbe = { target ->
+                            preferSuccessfulBinding(
+                                dependencies.stunDualStackProbe(
+                                    target,
+                                    resolverConfig,
+                                    path.primaryBinding(),
+                                ),
+                            )
+                        },
                     )
-                },
-            )
+                }
+            }.awaitAll()
         }
 
         deduplicate(results)
@@ -365,10 +409,8 @@ object CallTransportChecker {
         }
 
         val results = mutableListOf<CallTransportLeakResult>()
-        var cachedProxyPublicIp: String? = null
-        suspend fun fetchProxyPublicIp(): String? {
-            if (cachedProxyPublicIp != null) return cachedProxyPublicIp
-            cachedProxyPublicIp = cancellationAwareRunCatchingSuspend {
+        val proxyPublicIpDeferred = async(start = CoroutineStart.LAZY) {
+            cancellationAwareRunCatchingSuspend {
                 IfconfigClient.fetchIpViaProxy(
                     endpoint = proxyEndpoint,
                     timeoutMs = STUN_HTTP_TIMEOUT_MS,
@@ -377,65 +419,77 @@ object CallTransportChecker {
                     nativeCurlRetryCount = STUN_HTTP_NATIVE_CURL_RETRY_COUNT,
                 ).getOrNull()
             }.getOrNull()
-            return cachedProxyPublicIp
         }
-
-        val proxyLabel = formatHostPort(proxyEndpoint.host, proxyEndpoint.port)
-        val proxyOutcome = cancellationAwareRunCatchingSuspend { dependencies.proxyProbe(proxyEndpoint) }.getOrNull()
-        if (proxyOutcome?.reachable == true) {
-            cachedProxyPublicIp = proxyOutcome.observedPublicIp ?: cachedProxyPublicIp
-            results += CallTransportLeakResult(
-                service = CallTransportService.TELEGRAM,
-                probeKind = CallTransportProbeKind.PROXY_ASSISTED_TELEGRAM,
-                networkPath = CallTransportNetworkPath.LOCAL_PROXY,
-                status = CallTransportStatus.NEEDS_REVIEW,
-                targetHost = proxyOutcome.targetHost,
-                targetPort = proxyOutcome.targetPort,
-                observedPublicIp = proxyOutcome.observedPublicIp,
-                summary = buildProxySummary(
-                    proxyEndpoint = proxyEndpoint,
-                    targetHost = proxyOutcome.targetHost,
-                    targetPort = proxyOutcome.targetPort,
-                    publicIp = proxyOutcome.observedPublicIp,
-                ),
-                confidence = EvidenceConfidence.MEDIUM,
-            )
-        } else if (proxyOutcome != null) {
-            results += CallTransportLeakResult(
-                service = CallTransportService.TELEGRAM,
-                probeKind = CallTransportProbeKind.PROXY_ASSISTED_TELEGRAM,
-                networkPath = CallTransportNetworkPath.LOCAL_PROXY,
-                status = CallTransportStatus.NO_SIGNAL,
-                summary = "Telegram call transport via local SOCKS5 proxy $proxyLabel did not expose a reachable Telegram DC",
-            )
+        val proxyOutcomeDeferred = async {
+            cancellationAwareRunCatchingSuspend { dependencies.proxyProbe(proxyEndpoint) }.getOrNull()
         }
+        try {
+            suspend fun fetchProxyPublicIp(): String? {
+                if (proxyOutcomeDeferred.isCompleted) {
+                    proxyOutcomeDeferred.await()?.observedPublicIp?.let { return it }
+                }
+                return proxyPublicIpDeferred.await()
+            }
+            val proxyLabel = formatHostPort(proxyEndpoint.host, proxyEndpoint.port)
+            val udpStunDeferred = async {
+                val catalog = cancellationAwareRunCatching { dependencies.loadCatalog(context) }
+                    .getOrElse { error ->
+                        return@async errorResult(
+                            service = CallTransportService.TELEGRAM,
+                            probeKind = CallTransportProbeKind.PROXY_ASSISTED_UDP_STUN,
+                            path = CallTransportNetworkPath.LOCAL_PROXY,
+                            summary = "STUN target catalog is unavailable: ${error.message ?: error::class.java.simpleName}",
+                        )
+                    }
 
-        val catalog = cancellationAwareRunCatching { dependencies.loadCatalog(context) }
-            .getOrElse { error ->
-                return@withContext results + errorResult(
-                    service = CallTransportService.TELEGRAM,
+                probeStunServiceTargets(
+                    targets = catalog.stunTargets,
+                    path = PathDescriptor(path = CallTransportNetworkPath.LOCAL_PROXY),
+                    fetchPublicIp = {
+                        fetchProxyPublicIp()?.let { Result.success(it) }
+                            ?: Result.failure(IllegalStateException("Proxy public IP is unavailable"))
+                    },
+                    stunProbe = { target ->
+                        dependencies.proxyUdpStunProbe(context, proxyEndpoint, target, resolverConfig)
+                    },
                     probeKind = CallTransportProbeKind.PROXY_ASSISTED_UDP_STUN,
-                    path = CallTransportNetworkPath.LOCAL_PROXY,
-                    summary = "STUN target catalog is unavailable: ${error.message ?: error::class.java.simpleName}",
                 )
             }
 
-        val stunTargets = catalog.stunTargets
+            val proxyOutcome = proxyOutcomeDeferred.await()
+            if (proxyOutcome?.reachable == true) {
+                results += CallTransportLeakResult(
+                    service = CallTransportService.TELEGRAM,
+                    probeKind = CallTransportProbeKind.PROXY_ASSISTED_TELEGRAM,
+                    networkPath = CallTransportNetworkPath.LOCAL_PROXY,
+                    status = CallTransportStatus.NEEDS_REVIEW,
+                    targetHost = proxyOutcome.targetHost,
+                    targetPort = proxyOutcome.targetPort,
+                    observedPublicIp = proxyOutcome.observedPublicIp,
+                    summary = buildProxySummary(
+                        proxyEndpoint = proxyEndpoint,
+                        targetHost = proxyOutcome.targetHost,
+                        targetPort = proxyOutcome.targetPort,
+                        publicIp = proxyOutcome.observedPublicIp,
+                    ),
+                    confidence = EvidenceConfidence.MEDIUM,
+                )
+            } else if (proxyOutcome != null) {
+                results += CallTransportLeakResult(
+                    service = CallTransportService.TELEGRAM,
+                    probeKind = CallTransportProbeKind.PROXY_ASSISTED_TELEGRAM,
+                    networkPath = CallTransportNetworkPath.LOCAL_PROXY,
+                    status = CallTransportStatus.NO_SIGNAL,
+                    summary = "Telegram call transport via local SOCKS5 proxy $proxyLabel did not expose a reachable Telegram DC",
+                )
+            }
 
-        results += probeStunServiceTargets(
-            targets = stunTargets,
-            path = PathDescriptor(path = CallTransportNetworkPath.LOCAL_PROXY),
-            fetchPublicIp = {
-                fetchProxyPublicIp()?.let { Result.success(it) }
-                    ?: Result.failure(IllegalStateException("Proxy public IP is unavailable"))
-            },
-            stunProbe = { target ->
-                dependencies.proxyUdpStunProbe(context, proxyEndpoint, target, resolverConfig)
-            },
-            probeKind = CallTransportProbeKind.PROXY_ASSISTED_UDP_STUN,
-        )
+            results += udpStunDeferred.await()
 
-        deduplicate(results)
+            deduplicate(results)
+        } finally {
+            proxyPublicIpDeferred.cancel()
+        }
     }
 
     private suspend fun probeStunServiceTargets(
@@ -455,38 +509,51 @@ object CallTransportChecker {
             )
         }
 
-        var lastError: Throwable? = null
-        for (target in targets) {
-            val binding = stunProbe(target)
-            if (binding.isSuccess) {
-                val result = binding.getOrThrow()
-                val publicIp = fetchPublicIp().getOrNull()
-                val status = classifySignal(path = path, mappedIp = result.mappedIp, publicIp = publicIp)
-                val confidence = when {
-                    publicIp != null && publicIp != result.mappedIp -> EvidenceConfidence.HIGH
-                    publicIp != null -> EvidenceConfidence.MEDIUM
-                    else -> EvidenceConfidence.LOW
-                }
-                return CallTransportLeakResult(
-                    service = CallTransportService.TELEGRAM,
-                    probeKind = probeKind,
-                    networkPath = path.path,
-                    status = status,
+        val orderedTargets = orderTargetsForServiceProbe(targets)
+        val priorityTargets = orderedTargets
+            .filter { it.host in PREFERRED_STUN_HOSTS }
+            .take(STUN_PRIORITY_BATCH_SIZE)
+            .ifEmpty { orderedTargets.take(STUN_PRIORITY_BATCH_SIZE) }
+        val priorityKeys = priorityTargets.map { it.host to it.port }.toSet()
+        val fallbackTargets = orderedTargets.filterNot { (it.host to it.port) in priorityKeys }
+        val firstSuccess = awaitFirstSuccessfulStunProbe(priorityTargets, stunProbe)
+        val effectiveResult = if (firstSuccess.result != null || fallbackTargets.isEmpty()) {
+            firstSuccess
+        } else {
+            awaitFirstSuccessfulStunProbe(
+                targets = fallbackTargets,
+                stunProbe = stunProbe,
+                initialLastError = firstSuccess.lastError,
+            )
+        }
+        if (effectiveResult.target != null && effectiveResult.result != null) {
+            val target = effectiveResult.target
+            val result = effectiveResult.result
+            val publicIp = fetchPublicIp().getOrNull()
+            val status = classifySignal(path = path, mappedIp = result.mappedIp, publicIp = publicIp)
+            val confidence = when {
+                publicIp != null && publicIp != result.mappedIp -> EvidenceConfidence.HIGH
+                publicIp != null -> EvidenceConfidence.MEDIUM
+                else -> EvidenceConfidence.LOW
+            }
+            return CallTransportLeakResult(
+                service = CallTransportService.TELEGRAM,
+                probeKind = probeKind,
+                networkPath = path.path,
+                status = status,
+                targetHost = target.host,
+                targetPort = target.port,
+                mappedIp = result.mappedIp,
+                observedPublicIp = publicIp,
+                summary = buildDirectSummary(
+                    path = path.path,
                     targetHost = target.host,
                     targetPort = target.port,
                     mappedIp = result.mappedIp,
-                    observedPublicIp = publicIp,
-                    summary = buildDirectSummary(
-                        path = path.path,
-                        targetHost = target.host,
-                        targetPort = target.port,
-                        mappedIp = result.mappedIp,
-                        publicIp = publicIp,
-                    ),
-                    confidence = confidence,
-                )
-            }
-            lastError = binding.exceptionOrNull()
+                    publicIp = publicIp,
+                ),
+                confidence = confidence,
+            )
         }
 
         return CallTransportLeakResult(
@@ -494,9 +561,82 @@ object CallTransportChecker {
             probeKind = probeKind,
             networkPath = path.path,
             status = CallTransportStatus.NO_SIGNAL,
-            targetHost = targets.firstOrNull()?.host,
-            targetPort = targets.firstOrNull()?.port,
-            summary = buildNoSignalSummary(path = path.path, probeKind = probeKind, lastError = lastError),
+            targetHost = orderedTargets.firstOrNull()?.host,
+            targetPort = orderedTargets.firstOrNull()?.port,
+            summary = buildNoSignalSummary(
+                path = path.path,
+                probeKind = probeKind,
+                lastError = effectiveResult.lastError,
+            ),
+        )
+    }
+
+    private suspend fun buildDirectResultFromSweep(
+        targets: List<CallTransportTargetCatalog.StunTarget>,
+        path: PathDescriptor,
+        sweepGroups: List<StunProbeGroupResult>,
+        fetchPublicIp: suspend () -> Result<String>,
+        probeKind: CallTransportProbeKind = CallTransportProbeKind.DIRECT_UDP_STUN,
+    ): CallTransportLeakResult? {
+        val sweepResults = sweepGroups.flatMap { it.results }
+        if (sweepResults.isEmpty()) {
+            return null
+        }
+
+        val resultsByTarget = sweepResults.associateBy { it.host to it.port }
+        val orderedTargets = orderTargetsForServiceProbe(targets)
+        val successfulTarget = orderedTargets.firstNotNullOfOrNull { target ->
+            val sweepResult = resultsByTarget[target.host to target.port] ?: return@firstNotNullOfOrNull null
+            val mappedIp = preferredMappedIp(sweepResult) ?: return@firstNotNullOfOrNull null
+            target to mappedIp
+        }
+
+        if (successfulTarget != null) {
+            val (target, mappedIp) = successfulTarget
+            val publicIp = fetchPublicIp().getOrNull()
+            val status = classifySignal(path = path, mappedIp = mappedIp, publicIp = publicIp)
+            val confidence = when {
+                publicIp != null && publicIp != mappedIp -> EvidenceConfidence.HIGH
+                publicIp != null -> EvidenceConfidence.MEDIUM
+                else -> EvidenceConfidence.LOW
+            }
+            return CallTransportLeakResult(
+                service = CallTransportService.TELEGRAM,
+                probeKind = probeKind,
+                networkPath = path.path,
+                status = status,
+                targetHost = target.host,
+                targetPort = target.port,
+                mappedIp = mappedIp,
+                observedPublicIp = publicIp,
+                summary = buildDirectSummary(
+                    path = path.path,
+                    targetHost = target.host,
+                    targetPort = target.port,
+                    mappedIp = mappedIp,
+                    publicIp = publicIp,
+                ),
+                confidence = confidence,
+            )
+        }
+
+        val lastError = orderedTargets.asReversed()
+            .firstNotNullOfOrNull { target ->
+                resultsByTarget[target.host to target.port]?.error?.takeIf { it.isNotBlank() }
+            }
+            ?.let(::IllegalStateException)
+        return CallTransportLeakResult(
+            service = CallTransportService.TELEGRAM,
+            probeKind = probeKind,
+            networkPath = path.path,
+            status = CallTransportStatus.NO_SIGNAL,
+            targetHost = orderedTargets.firstOrNull()?.host,
+            targetPort = orderedTargets.firstOrNull()?.port,
+            summary = buildNoSignalSummary(
+                path = path.path,
+                probeKind = probeKind,
+                lastError = lastError,
+            ),
         )
     }
 
@@ -700,6 +840,109 @@ object CallTransportChecker {
     }
 
     private fun normalizeLocalRelayHost(host: String): String = host.substringBefore('%').lowercase()
+
+    private fun orderTargetsForServiceProbe(
+        targets: List<CallTransportTargetCatalog.StunTarget>,
+    ): List<CallTransportTargetCatalog.StunTarget> {
+        val priorityByHost = PREFERRED_STUN_HOSTS.withIndex().associate { (index, host) -> host to index }
+        return targets.sortedWith(
+            compareBy<CallTransportTargetCatalog.StunTarget> { priorityByHost[it.host] ?: Int.MAX_VALUE }
+                .thenBy { it.scope.ordinal }
+                .thenBy { it.host },
+        )
+    }
+
+    private fun preferredMappedIp(result: StunProbeResult): String? {
+        return result.mappedIpv4 ?: result.mappedIpv6
+    }
+
+    private data class TargetProbeCompletion<T>(
+        val target: CallTransportTargetCatalog.StunTarget,
+        val result: Result<T>,
+    )
+
+    private data class FirstSuccessfulStunProbe(
+        val target: CallTransportTargetCatalog.StunTarget? = null,
+        val result: StunBindingClient.BindingResult? = null,
+        val lastError: Throwable? = null,
+    )
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private suspend fun probeScopeTargetsConcurrently(
+        scope: StunScope,
+        targets: List<CallTransportTargetCatalog.StunTarget>,
+        resolverConfig: DnsResolverConfig,
+        binding: ResolverBinding?,
+        dependencies: Dependencies,
+    ): List<StunProbeResult> = coroutineScope {
+        val dispatcher = Dispatchers.IO.limitedParallelism(STUN_SWEEP_MAX_CONCURRENCY)
+        orderTargetsForServiceProbe(targets).map { target ->
+            async(dispatcher) {
+                val dual = cancellationAwareRunCatching {
+                    dependencies.stunDualStackProbe(target, resolverConfig, binding)
+                }.getOrElse {
+                    StunBindingClient.DualStackBindingResult(null, null)
+                }
+                StunProbeResult(
+                    host = target.host,
+                    port = target.port,
+                    scope = scope,
+                    mappedIpv4 = dual.ipv4Result?.getOrNull()?.mappedIp,
+                    mappedIpv6 = dual.ipv6Result?.getOrNull()?.mappedIp,
+                    error = when {
+                        dual.ipv4Result == null && dual.ipv6Result == null ->
+                            "Не удалось разрешить адрес"
+                        dual.ipv4Result?.isSuccess != true && dual.ipv6Result?.isSuccess != true -> {
+                            val err = dual.ipv4Result?.exceptionOrNull()
+                                ?: dual.ipv6Result?.exceptionOrNull()
+                            err?.message ?: "Нет ответа"
+                        }
+                        else -> null
+                    },
+                )
+            }
+        }.awaitAll()
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private suspend fun awaitFirstSuccessfulStunProbe(
+        targets: List<CallTransportTargetCatalog.StunTarget>,
+        stunProbe: suspend (CallTransportTargetCatalog.StunTarget) -> Result<StunBindingClient.BindingResult>,
+        initialLastError: Throwable? = null,
+    ): FirstSuccessfulStunProbe = supervisorScope {
+        if (targets.isEmpty()) return@supervisorScope FirstSuccessfulStunProbe()
+
+        val dispatcher = Dispatchers.IO.limitedParallelism(STUN_SERVICE_MAX_CONCURRENCY)
+        val completions = Channel<TargetProbeCompletion<StunBindingClient.BindingResult>>(capacity = targets.size)
+        var lastError: Throwable? = initialLastError
+
+        val jobs = targets.map { target ->
+            async(dispatcher) {
+                val result = stunProbe(target)
+                completions.send(TargetProbeCompletion(target = target, result = result))
+            }
+        }
+
+        try {
+            repeat(targets.size) {
+                val completion = completions.receive()
+                if (completion.result.isSuccess) {
+                    jobs.forEach { it.cancel() }
+                    return@supervisorScope FirstSuccessfulStunProbe(
+                        target = completion.target,
+                        result = completion.result.getOrThrow(),
+                        lastError = lastError,
+                    )
+                }
+                lastError = completion.result.exceptionOrNull() ?: lastError
+            }
+        } finally {
+            jobs.forEach { it.cancel() }
+            completions.close()
+        }
+
+        FirstSuccessfulStunProbe(lastError = lastError)
+    }
 
     private fun deduplicate(results: List<CallTransportLeakResult>): List<CallTransportLeakResult> {
         data class Key(

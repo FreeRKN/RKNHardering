@@ -7,6 +7,8 @@ import android.net.NetworkCapabilities
 import com.notcvnt.rknhardering.network.DnsResolverConfig
 import com.notcvnt.rknhardering.network.NetworkInterfaceNameNormalizer
 import com.notcvnt.rknhardering.network.ResolverBinding
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -22,6 +24,11 @@ data class PerTargetProbe(
 private data class ProbeTarget(
     val displayHost: String,
     val urls: List<String>,
+)
+
+private data class TargetComparisons(
+    val ru: PublicIpNetworkComparison,
+    val nonRu: PublicIpNetworkComparison,
 )
 
 /**
@@ -153,20 +160,15 @@ object UnderlyingNetworkProber {
             )
         }
 
-        val ruVpnComparison = dependencies.comparisonFetcher(
-            vpnNetwork,
-            resolverConfig,
-            debugEnabled,
-            modeOverride,
-            RU_PROBE_TARGET.urls,
+        val vpnComparisons = fetchTargetComparisons(
+            snapshot = vpnNetwork,
+            dependencies = dependencies,
+            resolverConfig = resolverConfig,
+            debugEnabled = debugEnabled,
+            modeOverride = modeOverride,
         )
-        val nonRuVpnComparison = dependencies.comparisonFetcher(
-            vpnNetwork,
-            resolverConfig,
-            debugEnabled,
-            modeOverride,
-            NON_RU_PROBE_TARGET.urls,
-        )
+        val ruVpnComparison = vpnComparisons.ru
+        val nonRuVpnComparison = vpnComparisons.nonRu
         val vpnError = ruVpnComparison.selectedError ?: nonRuVpnComparison.selectedError
 
         val ruVpnProbe = PerTargetProbe(
@@ -221,26 +223,19 @@ object UnderlyingNetworkProber {
         for (network in nonVpnNetworks) {
             lastUnderlyingNetwork = network
 
-            // Probe RU target
-            val ruResult = dependencies.comparisonFetcher(
-                network,
-                resolverConfig,
-                debugEnabled,
-                modeOverride,
-                RU_PROBE_TARGET.urls,
+            val comparisons = fetchTargetComparisons(
+                snapshot = network,
+                dependencies = dependencies,
+                resolverConfig = resolverConfig,
+                debugEnabled = debugEnabled,
+                modeOverride = modeOverride,
             )
+            val ruResult = comparisons.ru
             ruUnderlyingComparison = ruResult
             ruUnderlyingIp = ruResult.selectedIp
             ruUnderlyingError = ruResult.selectedError ?: ruUnderlyingError
 
-            // Probe non-RU target
-            val nonRuResult = dependencies.comparisonFetcher(
-                network,
-                resolverConfig,
-                debugEnabled,
-                modeOverride,
-                NON_RU_PROBE_TARGET.urls,
-            )
+            val nonRuResult = comparisons.nonRu
             nonRuUnderlyingComparison = nonRuResult
             nonRuUnderlyingIp = nonRuResult.selectedIp
             nonRuUnderlyingError = nonRuResult.selectedError ?: nonRuUnderlyingError
@@ -289,6 +284,37 @@ object UnderlyingNetworkProber {
                 underlyingInterfaceName = (usedBoundNetwork ?: lastUnderlyingNetwork)?.interfaceName,
                 underlyingComparison = ruUnderlyingComparison ?: nonRuUnderlyingComparison,
             ),
+        )
+    }
+
+    private suspend fun fetchTargetComparisons(
+        snapshot: NetworkSnapshot,
+        dependencies: Dependencies,
+        resolverConfig: DnsResolverConfig,
+        debugEnabled: Boolean,
+        modeOverride: TunProbeModeOverride,
+    ): TargetComparisons = coroutineScope {
+        val ruDeferred = async {
+            dependencies.comparisonFetcher(
+                snapshot,
+                resolverConfig,
+                debugEnabled,
+                modeOverride,
+                RU_PROBE_TARGET.urls,
+            )
+        }
+        val nonRuDeferred = async {
+            dependencies.comparisonFetcher(
+                snapshot,
+                resolverConfig,
+                debugEnabled,
+                modeOverride,
+                NON_RU_PROBE_TARGET.urls,
+            )
+        }
+        TargetComparisons(
+            ru = ruDeferred.await(),
+            nonRu = nonRuDeferred.await(),
         )
     }
 

@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.notcvnt.rknhardering.model.EvidenceSource
 import com.notcvnt.rknhardering.network.DnsResolverConfig
 import com.notcvnt.rknhardering.probe.SystemPingProber
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertFalse
@@ -13,6 +14,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.IOException
+import kotlin.system.measureTimeMillis
 
 @RunWith(RobolectricTestRunner::class)
 class IcmpSpoofingCheckerTest {
@@ -74,6 +76,37 @@ class IcmpSpoofingCheckerTest {
 
         assertFalse(result.needsReview)
         assertTrue(result.hasError)
+    }
+
+    @Test
+    fun `icmp targets are probed in parallel`() {
+        IcmpSpoofingChecker.dependenciesOverride = IcmpSpoofingChecker.Dependencies(
+            resolveIpv4 = { host, _ ->
+                when (host) {
+                    "instagram.com" -> "157.240.22.174"
+                    "google.com" -> "8.8.8.8"
+                    else -> error("Unexpected host $host")
+                }
+            },
+            ping = { address ->
+                delay(300)
+                when (address) {
+                    "157.240.22.174" -> pingResult(received = 0)
+                    "8.8.8.8" -> pingResult(received = 3, min = 15.0, avg = 18.0, max = 20.0)
+                    else -> error("Unexpected address $address")
+                }
+            },
+        )
+
+        val elapsedMs = measureTimeMillis {
+            val result = runBlocking {
+                IcmpSpoofingChecker.check(context, DnsResolverConfig.system())
+            }
+
+            assertFalse(result.hasError)
+        }
+
+        assertTrue("Expected ICMP targets to overlap, but took ${elapsedMs}ms", elapsedMs < 500)
     }
 
     private fun dependencies(

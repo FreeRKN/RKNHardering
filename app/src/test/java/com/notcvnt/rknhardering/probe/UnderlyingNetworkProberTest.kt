@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Network
 import androidx.test.core.app.ApplicationProvider
 import com.notcvnt.rknhardering.network.DnsResolverConfig
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -14,6 +15,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import kotlin.system.measureTimeMillis
 
 @RunWith(RobolectricTestRunner::class)
 class UnderlyingNetworkProberTest {
@@ -202,6 +204,60 @@ class UnderlyingNetworkProberTest {
         assertNotNull(result.ruTarget.vpnIp)
         assertNotNull(result.nonRuTarget.vpnIp)
         assertTrue(result.ruTarget.vpnIp != result.nonRuTarget.vpnIp)
+    }
+
+    @Test
+    fun `probe fetches ru and non ru targets in parallel`() {
+        val vpnNetwork = newNetwork(307)
+        val wifiNetwork = newNetwork(308)
+        installDependencies(
+            activeNetwork = vpnNetwork,
+            snapshots = listOf(
+                snapshot(vpnNetwork, "tun0", hasVpnTransport = true),
+                snapshot(wifiNetwork, "wlan0", hasVpnTransport = false),
+            ),
+            comparisons = mapOf(
+                vpnNetwork to mapOf(
+                    listOf("https://ipv4-internet.yandex.net/api/v0/ip", "https://ip.mail.ru") to successfulComparison("198.51.100.10"),
+                    listOf(
+                        "https://api-ipv4.ip.sb/ip",
+                        "https://checkip.amazonaws.com",
+                        "https://ifconfig.me/ip",
+                        "https://api4.ipify.org",
+                    ) to successfulComparison("203.0.113.10"),
+                ),
+                wifiNetwork to mapOf(
+                    listOf("https://ipv4-internet.yandex.net/api/v0/ip", "https://ip.mail.ru") to successfulComparison("203.0.113.1"),
+                    listOf(
+                        "https://api-ipv4.ip.sb/ip",
+                        "https://checkip.amazonaws.com",
+                        "https://ifconfig.me/ip",
+                        "https://api4.ipify.org",
+                    ) to successfulComparison("203.0.113.2"),
+                ),
+            ),
+        )
+        val baseDependencies = requireNotNull(UnderlyingNetworkProber.dependenciesOverride)
+        UnderlyingNetworkProber.dependenciesOverride = baseDependencies.copy(
+            comparisonFetcher = { snapshot, resolverConfig, debugEnabled, modeOverride, targetUrls ->
+                delay(300)
+                baseDependencies.comparisonFetcher(snapshot, resolverConfig, debugEnabled, modeOverride, targetUrls)
+            },
+        )
+
+        val elapsedMs = measureTimeMillis {
+            val result = runBlocking {
+                UnderlyingNetworkProber.probe(
+                    context = context,
+                    resolverConfig = DnsResolverConfig.system(),
+                )
+            }
+
+            assertTrue(result.vpnActive)
+            assertTrue(result.underlyingReachable)
+        }
+
+        assertTrue("Expected RU/non-RU target probes to overlap, but took ${elapsedMs}ms", elapsedMs < 900)
     }
 
     private fun installDependencies(

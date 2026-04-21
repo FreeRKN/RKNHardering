@@ -4,6 +4,8 @@ import com.notcvnt.rknhardering.ScanExecutionContext
 import com.notcvnt.rknhardering.network.DnsResolverConfig
 import com.notcvnt.rknhardering.network.ResolverBinding
 import com.notcvnt.rknhardering.network.ResolverNetworkStack
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -98,47 +100,62 @@ object IfconfigClient {
         } else {
             ENDPOINTS
         }
-        val strict = if (modeOverride == TunProbeModeOverride.CURL_COMPATIBLE) {
-            PublicIpModeProbeResult(
-                mode = PublicIpProbeMode.STRICT_SAME_PATH,
-                status = PublicIpProbeStatus.SKIPPED,
-                error = DISABLED_BY_OVERRIDE_MESSAGE,
-            )
-        } else {
-            fetchModeProbeResult(
-                mode = PublicIpProbeMode.STRICT_SAME_PATH,
-                timeoutMs = timeoutMs,
-                resolverConfig = resolverConfig,
-                binding = primaryBinding,
-                collectTrace = collectTrace,
-                endpoints = endpoints,
-                okHttpRetryCount = okHttpRetryCount,
-                nativeCurlRetryCount = nativeCurlRetryCount,
-                executionContext = executionContext,
-            )
+        suspend fun fetchStrict(): PublicIpModeProbeResult {
+            return if (modeOverride == TunProbeModeOverride.CURL_COMPATIBLE) {
+                PublicIpModeProbeResult(
+                    mode = PublicIpProbeMode.STRICT_SAME_PATH,
+                    status = PublicIpProbeStatus.SKIPPED,
+                    error = DISABLED_BY_OVERRIDE_MESSAGE,
+                )
+            } else {
+                fetchModeProbeResult(
+                    mode = PublicIpProbeMode.STRICT_SAME_PATH,
+                    timeoutMs = timeoutMs,
+                    resolverConfig = resolverConfig,
+                    binding = primaryBinding,
+                    collectTrace = collectTrace,
+                    endpoints = endpoints,
+                    okHttpRetryCount = okHttpRetryCount,
+                    nativeCurlRetryCount = nativeCurlRetryCount,
+                    executionContext = executionContext,
+                )
+            }
         }
-        val curlCompatible = when {
-            modeOverride == TunProbeModeOverride.STRICT_SAME_PATH -> PublicIpModeProbeResult(
-                mode = PublicIpProbeMode.CURL_COMPATIBLE,
-                status = PublicIpProbeStatus.SKIPPED,
-                error = DISABLED_BY_OVERRIDE_MESSAGE,
-            )
-            fallbackBinding != null -> fetchModeProbeResult(
-                mode = PublicIpProbeMode.CURL_COMPATIBLE,
-                timeoutMs = timeoutMs,
-                resolverConfig = resolverConfig,
-                binding = fallbackBinding,
-                collectTrace = collectTrace,
-                endpoints = endpoints,
-                okHttpRetryCount = okHttpRetryCount,
-                nativeCurlRetryCount = nativeCurlRetryCount,
-                executionContext = executionContext,
-            )
-            else -> PublicIpModeProbeResult(
-                mode = PublicIpProbeMode.CURL_COMPATIBLE,
-                status = PublicIpProbeStatus.SKIPPED,
-                error = CURL_COMPATIBLE_UNAVAILABLE_MESSAGE,
-            )
+
+        suspend fun fetchCurlCompatible(): PublicIpModeProbeResult {
+            return when {
+                modeOverride == TunProbeModeOverride.STRICT_SAME_PATH -> PublicIpModeProbeResult(
+                    mode = PublicIpProbeMode.CURL_COMPATIBLE,
+                    status = PublicIpProbeStatus.SKIPPED,
+                    error = DISABLED_BY_OVERRIDE_MESSAGE,
+                )
+                fallbackBinding != null -> fetchModeProbeResult(
+                    mode = PublicIpProbeMode.CURL_COMPATIBLE,
+                    timeoutMs = timeoutMs,
+                    resolverConfig = resolverConfig,
+                    binding = fallbackBinding,
+                    collectTrace = collectTrace,
+                    endpoints = endpoints,
+                    okHttpRetryCount = okHttpRetryCount,
+                    nativeCurlRetryCount = nativeCurlRetryCount,
+                    executionContext = executionContext,
+                )
+                else -> PublicIpModeProbeResult(
+                    mode = PublicIpProbeMode.CURL_COMPATIBLE,
+                    status = PublicIpProbeStatus.SKIPPED,
+                    error = CURL_COMPATIBLE_UNAVAILABLE_MESSAGE,
+                )
+            }
+        }
+
+        val (strict, curlCompatible) = if (modeOverride == TunProbeModeOverride.AUTO && fallbackBinding != null) {
+            coroutineScope {
+                val strictDeferred = async { fetchStrict() }
+                val curlCompatibleDeferred = async { fetchCurlCompatible() }
+                strictDeferred.await() to curlCompatibleDeferred.await()
+            }
+        } else {
+            fetchStrict() to fetchCurlCompatible()
         }
 
         val selectedMode = when (modeOverride) {

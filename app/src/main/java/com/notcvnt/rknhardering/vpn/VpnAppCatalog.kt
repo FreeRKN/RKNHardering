@@ -28,13 +28,11 @@ object VpnAppCatalog {
     const val FAMILY_HIDDIFY = "Hiddify"
     const val FAMILY_MIKUBOX = "MikuBox"
     const val FAMILY_AEROBOX = "AeroBox"
+    const val FAMILY_CATBOX = "CatBox"
     const val FAMILY_FIREFLY = "FireflyVPN"
-    const val FAMILY_V2FLY = "V2fly"
-    const val FAMILY_FLARE = "FlareVPN"
     const val FAMILY_HUSI = "Husi"
     const val FAMILY_V2RAYTUN = "v2RayTun"
     const val FAMILY_V2BOX = "v2box"
-    const val FAMILY_CATBOX = "CatBox"
     const val FAMILY_EXCLAVE = "Exclave"
     const val FAMILY_CLASH = "Clash"
     const val FAMILY_SHADOWSOCKS = "Shadowsocks"
@@ -50,14 +48,6 @@ object VpnAppCatalog {
     const val FAMILY_TERMUX = "Termux"
 
     val signatures: List<VpnAppSignature> = listOf(
-        VpnAppSignature(
-            packageName = "com.aerobox",
-            appName = "AeroBox",
-            family = FAMILY_AEROBOX,
-            kind = VpnAppKind.TARGETED_BYPASS,
-            defaultPorts = setOf(1080, 2080, 2081),
-            signals = setOf(VpnClientSignal.VPN_SERVICE, VpnClientSignal.LOCAL_PROXY),
-        ),
         VpnAppSignature(
             packageName = "com.v2ray.ang",
             appName = "v2rayNG",
@@ -102,6 +92,14 @@ object VpnAppCatalog {
             packageName = "uwu.mb4a",
             appName = "MikuBox",
             family = FAMILY_MIKUBOX,
+            kind = VpnAppKind.GENERIC_VPN,
+            defaultPorts = setOf(1080, 2080, 2081),
+            signals = setOf(VpnClientSignal.VPN_SERVICE, VpnClientSignal.LOCAL_PROXY),
+        ),
+        VpnAppSignature(
+            packageName = "com.aerobox",
+            appName = "AeroBox",
+            family = FAMILY_AEROBOX,
             kind = VpnAppKind.GENERIC_VPN,
             defaultPorts = setOf(1080, 2080, 2081),
             signals = setOf(VpnClientSignal.VPN_SERVICE, VpnClientSignal.LOCAL_PROXY),

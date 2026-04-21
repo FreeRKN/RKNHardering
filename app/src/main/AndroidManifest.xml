@@ -38,6 +38,16 @@
         <package android:name="com.termux" />
         <package android:name="org.aspect.tgwsproxy" />
         <package android:name="org.aspect.tgwsproxy.android" />
+        <package android:name="io.nekohasekai.sagernet" />
+        <package android:name="uwu.mb4a" />
+        <package android:name="com.aerobox" />
+        <package android:name="com.nebula.karing" />
+        <package android:name="app.husi.singbox" />
+        <package android:name="xyz.a202132.app" />
+        <package android:name="com.v2raytun.android" />
+        <package android:name="dev.hexasoftware.v2box" />
+        <package android:name="com.avo.vpn" />
+        <package android:name="com.github.dyhkwong.sagernet" />
     </queries>
 
     <application

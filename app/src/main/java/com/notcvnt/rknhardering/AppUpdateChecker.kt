@@ -2,8 +2,8 @@ package com.notcvnt.rknhardering
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import androidx.core.content.edit
+import androidx.core.net.toUri
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -44,6 +44,35 @@ internal object AppUpdateChecker {
         val latestVersion: String,
         val downloadUrl: String,
     )
+
+    fun isAutoUpdateChoiceMade(context: Context): Boolean {
+        return AppUiSettings.prefs(context)
+            .getBoolean(SettingsPrefs.PREF_AUTO_UPDATE_CHOICE_MADE, false)
+    }
+
+    fun isAutoUpdateEnabled(context: Context): Boolean {
+        return AppUiSettings.prefs(context)
+            .getBoolean(SettingsPrefs.PREF_AUTO_UPDATE_ENABLED, false)
+    }
+
+    fun canCheckForUpdates(context: Context): Boolean {
+        val prefs = AppUiSettings.prefs(context)
+        return prefs.getBoolean(SettingsPrefs.PREF_NETWORK_REQUESTS_ENABLED, true) &&
+            prefs.getBoolean(SettingsPrefs.PREF_AUTO_UPDATE_ENABLED, false)
+    }
+
+    fun setAutoUpdateEnabled(
+        context: Context,
+        enabled: Boolean,
+        markChoiceMade: Boolean = true,
+    ) {
+        AppUiSettings.prefs(context).edit {
+            putBoolean(SettingsPrefs.PREF_AUTO_UPDATE_ENABLED, enabled)
+            if (markChoiceMade) {
+                putBoolean(SettingsPrefs.PREF_AUTO_UPDATE_CHOICE_MADE, true)
+            }
+        }
+    }
 
     /**
      * Fetches the latest release metadata from GitHub.
@@ -104,9 +133,10 @@ internal object AppUpdateChecker {
         context: Context,
         currentVersion: String,
         updateInfo: UpdateInfo,
+        onDismiss: (() -> Unit)? = null,
     ) {
         val prefs = AppUiSettings.prefs(context)
-        MaterialAlertDialogBuilder(context)
+        val dialog = MaterialAlertDialogBuilder(context)
             .setTitle(context.getString(R.string.update_dialog_title))
             .setMessage(
                 context.getString(
@@ -116,7 +146,7 @@ internal object AppUpdateChecker {
                 ),
             )
             .setPositiveButton(R.string.update_dialog_download) { _, _ ->
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(updateInfo.downloadUrl))
+                val intent = Intent(Intent.ACTION_VIEW, updateInfo.downloadUrl.toUri())
                 context.startActivity(intent)
             }
             .setNegativeButton(R.string.update_dialog_skip) { _, _ ->
@@ -125,6 +155,9 @@ internal object AppUpdateChecker {
             .setNeutralButton(R.string.update_dialog_later, null)
             .setCancelable(true)
             .show()
+        dialog.setOnDismissListener {
+            onDismiss?.invoke()
+        }
     }
 
     /**

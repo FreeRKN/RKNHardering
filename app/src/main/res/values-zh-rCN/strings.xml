@@ -50,6 +50,8 @@
     <string name="settings_port_custom">自定义</string>
     <string name="settings_network_requests">网络请求</string>
     <string name="settings_network_requests_desc">GeoIP、IP 比较、CDN pulling、BeaconDB、call transport 检查</string>
+    <string name="settings_auto_update">更新检查</string>
+    <string name="settings_auto_update_desc">检查 GitHub Releases，并提示下载更新的 APK。</string>
     <string name="settings_network_disable_title">要禁用网络请求吗？</string>
     <string name="settings_network_disable_message">禁用后：\n\n• GeoIP 检查将不会运行\n• 通过外部服务进行的 IP 比较将被禁用\n• CDN pulling 检查将被禁用\n• 通过 BeaconDB（基站/Wi-Fi）进行的位置判断将被禁用\n• Call transport 泄露探测将被禁用\n\n届时只保留本地检查：直接迹象、间接迹象和端口扫描</string>
     <string name="settings_network_disable_confirm">禁用</string>
@@ -545,4 +547,8 @@
     <string name="update_dialog_download">下载</string>
     <string name="update_dialog_skip">跳过此版本</string>
     <string name="update_dialog_later">稍后</string>
+    <string name="auto_update_onboarding_title">启用更新检查？</string>
+    <string name="auto_update_onboarding_message">首次启动时，应用可以检查 GitHub Releases 是否有更新的 APK。如果你现在禁用它，在你手动到网络设置中重新开启之前，应用不会执行这项检查。</string>
+    <string name="auto_update_onboarding_enable">启用</string>
+    <string name="auto_update_onboarding_disable">不要启用</string>
 </resources>

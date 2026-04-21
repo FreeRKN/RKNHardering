@@ -372,23 +372,72 @@ class MainActivity : AppCompatActivity() {
         btnExport.setOnClickListener { showExportFormatDialog() }
         observeScanEvents()
 
+        if (showAutoUpdateOnboardingIfNeeded()) return
+        continueStartupFlow()
+    }
+
+    private fun continueStartupFlow() {
+        handleInitialPermissionFlow()
+        checkForAppUpdates()
+    }
+
+    private fun handleInitialPermissionFlow() {
         if (intent.getBooleanExtra(SettingsActivity.EXTRA_REQUEST_PERMISSIONS, false)) {
             intent.removeExtra(SettingsActivity.EXTRA_REQUEST_PERMISSIONS)
             reRequestPermissions()
         } else if (!prefs.getBoolean(PREF_RATIONALE_SHOWN, false)) {
             showPermissionRationale()
         }
-
-        checkForAppUpdates()
     }
 
-    private fun checkForAppUpdates() {
+    private fun showAutoUpdateOnboardingIfNeeded(): Boolean {
+        if (AppUpdateChecker.isAutoUpdateChoiceMade(this)) return false
+        if (!prefs.getBoolean(SettingsActivity.PREF_NETWORK_REQUESTS_ENABLED, true)) return false
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.auto_update_onboarding_title)
+            .setMessage(R.string.auto_update_onboarding_message)
+            .setPositiveButton(R.string.auto_update_onboarding_enable) { _, _ ->
+                AppUpdateChecker.setAutoUpdateEnabled(this, true)
+                checkForAppUpdates {
+                    handleInitialPermissionFlow()
+                }
+            }
+            .setNegativeButton(R.string.auto_update_onboarding_disable) { _, _ ->
+                AppUpdateChecker.setAutoUpdateEnabled(this, false)
+                handleInitialPermissionFlow()
+            }
+            .setCancelable(false)
+            .show()
+        return true
+    }
+
+    private fun checkForAppUpdates(onComplete: (() -> Unit)? = null) {
+        if (!AppUpdateChecker.canCheckForUpdates(this)) {
+            onComplete?.invoke()
+            return
+        }
         lifecycleScope.launch {
-            val updateInfo = AppUpdateChecker.fetchLatestRelease() ?: return@launch
+            val updateInfo = AppUpdateChecker.fetchLatestRelease()
+            if (updateInfo == null) {
+                onComplete?.invoke()
+                return@launch
+            }
             val currentVersion = BuildConfig.VERSION_NAME
-            if (!AppUpdateChecker.isNewerVersion(currentVersion, updateInfo.latestVersion)) return@launch
-            if (AppUpdateChecker.isVersionSkipped(this@MainActivity, updateInfo.latestVersion)) return@launch
-            AppUpdateChecker.showUpdateDialog(this@MainActivity, currentVersion, updateInfo)
+            if (!AppUpdateChecker.isNewerVersion(currentVersion, updateInfo.latestVersion)) {
+                onComplete?.invoke()
+                return@launch
+            }
+            if (AppUpdateChecker.isVersionSkipped(this@MainActivity, updateInfo.latestVersion)) {
+                onComplete?.invoke()
+                return@launch
+            }
+            AppUpdateChecker.showUpdateDialog(
+                this@MainActivity,
+                currentVersion,
+                updateInfo,
+                onDismiss = onComplete,
+            )
         }
     }
 

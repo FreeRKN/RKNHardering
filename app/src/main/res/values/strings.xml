@@ -50,6 +50,8 @@
     <string name="settings_port_custom">Custom</string>
     <string name="settings_network_requests">Network requests</string>
     <string name="settings_network_requests_desc">GeoIP, IP comparison, CDN pulling, BeaconDB, call transport probe, ICMP spoofing</string>
+    <string name="settings_auto_update">Update checks</string>
+    <string name="settings_auto_update_desc">Checks GitHub Releases and offers to download a newer APK.</string>
     <string name="settings_network_disable_title">Disable network requests?</string>
     <string name="settings_network_disable_message">If disabled:\n\n• GeoIP checks will not run\n• IP address comparison via external services will be disabled\n• CDN pulling checks will be disabled\n• Geolocation via BeaconDB (cell towers/Wi-Fi) will be disabled\n• Call transport leak probing will be disabled\n• ICMP spoofing checks will be disabled\n\nOnly local checks will remain available: direct signs, indirect signs, and port scanning</string>
     <string name="settings_cdn_pulling">CDN pulling</string>
@@ -560,4 +562,8 @@
     <string name="update_dialog_download">Download</string>
     <string name="update_dialog_skip">Skip this version</string>
     <string name="update_dialog_later">Later</string>
+    <string name="auto_update_onboarding_title">Enable update checks?</string>
+    <string name="auto_update_onboarding_message">On first launch the app can check GitHub Releases for a newer APK. If you disable this now, the app will not perform this check until you enable it manually in network settings.</string>
+    <string name="auto_update_onboarding_enable">Enable</string>
+    <string name="auto_update_onboarding_disable">Do not enable</string>
 </resources>

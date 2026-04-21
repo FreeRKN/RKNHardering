@@ -50,6 +50,8 @@
     <string name="settings_port_custom">سفارشی</string>
     <string name="settings_network_requests">درخواست‌های شبکه</string>
     <string name="settings_network_requests_desc">GeoIP، مقایسه IP، CDN pulling، BeaconDB، بررسی call transport</string>
+    <string name="settings_auto_update">بررسی به‌روزرسانی‌ها</string>
+    <string name="settings_auto_update_desc">نسخه‌های GitHub Releases را بررسی می‌کند و دانلود APK جدیدتر را پیشنهاد می‌دهد.</string>
     <string name="settings_network_disable_title">درخواست‌های شبکه غیرفعال شوند؟</string>
     <string name="settings_network_disable_message">در صورت غیرفعال شدن:\n\n• بررسی‌های GeoIP اجرا نخواهند شد\n• مقایسه IP از طریق سرویس‌های خارجی غیرفعال می‌شود\n• بررسی CDN pulling غیرفعال می‌شود\n• مکان‌یابی از طریق BeaconDB (دکل‌ها/Wi-Fi) غیرفعال می‌شود\n• بررسی نشت call transport غیرفعال می‌شود\n\nفقط بررسی‌های محلی باقی می‌مانند: نشانه‌های مستقیم، نشانه‌های غیرمستقیم و اسکن پورت</string>
     <string name="settings_network_disable_confirm">غیرفعال کردن</string>
@@ -547,4 +549,8 @@
     <string name="update_dialog_download">دانلود</string>
     <string name="update_dialog_skip">رد کردن این نسخه</string>
     <string name="update_dialog_later">بعداً</string>
+    <string name="auto_update_onboarding_title">بررسی به‌روزرسانی‌ها فعال شود؟</string>
+    <string name="auto_update_onboarding_message">در اولین اجرا، برنامه می‌تواند GitHub Releases را برای یافتن APK جدیدتر بررسی کند. اگر اکنون آن را غیرفعال کنید، این بررسی تا وقتی که خودتان آن را در تنظیمات شبکه فعال نکنید انجام نخواهد شد.</string>
+    <string name="auto_update_onboarding_enable">فعال کردن</string>
+    <string name="auto_update_onboarding_disable">فعال نکن</string>
 </resources>

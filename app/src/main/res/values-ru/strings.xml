@@ -50,6 +50,8 @@
     <string name="settings_port_custom">Кастомный</string>
     <string name="settings_network_requests">Сетевые запросы</string>
     <string name="settings_network_requests_desc">GeoIP, IP сравнение, CDN pulling, BeaconDB, проверка call transport, подмена ICMP</string>
+    <string name="settings_auto_update">Проверка обновлений</string>
+    <string name="settings_auto_update_desc">Проверяет GitHub Releases и предлагает скачать более новую APK.</string>
     <string name="settings_network_disable_title">Отключить сетевые запросы?</string>
     <string name="settings_network_disable_message">При отключении:\n\n• GeoIP проверка не будет выполнена\n• Сравнение IP-адресов через внешние сервисы отключится\n• Проверка CDN pulling отключится\n• Геолокация через BeaconDB (вышки/Wi-Fi) отключится\n• Проверка утечек call transport отключится\n• Проверка подмены ICMP отключится\n\nБудут работать только локальные проверки: прямые признаки, косвенные признаки, сканирование портов</string>
     <string name="settings_network_disable_confirm">Отключить</string>
@@ -564,4 +566,8 @@
     <string name="update_dialog_download">Скачать</string>
     <string name="update_dialog_skip">Пропустить эту версию</string>
     <string name="update_dialog_later">Потом</string>
+    <string name="auto_update_onboarding_title">Включить проверку обновлений?</string>
+    <string name="auto_update_onboarding_message">При первом запуске приложение может проверить GitHub Releases на наличие новой APK. Если сейчас отказаться, эта проверка не будет выполняться, пока вы вручную не включите её в настройках сети.</string>
+    <string name="auto_update_onboarding_enable">Включить</string>
+    <string name="auto_update_onboarding_disable">Не включать</string>
 </resources>

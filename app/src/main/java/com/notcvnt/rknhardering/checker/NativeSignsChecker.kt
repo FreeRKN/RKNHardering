@@ -36,6 +36,17 @@ object NativeSignsChecker {
         "libzygisk",
     )
 
+    private val HIGH_CONFIDENCE_ROOT_MOUNT_MARKERS = setOf(
+        "magisk",
+        "zygisk",
+        "lsposed",
+        "riru",
+        "kernelsu",
+        "apatch",
+        "/data/adb",
+        "core-only",
+    )
+
     internal data class JvmInterfaceSnapshot(
         val name: String,
         val canonicalName: String?,
@@ -585,12 +596,21 @@ object NativeSignsChecker {
                 )
                 "suspicious_mount" -> Pair(
                     context.getString(R.string.checker_native_root_suspicious_mount, detail),
-                    EvidenceConfidence.MEDIUM,
+                    if (containsHighConfidenceRootMountMarker(detail)) {
+                        EvidenceConfidence.HIGH
+                    } else {
+                        EvidenceConfidence.MEDIUM
+                    },
                 )
-                "overlay_mount" -> Pair(
-                    context.getString(R.string.checker_native_root_overlay_mount, detail),
-                    EvidenceConfidence.MEDIUM,
-                )
+                "overlay_mount" -> {
+                    if (!containsHighConfidenceRootMountMarker(detail)) {
+                        continue
+                    }
+                    Pair(
+                        context.getString(R.string.checker_native_root_overlay_mount, detail),
+                        EvidenceConfidence.HIGH,
+                    )
+                }
                 "selinux" -> {
                     if (detail == "permissive") {
                         Pair(
@@ -631,6 +651,13 @@ object NativeSignsChecker {
         }
 
         return PartialOutcome(findings, evidence, needsReview = needsReview)
+    }
+
+    internal fun containsHighConfidenceRootMountMarker(detail: String): Boolean {
+        val normalized = detail.lowercase()
+        return HIGH_CONFIDENCE_ROOT_MOUNT_MARKERS.any { marker ->
+            normalized.contains(marker)
+        }
     }
 }
 

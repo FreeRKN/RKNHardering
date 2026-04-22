@@ -27,16 +27,20 @@ class XrayApiClient(
         val channel = OkHttpChannelBuilder.forAddress(host, port)
             .usePlaintext()
             .build()
+        val grpcContext = io.grpc.Context.current().withCancellation()
         val registration = executionContext.cancellationSignal.register {
+            grpcContext.cancel(kotlinx.coroutines.CancellationException("Scan cancelled"))
             channel.shutdownNow()
         }
 
         try {
             executionContext.throwIfCancelled()
-            val stub = HandlerServiceGrpc.newBlockingStub(channel)
-                .withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            val response = grpcContext.call {
+                val stub = HandlerServiceGrpc.newBlockingStub(channel)
+                    .withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
 
-            val response = stub.listOutbounds(ListOutboundsRequest.getDefaultInstance())
+                stub.listOutbounds(ListOutboundsRequest.getDefaultInstance())
+            }
             val outbounds = response.outboundsList
                 .filterNot { outbound ->
                     outbound.proxySettings.type == "xray.proxy.freedom.Config" ||

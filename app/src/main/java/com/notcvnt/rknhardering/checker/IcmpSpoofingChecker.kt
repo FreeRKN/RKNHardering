@@ -14,6 +14,9 @@ import com.notcvnt.rknhardering.probe.SystemPingProber
 import java.io.IOException
 import java.net.Inet4Address
 import java.util.Locale
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -67,13 +70,15 @@ object IcmpSpoofingChecker {
         val dependencies = dependenciesOverride ?: Dependencies()
         val findings = mutableListOf<Finding>()
         val evidence = mutableListOf<EvidenceItem>()
-        val outcomes = mutableListOf<TargetOutcome>()
-
-        try {
-            for (target in defaultTargets) {
-                val address = dependencies.resolveIpv4(target.host, resolverConfig)
-                val ping = dependencies.ping(address)
-                outcomes += TargetOutcome(target = target, address = address, ping = ping)
+        val outcomes = try {
+            coroutineScope {
+                defaultTargets.map { target ->
+                    async {
+                        val address = dependencies.resolveIpv4(target.host, resolverConfig)
+                        val ping = dependencies.ping(address)
+                        TargetOutcome(target = target, address = address, ping = ping)
+                    }
+                }.awaitAll()
             }
         } catch (error: Throwable) {
             return@withContext unsupportedResult(context, error)

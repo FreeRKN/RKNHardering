@@ -22,16 +22,51 @@ class CdnPullingCheckerTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
 
     @Test
-    fun `evaluate marks result detected when at least one target exposes data`() {
+    fun `evaluate marks result detected when actionable target exposes data`() {
         val result = CdnPullingChecker.evaluate(
             context = context,
             responses = listOf(
                 CdnPullingResponse(
-                    targetLabel = "rutracker.org",
-                    url = "https://rutracker.org/cdn-cgi/trace",
+                    targetLabel = "meduza.io",
+                    url = "https://meduza.io/cdn-cgi/trace",
                     ip = "203.0.113.64",
                     importantFields = linkedMapOf("IP" to "203.0.113.64", "LOC" to "FI"),
                     rawBody = "ip=203.0.113.64\nloc=FI",
+                ),
+                CdnPullingResponse(
+                    targetLabel = "redirector.googlevideo.com",
+                    url = "https://redirector.googlevideo.com/report_mapping?di=no",
+                    error = "timeout",
+                ),
+            ),
+        )
+
+        assertTrue(result.detected)
+        assertFalse(result.needsReview)
+        assertFalse(result.hasError)
+    }
+
+    @Test
+    fun `evaluate treats cloudflare trace as diagnostic only`() {
+        val result = CdnPullingChecker.evaluate(
+            context = context,
+            responses = listOf(
+                CdnPullingResponse(
+                    targetLabel = "redirector.googlevideo.com",
+                    url = "https://redirector.googlevideo.com/report_mapping?di=no",
+                    error = "timeout",
+                ),
+                CdnPullingResponse(
+                    targetLabel = "cloudflare.com",
+                    url = "https://www.cloudflare.com/cdn-cgi/trace",
+                    ip = "203.0.113.64",
+                    importantFields = linkedMapOf("IP" to "203.0.113.64", "LOC" to "RU"),
+                ),
+                CdnPullingResponse(
+                    targetLabel = "one.one.one.one",
+                    url = "https://one.one.one.one/cdn-cgi/trace",
+                    ip = "203.0.113.64",
+                    importantFields = linkedMapOf("IP" to "203.0.113.64", "LOC" to "RU"),
                 ),
                 CdnPullingResponse(
                     targetLabel = "meduza.io",
@@ -41,9 +76,13 @@ class CdnPullingCheckerTest {
             ),
         )
 
-        assertTrue(result.detected)
-        assertTrue(result.needsReview)
+        assertFalse(result.detected)
+        assertFalse(result.needsReview)
         assertFalse(result.hasError)
+        assertEquals(
+            context.getString(R.string.checker_cdn_pulling_summary_detected_partial, "203.0.113.64", 2, 4),
+            result.summary,
+        )
     }
 
     @Test
@@ -71,14 +110,14 @@ class CdnPullingCheckerTest {
             context = context,
             responses = listOf(
                 CdnPullingResponse(
-                    targetLabel = "rutracker.org",
-                    url = "https://rutracker.org/cdn-cgi/trace",
+                    targetLabel = "meduza.io",
+                    url = "https://meduza.io/cdn-cgi/trace",
                     ip = "203.0.113.64",
                     importantFields = linkedMapOf("IP" to "203.0.113.64", "LOC" to "FI"),
                 ),
                 CdnPullingResponse(
-                    targetLabel = "meduza.io",
-                    url = "https://meduza.io/cdn-cgi/trace",
+                    targetLabel = "redirector.googlevideo.com",
+                    url = "https://redirector.googlevideo.com/report_mapping?di=no",
                     importantFields = linkedMapOf("LOC" to "NL", "COLO" to "AMS"),
                 ),
             ),
@@ -90,7 +129,7 @@ class CdnPullingCheckerTest {
             context.getString(R.string.checker_cdn_pulling_summary_detected_no_ip, 2, 2),
             result.summary,
         )
-        assertTrue(result.findings.any { it.description == "rutracker.org: IP: 203.0.113.64, LOC: FI" })
+        assertTrue(result.findings.any { it.description == "meduza.io: IP: 203.0.113.64, LOC: FI" })
     }
 
     @Test

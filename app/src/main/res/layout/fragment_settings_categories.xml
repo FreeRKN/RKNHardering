@@ -46,6 +46,7 @@
 
         <TextView
             style="@style/SettingsGroupLabel"
+            android:layout_marginTop="18dp"
             android:text="@string/settings_group_app" />
 
         <com.google.android.material.card.MaterialCardView
@@ -70,6 +71,7 @@
 
         <TextView
             style="@style/SettingsGroupLabel"
+            android:layout_marginTop="18dp"
             android:text="@string/settings_group_info" />
 
         <com.google.android.material.card.MaterialCardView

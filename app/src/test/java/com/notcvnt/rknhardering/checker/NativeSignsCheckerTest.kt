@@ -30,6 +30,7 @@ class NativeSignsCheckerTest {
         NativeSignsBridge.readSelfMapsSummaryOverride = { emptyArray() }
         NativeSignsBridge.probeFeatureFlagsOverride = { emptyArray() }
         NativeSignsBridge.libraryIntegrityOverride = { emptyArray() }
+        NativeSignsBridge.detectRootOverride = { emptyArray() }
     }
 
     @After
@@ -139,6 +140,49 @@ class NativeSignsCheckerTest {
             result.evidence.any {
                 it.source == EvidenceSource.NATIVE_ROUTE && it.detected
             },
+        )
+    }
+
+    @Test
+    fun `stock vendor overlay mounts are ignored`() {
+        NativeSignsBridge.getIfAddrsOverride = {
+            arrayOf("wlan0|3|65|AF_INET|192.168.1.10|255.255.255.0|1500")
+        }
+        NativeSignsBridge.detectRootOverride = {
+            arrayOf(
+                "overlay_mount|overlay /system_ext/etc/permissions overlay ro,seclabel,relatime,lowerdir=/mnt/vendor/mi_ext/system_ext/etc/permissions:/system_ext/etc/permissions 0 0",
+                "overlay_mount|overlay /product/overlay overlay ro,seclabel,relatime,lowerdir=/mnt/vendor/mi_ext/product/overlay:/product/overlay 0 0",
+            )
+        }
+
+        val result = runBlocking { NativeSignsChecker.check(context) }
+
+        assertFalse(
+            result.findings.any { it.source == EvidenceSource.NATIVE_ROOT_DETECTION },
+        )
+        assertFalse(
+            result.evidence.any { it.source == EvidenceSource.NATIVE_ROOT_DETECTION && it.detected },
+        )
+    }
+
+    @Test
+    fun `root overlay mounts with explicit markers are kept`() {
+        NativeSignsBridge.getIfAddrsOverride = {
+            arrayOf("wlan0|3|65|AF_INET|192.168.1.10|255.255.255.0|1500")
+        }
+        NativeSignsBridge.detectRootOverride = {
+            arrayOf(
+                "overlay_mount|overlay /system overlay rw,seclabel,relatime,lowerdir=/system,upperdir=/data/adb/modules/lsposed/system,workdir=/data/adb/overlay 0 0",
+            )
+        }
+
+        val result = runBlocking { NativeSignsChecker.check(context) }
+
+        assertTrue(
+            result.findings.any { it.source == EvidenceSource.NATIVE_ROOT_DETECTION && it.needsReview },
+        )
+        assertTrue(
+            result.evidence.any { it.source == EvidenceSource.NATIVE_ROOT_DETECTION && it.detected },
         )
     }
 

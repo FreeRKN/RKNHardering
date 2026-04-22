@@ -50,6 +50,8 @@
     <string name="settings_port_custom">Кастомный</string>
     <string name="settings_network_requests">Сетевые запросы</string>
     <string name="settings_network_requests_desc">GeoIP, IP сравнение, CDN pulling, BeaconDB, проверка call transport, подмена ICMP</string>
+    <string name="settings_auto_update">Проверка обновлений</string>
+    <string name="settings_auto_update_desc">Проверяет GitHub Releases и предлагает скачать более новую APK.</string>
     <string name="settings_network_disable_title">Отключить сетевые запросы?</string>
     <string name="settings_network_disable_message">При отключении:\n\n• GeoIP проверка не будет выполнена\n• Сравнение IP-адресов через внешние сервисы отключится\n• Проверка CDN pulling отключится\n• Геолокация через BeaconDB (вышки/Wi-Fi) отключится\n• Проверка утечек call transport отключится\n• Проверка подмены ICMP отключится\n\nБудут работать только локальные проверки: прямые признаки, косвенные признаки, сканирование портов</string>
     <string name="settings_network_disable_confirm">Отключить</string>
@@ -175,12 +177,25 @@
     <string name="main_loading_status_checking">Проверяется</string>
     <string name="main_loading_status_progress" translatable="false">%1$s%2$s</string>
 
+    <string name="main_preview_geo_ip">Будет выполнена сверка страны, ASN и признаков хостинга.</string>
+    <string name="main_preview_ip_comparison">Будет выполнено сравнение внешнего IP через несколько независимых сервисов.</string>
+    <string name="main_preview_cdn_pulling">Будет проверено, какие сетевые данные вернут заблокированные или CDN-backed endpoints.</string>
+    <string name="main_preview_direct">Будет проведен поиск прямых признаков VPN, прокси и установленных клиентов.</string>
+    <string name="main_preview_indirect">Будет выполнена проверка интерфейсов, DNS, маршрутов и локальных технических сигналов.</string>
+    <string name="main_preview_native_signs">Будет выполнена проверка нативных интерфейсов, маршрутов и низкоуровневых сигналов библиотек.</string>
+    <string name="main_preview_call_transport">Будут проверены ответы STUN-серверов и сигналы утечки call transport.</string>
+    <string name="main_preview_icmp">Будет выполнен резолв и пинг заблокированной и контрольной цели через активный маршрут.</string>
+    <string name="main_preview_location">Будет выполнен сбор сигналов оператора, вышек и ближайших Wi-Fi точек.</string>
+    <string name="main_preview_bypass">Будет выполнен поиск локального split tunnel bypass и доступных proxy endpoints.</string>
+
     <string name="main_loading_geo_ip">Сверяем страну, ASN и признаки хостинга.</string>
     <string name="main_loading_ip_comparison">Сравниваем внешний IP через несколько независимых сервисов.</string>
     <string name="main_loading_cdn_pulling">Проверяем, какие сетевые данные вернут заблокированные или CDN-backed endpoints.</string>
     <string name="main_loading_icmp">Резолвим и пингуем заблокированную и контрольную цели через активный маршрут.</string>
     <string name="main_loading_direct">Ищем прямые признаки VPN, прокси и установленных клиентов.</string>
     <string name="main_loading_indirect">Проверяем интерфейсы, DNS, маршруты и локальные технические сигналы.</string>
+    <string name="main_loading_native_signs">Проверяем нативные интерфейсы, маршруты и низкоуровневые сигналы библиотек.</string>
+    <string name="main_loading_call_transport">Проверяем ответы STUN-серверов и сигналы утечки call transport.</string>
     <string name="main_loading_location">Собираем сигналы оператора, вышек и ближайших Wi-Fi точек.</string>
     <string name="main_loading_bypass">Ищем локальный split tunnel bypass и доступные proxy endpoints.</string>
 
@@ -452,9 +467,13 @@
     </plurals>
     <string name="checker_bypass_vpn_not_active">Underlying network: VPN не активен, проверка не требуется</string>
     <string name="checker_bypass_vpn_network_binding">VPN network binding: приложение видит и VPN Network, и non-VPN default сеть (VPN IP: %1$s, direct IP: %2$s)</string>
-    <string name="checker_bypass_tun_probe_success">TUN активный зонд: запрос через VPN Network вернул IP %1$s (TUN — живой маршрутизируемый интерфейс)</string>
-    <string name="checker_bypass_tun_probe_success_transport_only">TUN активный зонд: curl-compatible transport-only путь вернул IP %1$s (SO_BINDTODEVICE + системный DNS)</string>
-    <string name="checker_bypass_tun_probe_success_curl_compatible">TUN активный зонд: curl-compatible путь вернул IP %1$s</string>
+    <string name="checker_bypass_tun_probe_success">TUN активный зонд: IP %1$s</string>
+    <string name="checker_bypass_tun_probe_success_direct">TUN активный зонд, напрямую: IP %1$s</string>
+    <string name="checker_bypass_tun_probe_success_proxy">TUN активный зонд, прокси: IP %1$s</string>
+    <string name="checker_bypass_tun_probe_success_direct_target">TUN активный зонд, %1$s, напрямую: IP %2$s</string>
+    <string name="checker_bypass_tun_probe_success_proxy_target">TUN активный зонд, %1$s, через прокси: IP %2$s</string>
+    <string name="checker_bypass_tun_probe_success_transport_only">TUN активный зонд: IP %1$s</string>
+    <string name="checker_bypass_tun_probe_success_curl_compatible">TUN активный зонд: IP %1$s</string>
     <string name="checker_bypass_tun_probe_failure">TUN активный зонд: запрос через VPN Network недоступен (интерфейс заблокирован или filtered)</string>
     <string name="checker_bypass_tun_probe_failure_reason">TUN активный зонд: запрос через VPN Network завершился ошибкой (%1$s)</string>
     <string name="checker_bypass_tun_probe_dns_mismatch">TUN активный зонд: strict same-path завершился ошибкой (%1$s), но curl-compatible transport-only путь сработал; вероятен mismatch DNS-path</string>
@@ -564,4 +583,8 @@
     <string name="update_dialog_download">Скачать</string>
     <string name="update_dialog_skip">Пропустить эту версию</string>
     <string name="update_dialog_later">Потом</string>
+    <string name="auto_update_onboarding_title">Включить проверку обновлений?</string>
+    <string name="auto_update_onboarding_message">При первом запуске приложение может проверить GitHub Releases на наличие новой APK. Если сейчас отказаться, эта проверка не будет выполняться, пока вы вручную не включите её в настройках сети.</string>
+    <string name="auto_update_onboarding_enable">Включить</string>
+    <string name="auto_update_onboarding_disable">Не включать</string>
 </resources>

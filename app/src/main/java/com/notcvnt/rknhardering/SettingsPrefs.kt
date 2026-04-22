@@ -8,6 +8,8 @@ internal object SettingsPrefs {
     const val PREF_PORT_RANGE_START = "pref_port_range_start"
     const val PREF_PORT_RANGE_END = "pref_port_range_end"
     const val PREF_NETWORK_REQUESTS_ENABLED = "pref_network_requests_enabled"
+    const val PREF_AUTO_UPDATE_ENABLED = "pref_auto_update_enabled"
+    const val PREF_AUTO_UPDATE_CHOICE_MADE = "pref_auto_update_choice_made"
     const val PREF_CDN_PULLING_ENABLED = "pref_cdn_pulling_enabled"
     const val PREF_CDN_PULLING_MEDUZA_ENABLED = "pref_cdn_pulling_meduza_enabled"
     const val PREF_CALL_TRANSPORT_PROBE_ENABLED = "pref_call_transport_probe_enabled"

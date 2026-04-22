@@ -136,6 +136,49 @@ class SettingsActivityTest {
         assertEquals("v${BuildConfig.VERSION_NAME}", rowValue(root, R.id.rowAbout))
     }
 
+    @Test
+    fun `network disable also turns off auto update and locks switch`() {
+        AppUpdateChecker.setAutoUpdateEnabled(context, true)
+
+        val activity = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
+        activity.supportFragmentManager.beginTransaction()
+            .replace(R.id.settingsFragmentContainer, SettingsNetworkFragment())
+            .commitNow()
+        val fragment = activity.supportFragmentManager
+            .findFragmentById(R.id.settingsFragmentContainer) as SettingsNetworkFragment
+        val root = fragment.requireView()
+        val networkSwitch = root.findViewById<MaterialSwitch>(R.id.switchNetworkRequests)
+        val autoUpdateSwitch = root.findViewById<MaterialSwitch>(R.id.switchAutoUpdate)
+
+        assertTrue(autoUpdateSwitch.isChecked)
+
+        networkSwitch.performClick()
+        val dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertFalse(autoUpdateSwitch.isChecked)
+        assertFalse(autoUpdateSwitch.isEnabled)
+        assertFalse(AppUpdateChecker.isAutoUpdateEnabled(activity))
+    }
+
+    @Test
+    fun `auto update switch saves preference when network requests are enabled`() {
+        val activity = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
+        activity.supportFragmentManager.beginTransaction()
+            .replace(R.id.settingsFragmentContainer, SettingsNetworkFragment())
+            .commitNow()
+        val fragment = activity.supportFragmentManager
+            .findFragmentById(R.id.settingsFragmentContainer) as SettingsNetworkFragment
+        val autoUpdateSwitch = fragment.requireView().findViewById<MaterialSwitch>(R.id.switchAutoUpdate)
+
+        autoUpdateSwitch.performClick()
+
+        assertTrue(autoUpdateSwitch.isChecked)
+        assertTrue(AppUpdateChecker.isAutoUpdateEnabled(activity))
+        assertTrue(AppUpdateChecker.isAutoUpdateChoiceMade(activity))
+    }
+
     private fun rowValue(root: android.view.View, rowId: Int): String {
         return root.findViewById<android.view.View>(rowId)
             .findViewById<TextView>(R.id.rowValue)

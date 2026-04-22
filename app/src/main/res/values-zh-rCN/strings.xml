@@ -50,6 +50,8 @@
     <string name="settings_port_custom">自定义</string>
     <string name="settings_network_requests">网络请求</string>
     <string name="settings_network_requests_desc">GeoIP、IP 比较、CDN pulling、BeaconDB、call transport 检查</string>
+    <string name="settings_auto_update">更新检查</string>
+    <string name="settings_auto_update_desc">检查 GitHub Releases，并提示下载更新的 APK。</string>
     <string name="settings_network_disable_title">要禁用网络请求吗？</string>
     <string name="settings_network_disable_message">禁用后：\n\n• GeoIP 检查将不会运行\n• 通过外部服务进行的 IP 比较将被禁用\n• CDN pulling 检查将被禁用\n• 通过 BeaconDB（基站/Wi-Fi）进行的位置判断将被禁用\n• Call transport 泄露探测将被禁用\n\n届时只保留本地检查：直接迹象、间接迹象和端口扫描</string>
     <string name="settings_network_disable_confirm">禁用</string>
@@ -175,12 +177,25 @@
     <string name="main_loading_status_checking">检查中</string>
     <string name="main_loading_status_progress" translatable="false">%1$s%2$s</string>
 
+    <string name="main_preview_geo_ip">将检查国家、ASN 和托管迹象。</string>
+    <string name="main_preview_ip_comparison">将通过多个独立服务比较公网 IP。</string>
+    <string name="main_preview_cdn_pulling">将检查被封锁或 CDN 支持的端点会返回哪些网络数据。</string>
+    <string name="main_preview_direct">将搜索 VPN、代理和已安装客户端的直接迹象。</string>
+    <string name="main_preview_indirect">将检查接口、DNS、路由和本地技术迹象。</string>
+    <string name="main_preview_native_signs">将检查原生接口、路由和底层库信号。</string>
+    <string name="main_preview_call_transport">将检查 STUN 服务器响应和 call transport 泄漏信号。</string>
+    <string name="main_preview_icmp">将通过当前活动路由解析并 ping 被封锁和对照主机。</string>
+    <string name="main_preview_location">将收集运营商、基站和附近 Wi-Fi 的迹象。</string>
+    <string name="main_preview_bypass">将搜索本地 split tunnel bypass 和可用的 proxy endpoint。</string>
+
     <string name="main_loading_geo_ip">正在检查国家、ASN 和托管迹象。</string>
     <string name="main_loading_ip_comparison">正在通过多个独立服务比较公网 IP。</string>
     <string name="main_loading_cdn_pulling">正在检查被封锁或 CDN 支持的端点会返回哪些网络数据。</string>
     <string name="main_loading_icmp">正在通过当前活动路由解析并 ping 被封锁和对照主机。</string>
     <string name="main_loading_direct">正在查找 VPN、代理和已安装客户端的直接迹象。</string>
     <string name="main_loading_indirect">正在检查接口、DNS、路由和本地技术迹象。</string>
+    <string name="main_loading_native_signs">正在检查原生接口、路由和底层库信号。</string>
+    <string name="main_loading_call_transport">正在检查 STUN 服务器响应和 call transport 泄漏信号。</string>
     <string name="main_loading_location">正在收集运营商、基站和附近 Wi-Fi 的迹象。</string>
     <string name="main_loading_bypass">正在查找本地 split tunnel bypass 和可用的 proxy endpoint。</string>
 
@@ -445,9 +460,13 @@
     </plurals>
     <string name="checker_bypass_vpn_not_active">Underlying network：VPN 未激活，无需执行此检查</string>
     <string name="checker_bypass_vpn_network_binding">VPN network binding：应用同时访问到了默认非 VPN 路径和 VPN Network（VPN IP：%1$s，默认 IP：%2$s）</string>
-    <string name="checker_bypass_tun_probe_success">TUN active probe：通过 VPN Network 发起的请求返回了 IP %1$s（TUN 是一个可路由的活动接口）</string>
-    <string name="checker_bypass_tun_probe_success_transport_only">TUN active probe：curl-compatible transport-only 路径返回了 IP %1$s（SO_BINDTODEVICE + system DNS）</string>
-    <string name="checker_bypass_tun_probe_success_curl_compatible">TUN 活跃探测：curl-compatible 路径返回了 IP %1$s</string>
+    <string name="checker_bypass_tun_probe_success">TUN 活跃探测：IP %1$s</string>
+    <string name="checker_bypass_tun_probe_success_direct">TUN 活跃探测，直连：IP %1$s</string>
+    <string name="checker_bypass_tun_probe_success_proxy">TUN 活跃探测，代理：IP %1$s</string>
+    <string name="checker_bypass_tun_probe_success_direct_target">TUN 活跃探测，%1$s，直连：IP %2$s</string>
+    <string name="checker_bypass_tun_probe_success_proxy_target">TUN 活跃探测，%1$s，经代理：IP %2$s</string>
+    <string name="checker_bypass_tun_probe_success_transport_only">TUN 活跃探测：IP %1$s</string>
+    <string name="checker_bypass_tun_probe_success_curl_compatible">TUN 活跃探测：IP %1$s</string>
     <string name="checker_bypass_tun_probe_failure">TUN active probe：通过 VPN Network 发起的请求不可用（接口被阻止或被 filtered）</string>
     <string name="checker_bypass_tun_probe_failure_reason">TUN 活跃探测：通过 VPN Network 发起的请求失败（%1$s）</string>
     <string name="checker_bypass_tun_probe_dns_mismatch">TUN 活跃探测：strict same-path 失败（%1$s），但 curl-compatible transport-only 路径成功；很可能存在 DNS path mismatch</string>
@@ -545,4 +564,8 @@
     <string name="update_dialog_download">下载</string>
     <string name="update_dialog_skip">跳过此版本</string>
     <string name="update_dialog_later">稍后</string>
+    <string name="auto_update_onboarding_title">启用更新检查？</string>
+    <string name="auto_update_onboarding_message">首次启动时，应用可以检查 GitHub Releases 是否有更新的 APK。如果你现在禁用它，在你手动到网络设置中重新开启之前，应用不会执行这项检查。</string>
+    <string name="auto_update_onboarding_enable">启用</string>
+    <string name="auto_update_onboarding_disable">不要启用</string>
 </resources>

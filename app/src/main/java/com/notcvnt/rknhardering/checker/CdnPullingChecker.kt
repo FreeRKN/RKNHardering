@@ -27,6 +27,10 @@ object CdnPullingChecker {
 
     private const val MAX_FETCH_ATTEMPTS = 1
     private const val RETRY_DELAY_MS = 250L
+    private val ACTIONABLE_TARGETS = setOf(
+        "redirector.googlevideo.com",
+        "meduza.io",
+    )
 
     internal data class EndpointSpec(
         val label: String,
@@ -189,22 +193,30 @@ object CdnPullingChecker {
     ): CdnPullingResult {
         val successfulResponses = responses.filter { it.ip != null || it.importantFields.isNotEmpty() }
         val successfulCount = successfulResponses.size
+        val actionableResponses = successfulResponses.filter { it.targetLabel in ACTIONABLE_TARGETS }
+        val actionableCount = actionableResponses.size
+        val actionableTargetCount = responses.count { it.targetLabel in ACTIONABLE_TARGETS }
 
         val allIpv4s = successfulResponses.mapNotNull { it.ipv4 ?: it.ip?.takeIf { ip -> CdnPullingClient.looksLikeIpv4(ip) } }.distinct()
         val allIpv6s = successfulResponses.mapNotNull { it.ipv6 ?: it.ip?.takeIf { ip -> CdnPullingClient.looksLikeIpv6(ip) } }.distinct()
-        val allIps = successfulResponses.mapNotNull { it.ip }.distinct()
+        val actionableIpv4s = actionableResponses.mapNotNull {
+            it.ipv4 ?: it.ip?.takeIf { ip -> CdnPullingClient.looksLikeIpv4(ip) }
+        }.distinct()
+        val actionableIpv6s = actionableResponses.mapNotNull {
+            it.ipv6 ?: it.ip?.takeIf { ip -> CdnPullingClient.looksLikeIpv6(ip) }
+        }.distinct()
 
         val allSuccessfulResponsesExposeIp = successfulResponses.isNotEmpty() && successfulResponses.all { it.ip != null }
+        val allActionableResponsesExposeIp = actionableResponses.isNotEmpty() && actionableResponses.all { it.ip != null }
         val hasError = successfulCount == 0
-        val detected = successfulCount > 0
+        val detected = actionableCount > 0
 
-        val ipv4Conflict = allIpv4s.size > 1
-        val ipv6Conflict = allIpv6s.size > 1
+        val ipv4Conflict = actionableIpv4s.size > 1
+        val ipv6Conflict = actionableIpv6s.size > 1
         val needsReview = detected && (
-            successfulCount < responses.size ||
-                ipv4Conflict ||
+            ipv4Conflict ||
                 ipv6Conflict ||
-                !allSuccessfulResponsesExposeIp
+                !allActionableResponsesExposeIp
         )
 
         val findings = buildFindings(successfulResponses, responses)
@@ -222,17 +234,16 @@ object CdnPullingChecker {
             if (allIpv6s.isNotEmpty()) append("IPv6: ${allIpv6s.joinToString(", ")}")
         }.ifEmpty { representativeIps.joinToString(", ") }
 
+        val summaryIpv4Conflict = allIpv4s.size > 1
+        val summaryIpv6Conflict = allIpv6s.size > 1
+
         val summary = when {
             hasError -> context.getString(R.string.checker_cdn_pulling_summary_error)
-            ipv4Conflict || ipv6Conflict -> context.getString(
+            summaryIpv4Conflict || summaryIpv6Conflict -> context.getString(
                 R.string.checker_cdn_pulling_summary_mixed_ips,
                 ipsFormatted,
             )
-            successfulCount == responses.size && allSuccessfulResponsesExposeIp && representativeIps.isNotEmpty() -> context.getString(
-                R.string.checker_cdn_pulling_summary_detected_full,
-                ipsFormatted,
-            )
-            allSuccessfulResponsesExposeIp && representativeIps.size == 1 -> context.getString(
+            successfulCount < responses.size && allSuccessfulResponsesExposeIp && representativeIps.size == 1 -> context.getString(
                 R.string.checker_cdn_pulling_summary_detected_partial,
                 representativeIps.single(),
                 successfulCount,

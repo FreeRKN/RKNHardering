@@ -50,6 +50,8 @@
     <string name="settings_port_custom">Custom</string>
     <string name="settings_network_requests">Network requests</string>
     <string name="settings_network_requests_desc">GeoIP, IP comparison, CDN pulling, BeaconDB, call transport probe, ICMP spoofing</string>
+    <string name="settings_auto_update">Update checks</string>
+    <string name="settings_auto_update_desc">Checks GitHub Releases and offers to download a newer APK.</string>
     <string name="settings_network_disable_title">Disable network requests?</string>
     <string name="settings_network_disable_message">If disabled:\n\n• GeoIP checks will not run\n• IP address comparison via external services will be disabled\n• CDN pulling checks will be disabled\n• Geolocation via BeaconDB (cell towers/Wi-Fi) will be disabled\n• Call transport leak probing will be disabled\n• ICMP spoofing checks will be disabled\n\nOnly local checks will remain available: direct signs, indirect signs, and port scanning</string>
     <string name="settings_cdn_pulling">CDN pulling</string>
@@ -175,12 +177,25 @@
     <string name="main_loading_status_checking">Checking</string>
     <string name="main_loading_status_progress" translatable="false">%1$s%2$s</string>
 
+    <string name="main_preview_geo_ip">Country, ASN, and hosting indicators will be checked.</string>
+    <string name="main_preview_ip_comparison">The public IP will be compared through multiple independent services.</string>
+    <string name="main_preview_cdn_pulling">It will be checked what blocked or CDN-backed endpoints return about your network.</string>
+    <string name="main_preview_direct">A search for direct signs of VPNs, proxies, and installed clients will be performed.</string>
+    <string name="main_preview_indirect">Interfaces, DNS, routes, and local technical signals will be checked.</string>
+    <string name="main_preview_native_signs">Native interfaces, routes, and low-level library signals will be checked.</string>
+    <string name="main_preview_call_transport">STUN server responses and call transport leak signals will be checked.</string>
+    <string name="main_preview_icmp">Blocked and control hosts will be resolved and pinged through the active route.</string>
+    <string name="main_preview_location">Carrier, cell tower, and nearby Wi-Fi signals will be collected.</string>
+    <string name="main_preview_bypass">A search for local split tunnel bypasses and available proxy endpoints will be performed.</string>
+
     <string name="main_loading_geo_ip">Checking country, ASN, and hosting indicators.</string>
     <string name="main_loading_ip_comparison">Comparing the public IP through multiple independent services.</string>
     <string name="main_loading_cdn_pulling">Checking what blocked or CDN-backed endpoints return about your network.</string>
     <string name="main_loading_icmp">Resolving and pinging blocked and control hosts through the active route.</string>
     <string name="main_loading_direct">Looking for direct signs of VPNs, proxies, and installed clients.</string>
     <string name="main_loading_indirect">Checking interfaces, DNS, routes, and local technical signals.</string>
+    <string name="main_loading_native_signs">Checking native interfaces, routes, and low-level library signals.</string>
+    <string name="main_loading_call_transport">Checking STUN server responses and call transport leak signals.</string>
     <string name="main_loading_location">Collecting carrier, cell tower, and nearby Wi-Fi signals.</string>
     <string name="main_loading_bypass">Looking for local split tunnel bypasses and available proxy endpoints.</string>
 
@@ -448,9 +463,13 @@
     </plurals>
     <string name="checker_bypass_vpn_not_active">Underlying network: VPN is not active, the check is not required</string>
     <string name="checker_bypass_vpn_network_binding">VPN network binding: the app can reach both the default non-VPN path and VPN Network (VPN IP: %1$s, default IP: %2$s)</string>
-    <string name="checker_bypass_tun_probe_success">TUN active probe: a request via VPN Network returned IP %1$s (TUN is a live routable interface)</string>
-    <string name="checker_bypass_tun_probe_success_transport_only">TUN active probe: a curl-compatible transport-only path returned IP %1$s (SO_BINDTODEVICE + system DNS)</string>
-    <string name="checker_bypass_tun_probe_success_curl_compatible">TUN active probe: a curl-compatible path returned IP %1$s</string>
+    <string name="checker_bypass_tun_probe_success">TUN active probe: IP %1$s</string>
+    <string name="checker_bypass_tun_probe_success_direct">TUN active probe, direct: IP %1$s</string>
+    <string name="checker_bypass_tun_probe_success_proxy">TUN active probe, proxy: IP %1$s</string>
+    <string name="checker_bypass_tun_probe_success_direct_target">TUN active probe, %1$s, direct: IP %2$s</string>
+    <string name="checker_bypass_tun_probe_success_proxy_target">TUN active probe, %1$s, via proxy: IP %2$s</string>
+    <string name="checker_bypass_tun_probe_success_transport_only">TUN active probe: IP %1$s</string>
+    <string name="checker_bypass_tun_probe_success_curl_compatible">TUN active probe: IP %1$s</string>
     <string name="checker_bypass_tun_probe_failure">TUN active probe: a request via VPN Network is unavailable (the interface is blocked or filtered)</string>
     <string name="checker_bypass_tun_probe_failure_reason">TUN active probe: a request via VPN Network failed (%1$s)</string>
     <string name="checker_bypass_tun_probe_dns_mismatch">TUN active probe: strict same-path failed (%1$s), but the curl-compatible transport-only path succeeded; DNS path mismatch is likely</string>
@@ -560,4 +579,8 @@
     <string name="update_dialog_download">Download</string>
     <string name="update_dialog_skip">Skip this version</string>
     <string name="update_dialog_later">Later</string>
+    <string name="auto_update_onboarding_title">Enable update checks?</string>
+    <string name="auto_update_onboarding_message">On first launch the app can check GitHub Releases for a newer APK. If you disable this now, the app will not perform this check until you enable it manually in network settings.</string>
+    <string name="auto_update_onboarding_enable">Enable</string>
+    <string name="auto_update_onboarding_disable">Do not enable</string>
 </resources>

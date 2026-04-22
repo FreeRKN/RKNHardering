@@ -117,6 +117,62 @@ class MainActivityUiRenderingTest {
     }
 
     @Test
+    fun `collapsed tiles keep placeholder hint before start`() {
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val tiles = getPrivateField<Map<String, Any>>(activity, "tiles")
+        val geoHint = getPrivateField<TextView>(tiles.getValue("geo"), "hint")
+        val callTransportHint = getPrivateField<TextView>(tiles.getValue("stn"), "hint")
+
+        assertEquals(activity.getString(R.string.tile_hint_placeholder), geoHint.text.toString())
+        assertEquals(activity.getString(R.string.tile_hint_placeholder), callTransportHint.text.toString())
+    }
+
+    @Test
+    fun `expanding direct signs before start shows loading description only in body`() {
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val tiles = getPrivateField<Map<String, Any>>(activity, "tiles")
+        val directHint = getPrivateField<TextView>(tiles.getValue("dir"), "hint")
+
+        invokePrivate<Unit>(activity, "expandCategory", "dir")
+
+        val bodyText = collectText(activity.findViewById(R.id.bodyDirect))
+
+        assertEquals(activity.getString(R.string.tile_hint_placeholder), directHint.text.toString())
+        assertTrueContains(bodyText, activity.getString(R.string.main_preview_direct))
+    }
+
+    @Test
+    fun `expanding call transport before start shows loading description only in body`() {
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val tiles = getPrivateField<Map<String, Any>>(activity, "tiles")
+        val callTransportHint = getPrivateField<TextView>(tiles.getValue("stn"), "hint")
+
+        invokePrivate<Unit>(activity, "expandCategory", "stn")
+
+        val bodyText = collectText(activity.findViewById(R.id.bodyCallTransport))
+
+        assertEquals(activity.getString(R.string.tile_hint_placeholder), callTransportHint.text.toString())
+        assertTrueContains(bodyText, activity.getString(R.string.main_preview_call_transport))
+    }
+
+    @Test
+    fun `expanding call transport during running shows active loading description`() {
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+
+        invokePrivate<Unit>(
+            activity,
+            "prepareCheckSessionUi",
+            CheckSettings(callTransportProbeEnabled = true),
+            false,
+        )
+        invokePrivate<Unit>(activity, "expandCategory", "stn")
+
+        val bodyText = collectText(activity.findViewById(R.id.bodyCallTransport))
+
+        assertTrueContains(bodyText, activity.getString(R.string.main_loading_call_transport))
+    }
+
+    @Test
     fun `prepare check session shows loading hint for call transport tile when probe enabled`() {
         val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
 
@@ -150,6 +206,32 @@ class MainActivityUiRenderingTest {
         val hint = getPrivateField<TextView>(icmpTile, "hint")
 
         assertEquals(activity.getString(R.string.tile_hint_loading), hint.text.toString())
+    }
+
+    @Test
+    fun `prepare check session resets native signs tile to loading on rerun`() {
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val nativeResult = CategoryResult(
+            name = "native",
+            detected = true,
+            findings = listOf(Finding("getifaddrs(): 2 из 3 выявлено", detected = true)),
+        )
+
+        invokePrivate<Unit>(activity, "updateTileFromCategory", "nat", nativeResult)
+        invokePrivate<Unit>(
+            activity,
+            "prepareCheckSessionUi",
+            CheckSettings(),
+            false,
+        )
+
+        val tiles = getPrivateField<Map<String, Any>>(activity, "tiles")
+        val nativeTile = tiles.getValue("nat")
+        val hint = getPrivateField<TextView>(nativeTile, "hint")
+        val status = activity.findViewById<TextView>(R.id.statusNativeSigns)
+
+        assertEquals(activity.getString(R.string.tile_hint_loading), hint.text.toString())
+        assertEquals(activity.getString(R.string.main_loading_status_checking), status.text.toString())
     }
 
     @Test
